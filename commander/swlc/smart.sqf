@@ -24,6 +24,7 @@ SWLC_fnc_smartTick = {
 SWLC_fnc_smartOnSeized = {
 	params ["_cmd", "_w", "_live"];
 	[_cmd, _w, _live] call SWLC_fnc_smartCheer;
+	[_cmd, _w, _live] call SWLC_fnc_smartMomentum;
 	// SMART_SEIZED
 };
 
@@ -230,4 +231,36 @@ SWLC_fnc_smartPrepFire = {
 	[_side, "prepfire", [[_target] call SWLC_fnc_adName]] call SWLC_fnc_radio;
 	_w set ["prepUntil", time + CFG("prepFireLeadSeconds")];
 	true
+};
+
+// 6. Exploit momentum: after a fast, cheap capture, go straight for a weak neighbouring sector.
+SWLC_fnc_smartMomentum = {
+	params ["_cmd", "_w", "_live"];
+	if !(CFG("smartMomentum")) exitWith {};
+	private _f = [_cmd, "momentum"] call SWLC_fnc_persona;
+	private _side = _cmd get "side";
+	private _took = time - (_w get "launched");
+	private _men = [_live] call SWLC_fnc_groupsMen;
+	if (_took > CFG("momentumFastSeconds") * _f || {_men < (CFG("momentumMinStrength") / _f) * (_w get "launchStrength")}) exitWith {
+		[_cmd, "momentum", "not_earned", [["took", round _took], ["men", _men], ["launched", _w get "launchStrength"]]] call SWLC_fnc_smartLog;
+	};
+	private _best = objNull;
+	private _bestMen = 1e9;
+	private _avail = [_side] call SWLC_fnc_adAvailable;
+	{
+		if (([_x] call SWLC_fnc_adOwner) != _side && {!([_x] call SWLC_fnc_adIsBase)} && {_x in _avail}) then {
+			private _t = [_cmd, _x] call SWLC_fnc_threatOf;
+			private _known = (_t get "infantry") + 3 * (_t get "light");
+			if ((_t get "armour") == 0 && {_known <= CFG("momentumWeakMen")} && {_known < _bestMen}) then {
+				_best = _x;
+				_bestMen = _known;
+			};
+		};
+	} forEach ([_w get "target"] call SWLC_fnc_adLinks);
+	if (isNull _best) exitWith {
+		[_cmd, "momentum", "no_weak_neighbour", [["took", round _took]]] call SWLC_fnc_smartLog;
+	};
+	_cmd set ["momentum", [_best, time + CFG("momentumHoldSeconds")]];
+	[_cmd, "momentum", "push", [["from", [_w get "target"] call SWLC_fnc_adName], ["to", [_best] call SWLC_fnc_adName], ["took", round _took], ["men", _men], ["known_defenders", _bestMen]]] call SWLC_fnc_smartLog;
+	[_side, "momentum", [[_best] call SWLC_fnc_adName]] call SWLC_fnc_radio;
 };

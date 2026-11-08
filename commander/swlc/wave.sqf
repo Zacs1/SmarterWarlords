@@ -60,7 +60,9 @@ SWLC_fnc_gatherTick = {
 	[_cmd, _w, _staged] call SWLC_fnc_shopTick;
 	[_cmd, _w, _staged] call SWLC_fnc_kitTick;
 	private _first = _w get "firstArrive";
-	private _capReached = _first >= 0 && {(time - _first) >= CFG("goMaxWait")};
+	private _momentum = _cmd getOrDefault ["momentum", []];
+	private _goWait = if (_momentum isNotEqualTo [] && {(_momentum # 0) isEqualTo (_w get "target")}) then {CFG("momentumGoWait")} else {CFG("goMaxWait")};
+	private _capReached = _first >= 0 && {(time - _first) >= _goWait};
 	private _countReached = (count _staged) >= CFG("goMinGroups") || {_w getOrDefault ["forceGo", false]};
 	if !(_capReached || _countReached) exitWith {};
 	if (_staged isEqualTo []) exitWith {};

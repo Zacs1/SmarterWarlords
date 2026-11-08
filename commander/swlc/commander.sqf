@@ -193,6 +193,8 @@ SWLC_fnc_voteScore = {
 		+ _unlocks * CFG("voteUnlockWeight")
 		- (_d / 100) * CFG("voteDistancePer100m");
 	if (_s == _enemyBase) then {_score = _score + CFG("voteEnemyBaseBonus")};
+	private _momentum = _cmd getOrDefault ["momentum", []];
+	if (_momentum isNotEqualTo [] && {(_momentum # 0) isEqualTo _s} && {time < (_momentum # 1)}) then {_score = _score + 100000};
 	private _threat = [_cmd, _s] call SWLC_fnc_threatOf;
 	private _defence = (_threat get "infantry") * CFG("voteDefenderWeight") + (_threat get "armour") * CFG("voteArmourWeight");
 	if !(_threat get "scouted") then {_defence = _defence * CFG("voteUnscoutedFactor")};
