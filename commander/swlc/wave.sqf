@@ -61,9 +61,9 @@ SWLC_fnc_gatherTick = {
 	[_cmd, _w, _staged] call SWLC_fnc_kitTick;
 	private _first = _w get "firstArrive";
 	private _momentum = _cmd getOrDefault ["momentum", []];
-	private _goWait = if (_momentum isNotEqualTo [] && {(_momentum # 0) isEqualTo (_w get "target")}) then {CFG("momentumGoWait")} else {CFG("goMaxWait")};
+	private _goWait = if (_momentum isNotEqualTo [] && {(_momentum # 0) isEqualTo (_w get "target")}) then {CFG("momentumGoWait")} else {CFG("goMaxWait") * ([_cmd, "goWait"] call SWLC_fnc_persona)};
 	private _capReached = _first >= 0 && {(time - _first) >= _goWait};
-	private _countReached = (count _staged) >= CFG("goMinGroups") || {_w getOrDefault ["forceGo", false]};
+	private _countReached = (count _staged) >= CFG("goMinGroups") + ([_cmd, "goMinAdd", 0] call SWLC_fnc_persona) || {_w getOrDefault ["forceGo", false]};
 	if !(_capReached || _countReached) exitWith {};
 	if (_staged isEqualTo []) exitWith {};
 
@@ -106,7 +106,7 @@ SWLC_fnc_makeApproaches = {
 	private _side = _cmd get "side";
 	private _tpos = [_target] call SWLC_fnc_adPos;
 	private _centre = [_tpos, _cmd get "stagingPos"] call SWLC_fnc_bearing;
-	private _spread = CFG("approachSpreadMin") + random (CFG("approachSpreadMax") - CFG("approachSpreadMin"));
+	private _spread = (CFG("approachSpreadMin") + random (CFG("approachSpreadMax") - CFG("approachSpreadMin"))) * ([_cmd, "spread"] call SWLC_fnc_persona);
 	private _offsets = if (_groupCount >= 4) then {[-_spread, 0, _spread]} else {[-_spread / 2, _spread / 2]};
 	private _out = [];
 	{

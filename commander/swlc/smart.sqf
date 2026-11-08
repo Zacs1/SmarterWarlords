@@ -14,7 +14,7 @@ SWLC_fnc_persona = {
 
 SWLC_fnc_smartTick = {
 	params ["_cmd"];
-	// SMART_INIT
+	if (CFG("smartPersonality") && {isNil {_cmd get "persona"}}) then {[_cmd] call SWLC_fnc_smartInit};
 	[_cmd] call SWLC_fnc_smartBreakTick;
 	[_cmd] call SWLC_fnc_smartRadioTick;
 	[_cmd] call SWLC_fnc_smartReinforceTick;
@@ -439,4 +439,18 @@ SWLC_fnc_smartDigInTick = {
 			};
 		};
 	} forEach (_cmd get "groups");
+};
+
+// 10. Commander personality, picked once per round. Forceable with personalityForce.
+SWLC_fnc_smartInit = {
+	params ["_cmd"];
+	private _force = CFG("personalityForce");
+	private _name = if (_force != "") then {_force} else {selectRandom ["aggressive", "cautious", "sneaky"]};
+	private _p = switch (_name) do {
+		case "aggressive": {[["goWait", 0.75], ["goMinAdd", 0], ["spread", 1], ["combat", 1.3], ["momentum", 1.3]]};
+		case "cautious": {[["goWait", 1], ["goMinAdd", 1], ["spread", 0.9], ["combat", 0.8], ["momentum", 0.7]]};
+		default {[["goWait", 0.9], ["goMinAdd", 0], ["spread", 1.4], ["combat", 0.7], ["momentum", 1]]};
+	};
+	_cmd set ["persona", createHashMapFromArray (_p + [["name", _name]])];
+	[_cmd, "personality", "chosen", [["name", _name], ["forced", _force != ""]]] call SWLC_fnc_smartLog;
 };

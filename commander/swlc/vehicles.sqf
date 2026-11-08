@@ -75,7 +75,7 @@ SWLC_fnc_vehShop = {
 	private _combatInWave = {(_x get "role") == "combat" && {(_x get "wave") == (_w get "id")} && {alive (_x get "obj")}} count (_cmd get "vehicles");
 	if ((_plan get "combatVehicle" || {_plentiful}) && {_combatInWave < CFG("vehMaxCombatPerWave")} && {([_cmd] call SWLC_fnc_vehFleetCount) < CFG("vehMaxFleet")}) then {
 		private _heavyWanted = (_plan get "atWanted") > 0;
-		private _budget = ([_side] call SWLC_fnc_cpFree) * CFG("cpCombatFraction");
+		private _budget = ([_side] call SWLC_fnc_cpFree) * CFG("cpCombatFraction") * ([_cmd, "combat"] call SWLC_fnc_persona);
 		private _options = _catalog select {(_x # 3) == "combat" && {(_x # 1) <= _budget} && {!_heavyWanted || {_x # 4}}};
 		if (_options isEqualTo []) then {_options = _catalog select {(_x # 3) == "combat" && {(_x # 1) <= _budget}}};
 		_options = [_options, [], {_x # 1}, "DESCEND"] call BIS_fnc_sortBy;
