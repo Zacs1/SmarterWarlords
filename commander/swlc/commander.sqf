@@ -48,19 +48,28 @@ SWLC_fnc_commanderGuard = {
 	scriptName format ["SWLC guard %1", _cmd get "side"];
 	while {true} do {
 		sleep CFG("guardSeconds");
+		private _side = _cmd get "side";
+		private _spent = 0;
 		private _t0 = diag_tickTime;
 		isNil {
-			private _side = _cmd get "side";
 			if (isNull ([_side] call SWLC_fnc_adTarget)) then {
 				[_cmd] call SWLC_fnc_voteCast;
 			};
-			{
-				if ([_x] call SWLC_fnc_adGuardOrder) then {
-					["C_GUARD", [["side", _side], ["group", groupId _x]]] call SWLC_fnc_log;
-				};
-			} forEach (_cmd get "groups");
 		};
-		_cmd set ["guardCost", (_cmd getOrDefault ["guardCost", 0]) + (diag_tickTime - _t0) * 1000];
+		_spent = (diag_tickTime - _t0) * 1000;
+		// One group per step, so a round of re-asserted waypoints doesn't all land in one frame.
+		{
+			private _g = _x;
+			_t0 = diag_tickTime;
+			isNil {
+				if (!isNull _g && {[_g] call SWLC_fnc_adGuardOrder}) then {
+					["C_GUARD", [["side", _side], ["group", groupId _g]]] call SWLC_fnc_log;
+				};
+			};
+			_spent = _spent + (diag_tickTime - _t0) * 1000;
+			sleep 0.01;
+		} forEach ((_cmd get "groups") select {true});
+		_cmd set ["guardCost", (_cmd getOrDefault ["guardCost", 0]) + _spent];
 		_cmd set ["guardCount", (_cmd getOrDefault ["guardCount", 0]) + 1];
 	};
 };

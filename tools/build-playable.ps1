@@ -7,6 +7,8 @@
 #     keeping Warlords' class order, plus an AI commander difficulty parameter at the end.
 #   - The same two defaults are set on the Warlords init module in mission.sqm.
 #   - disabledAI = 0, so empty slots are played by AI Warlords.
+#   - enableDebugConsole = 1, so the host can turn the debug overlay on with SWLC_debug = true.
+#   - Per-vehicle and per-guard log lines are off, because only the test analyser reads them.
 
 param(
     [string]$OutputFolder = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Arma 3\mpmissions')
@@ -56,7 +58,7 @@ $descPath = Join-Path $out 'description.ext'
 $desc = Get-Content -Raw -LiteralPath $descPath
 $include = '#include "\A3\Missions_F_Warlords\cfgMissionParams.inc"'
 if (-not $desc.Contains($include)) { throw 'Expected parameter include not found in description.ext' }
-$block = "disabledAI = 0;`r`n`r`nclass Params`r`n{`r`n$params$difficulty`r`n};"
+$block = "disabledAI = 0;`r`nenableDebugConsole = 1;`r`n`r`nclass Params`r`n{`r`n$params$difficulty`r`n};"
 Set-Content -LiteralPath $descPath -Encoding ascii -Value $desc.Replace($include, $block)
 
 function Set-ModuleValue([string]$Text, [string]$Property, [int]$Value) {
