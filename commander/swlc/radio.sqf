@@ -18,6 +18,16 @@ SWLC_radioLines = createHashMapFromArray [
 	["reqok", ["Roger, on it.", "Copy, moving now.", "Understood.", "Acknowledged, we're going."]],
 	["reqno", ["Can't do it, nothing spare.", "Negative, no one free right now.", "Not possible at the moment.", "Hold tight, nobody's available."]],
 	["report", ["Copy, marked.", "Got it, on the board.", "Thanks, adding that.", "Acknowledged, noted."]],
+	["heavy", ["Taking heavy fire!", "We're getting hammered here.", "Heavy losses, need help.", "They've got us pinned, taking casualties."]],
+	["breaking", ["We're falling back to staging.", "Too many down, pulling back.", "Breaking contact, returning to staging.", "We can't hold, falling back."]],
+	["cheer", ["Sector's ours, well done!", "Yes! We took it!", "That's the way, it's ours!", "Nice work, everyone, it's ours."]],
+	["momentum", ["Don't stop, push on %1!", "They're running. On to %1.", "Keep the pressure on, next is %1.", "%1 is wide open, go now."]],
+	["scout", ["Scout element moving ahead to %1.", "Sending eyes forward to %1.", "Recon team heading for %1.", "Scouts going out to %1."]],
+	["hunt", ["Hidden AT somewhere near %1, sweep for it.", "Something unseen got a vehicle at %1, hunting it.", "Hunting a hidden shooter at %1.", "Vehicle lost at %1, we're going after them."]],
+	["digin", ["Digging in at %1.", "Taking positions at %1, watch for a counterattack.", "Hold %1, expect them back.", "Set up on %1, they'll be back."]],
+	["prepfire", ["Fire mission on %1.", "Shells incoming on %1, stay clear.", "Prep fire on %1.", "Mortars on %1, hold at your marks."]],
+	["joinpush", ["Moving with you, %1.", "We'll push with you, %1.", "Got your back on this push, %1.", "%1, we're on you, moving up."]],
+	["smoke", ["Smoke out!", "Popping smoke, screen the push.", "Smoke going out, move under it.", "Laying smoke, go when it's up."]],
 	["failed", ["Pull back to staging and regroup.", "That's enough. Fall back to staging.", "Attack's failed. Regroup at staging.", "Break off, get back to staging."]]
 ];
 

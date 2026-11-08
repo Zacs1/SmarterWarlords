@@ -100,7 +100,7 @@ SWLC_settings = createHashMapFromArray [
 	// Radio
 	["radioEnabled", true],
 	["radioCooldownDefault", 30],
-	["radioCooldowns", createHashMapFromArray [["sighting", 15], ["arrived", 20], ["staging", 20], ["seized", 5], ["moveout", 10], ["failed", 20], ["mount", 20], ["kit", 30], ["stuck", 30], ["defend", 20], ["standdown", 20], ["stagingattack", 20], ["reqok", 5], ["reqno", 5], ["report", 15]]],
+	["radioCooldowns", createHashMapFromArray [["sighting", 15], ["arrived", 20], ["staging", 20], ["seized", 5], ["moveout", 10], ["failed", 20], ["mount", 20], ["kit", 30], ["stuck", 30], ["defend", 20], ["standdown", 20], ["stagingattack", 20], ["reqok", 5], ["reqno", 5], ["report", 15], ["heavy", 25], ["breaking", 15], ["cheer", 5], ["momentum", 30], ["scout", 30], ["hunt", 30], ["digin", 30], ["prepfire", 30], ["joinpush", 30], ["smoke", 20]]],
 
 	// The wave's plan comes from the threat summary
 	["planAtPerArmour", 2],

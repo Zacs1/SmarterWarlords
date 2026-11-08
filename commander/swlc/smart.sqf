@@ -16,11 +16,13 @@ SWLC_fnc_smartTick = {
 	params ["_cmd"];
 	// SMART_INIT
 	[_cmd] call SWLC_fnc_smartBreakTick;
+	[_cmd] call SWLC_fnc_smartRadioTick;
 	// SMART_CALLS
 };
 
 SWLC_fnc_smartOnSeized = {
 	params ["_cmd", "_w", "_live"];
+	[_cmd, _w, _live] call SWLC_fnc_smartCheer;
 	// SMART_SEIZED
 };
 
@@ -69,4 +71,28 @@ SWLC_fnc_smartBreakTick = {
 			[_cmd, "break", "merge", [["group", groupId _g], ["with", groupId _other], ["moved", count _movers]]] call SWLC_fnc_smartLog;
 		};
 	} forEach (_groups select {(_x getVariable ["SWLC_broke", false]) && {([_x] call SWLC_fnc_state) == "Staging"}});
+};
+
+// 2. Livelier radio: heavy-losses calls. Breaking and cheer calls are sent where those events happen.
+SWLC_fnc_smartRadioTick = {
+	params ["_cmd"];
+	if !(CFG("smartRadio")) exitWith {};
+	{
+		if ((_x get "phase") in ["TO_HOLD", "ASSAULT"]) then {
+			{
+				private _g = _x;
+				private _launch = _g getVariable ["SWLC_launchMen", 0];
+				if (_launch >= 2 && {!(_g getVariable ["SWLC_heavyCalled", false])} && {([_g] call SWLC_fnc_groupMen) <= _launch * (1 - CFG("radioHeavyFraction"))}) then {
+					_g setVariable ["SWLC_heavyCalled", true];
+					[_cmd get "side", "heavy", [], _g] call SWLC_fnc_radio;
+				};
+			} forEach ([_x] call SWLC_fnc_waveLive);
+		};
+	} forEach (_cmd get "flying");
+};
+
+SWLC_fnc_smartCheer = {
+	params ["_cmd", "_w", "_live"];
+	if !(CFG("smartRadio")) exitWith {};
+	if (_live isNotEqualTo []) then {[_cmd get "side", "cheer", [], selectRandom _live] call SWLC_fnc_radio};
 };
