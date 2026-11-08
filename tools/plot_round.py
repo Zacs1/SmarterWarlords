@@ -23,6 +23,7 @@ from matplotlib.collections import LineCollection  # noqa: E402
 from matplotlib.gridspec import GridSpec  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import Circle  # noqa: E402
+from PIL import Image  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -35,6 +36,7 @@ GRID = "#e6e4df"
 SIDE_COLOURS = {"WEST": "#2a78d6", "EAST": "#eb6834", "GUER": "#8a8882"}
 SIDE_LABELS = {"WEST": "BLUFOR", "EAST": "OPFOR", "GUER": "Independent"}
 TRACK_SIDES = ("WEST", "EAST")
+WORLD_SIZE_M = 15360
 
 
 def bounds(data: Round, margin: float = 250.0) -> tuple[float, float, float, float]:
@@ -144,6 +146,19 @@ def draw_tracks(ax, data: Round, t0: float, t1: float, fade: bool, line_width: f
                 )
 
 
+def load_terrain():
+    """The game's Tanoa overview from tools/extract-tanoa-map.ps1, or None if it hasn't been extracted."""
+    path = Path(__file__).parent.parent / "reference" / "map" / "tanoa_picturemap.png"
+    if not path.exists():
+        return None
+    return np.asarray(Image.open(path).convert("RGB"))
+
+
+def draw_terrain(ax, terrain) -> None:
+    if terrain is not None:
+        ax.imshow(terrain, extent=(0, WORLD_SIZE_M, 0, WORLD_SIZE_M), origin="upper", alpha=0.45, zorder=0, interpolation="bilinear")
+
+
 def style_axis(ax, limits, small: bool) -> None:
     ax.set_xlim(limits[0], limits[1])
     ax.set_ylim(limits[2], limits[3])
@@ -192,19 +207,30 @@ def main() -> int:
     figure = plt.figure(figsize=(9 + 3.2 * columns, 9.6), facecolor=SURFACE)
     grid = GridSpec(rows, 2 + columns, figure=figure, width_ratios=[1.45, 1.45] + [1] * columns, wspace=0.08, hspace=0.12)
 
+    terrain = load_terrain()
+
     main_ax = figure.add_subplot(grid[:, :2])
+    draw_terrain(main_ax, terrain)
     style_axis(main_ax, limits, small=False)
     draw_sectors(main_ax, data, end, labels=True, capture_times=True)
     draw_tracks(main_ax, data, 0, end, fade=True, line_width=1.3)
     main_ax.set_title("Whole round: track fades from faint (early) to solid (late)", fontsize=10, color=INK, loc="left")
     main_ax.set_xlabel("Tanoa x (m)", fontsize=8, color=MUTED)
     main_ax.set_ylabel("Tanoa y (m)", fontsize=8, color=MUTED)
-    main_ax.legend(handles=legend_handles(), loc="lower right", fontsize=7.5, frameon=True, facecolor=SURFACE, edgecolor=GRID)
+    main_ax.legend(
+        handles=legend_handles(),
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.07),
+        ncol=4,
+        fontsize=7.5,
+        frameon=False,
+    )
 
     window = end / args.panels
     for index in range(args.panels):
         t0, t1 = index * window, (index + 1) * window
         ax = figure.add_subplot(grid[index % rows, 2 + index // rows])
+        draw_terrain(ax, terrain)
         style_axis(ax, limits, small=True)
         draw_sectors(ax, data, t1, labels=False, capture_times=False)
         draw_tracks(ax, data, t0, t1, fade=False, line_width=1.1)

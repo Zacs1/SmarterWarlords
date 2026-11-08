@@ -17,3 +17,6 @@ tests/server/runs/
 
 # Python
 __pycache__/
+
+# Live console capture of a round: the RPT is the record
+docs/runs/*/*-console.log

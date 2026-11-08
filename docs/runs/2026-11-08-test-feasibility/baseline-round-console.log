@@ -1,8 +1,0 @@
-﻿Built D:\Projects\SmarterWarlords\tests\missions\SWL_Test.Tanoa
-Installed C:\Program Files (x86)\Steam\steamapps\common\Arma 3 Server\mpmissions\SWL_Test.Tanoa
-Starting server: C:\Program Files (x86)\Steam\steamapps\common\Arma 3 Server\arma3server_x64.exe -port=2402 "-config=D:\Projects\SmarterWarlords\tests\server\server.cfg" "-cfg=D:\Projects\SmarterWarlords\tests\server\basic.cfg" "-profiles=D:\Projects\SmarterWarlords\tests\server\runs\2026-11-08_19-26-56_baseline" -name=swl -autoInit -noSplash -world=empty
-Mission started: 19:27:32 SWL|START|t=2|world=Tanoa|mission=SWL_Test|dedicated=1|version=222|build=154089|params=100,1,1,1,1,0,0,1,1,2,2,1,1,1,500,1,-1,0,15,1800,1,2500,-100,-100,-100,-100,-100,-100,-100,-100
-19:27:49 SWL|TARGET|t=19|side=WEST|sector=Sector_1715_6128
-19:27:49 SWL|TARGET|t=19|side=EAST|sector=Leqa
-[1 min] mission time 2s, captures: 0
-[2 min] mission time 62s, captures: 0
