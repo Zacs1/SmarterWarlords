@@ -12,7 +12,12 @@ param(
     [string]$ServerDir = 'C:\Program Files (x86)\Steam\steamapps\common\Arma 3 Server',
     [int]$Port = 2402,
     [int]$StartTimeoutSeconds = 300,
-    [switch]$NoBuild
+    [switch]$NoBuild,
+    # Test scenario from tests/mission_overlay/swl/scenarios, and settings overrides ("a=1;b=[2]").
+    [string]$Scenario = '',
+    [string]$Overrides = '',
+    # Lobby parameter values, e.g. "BIS_WLFTEnabled=4,BIS_WLStartCP=5000". BIS_WLAIVoting defaults to 1.
+    [string]$Params = 'BIS_WLFTEnabled=4,BIS_WLAIVoting=1'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -110,7 +115,7 @@ $running = Get-Process -Name 'arma3server_x64' -ErrorAction SilentlyContinue
 if ($running) { throw "An arma3server_x64 process is already running (PID $($running.Id -join ', ')). Stop it first." }
 
 if (-not $NoBuild) {
-    & (Join-Path $PSScriptRoot 'build-test-mission.ps1')
+    & (Join-Path $PSScriptRoot 'build-test-mission.ps1') -Scenario $Scenario -Overrides $Overrides
 }
 & (Join-Path $PSScriptRoot 'install-test-mission.ps1') -ServerDir $ServerDir
 
@@ -118,7 +123,15 @@ $stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
 $runDir = Join-Path $root "tests\server\runs\${stamp}_$Name"
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 
-$cfg = Join-Path $root 'tests\server\server.cfg'
+# Per-run server.cfg: the template with this run's lobby parameters.
+$template = Join-Path $root 'tests\server\server.cfg'
+$cfg = Join-Path $runDir 'server.cfg'
+$paramLines = ($Params -split ',' | Where-Object { $_.Trim() } | ForEach-Object {
+    $k, $v = $_ -split '=', 2
+    '				{0} = {1};' -f $k.Trim(), $v.Trim()
+}) -join "`r`n"
+$cfgText = (Get-Content -LiteralPath $template -Raw) -replace '@PARAMS@', $paramLines
+Set-Content -LiteralPath $cfg -Value $cfgText -Encoding ascii
 $basic = Join-Path $root 'tests\server\basic.cfg'
 
 # Nothing loads with -mod, so no Workshop mod can load: vanilla only.
@@ -176,6 +189,7 @@ try {
                 if ($line -match 'SWL\|START\|') { $sawStart = $true; Write-Output "Mission started: $line" }
                 if ($line -match 'SWL\|TICK\|t=(\d+)') { $lastT = $Matches[1] }
                 if ($line -match 'SWL\|(CAPTURE|TARGET)\|') { Write-Output $line }
+                if ($line -match '(Error in expression|SWL\|C_READY)') { Write-Output $line }
                 if ($line -match 'SWL\|CAPTURE\|') { $captures++ }
                 if ($line -match 'SWL\|(ROUNDEND|ENDED)\|' -and -not $sawEnd) {
                     Write-Output $line

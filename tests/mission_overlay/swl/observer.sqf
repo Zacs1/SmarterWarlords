@@ -86,7 +86,9 @@ SWL_fnc_logGroup = {
 		format ["combat=%1", [0, 1] select (behaviour _leader == "COMBAT")],
 		format ["beh=%1", behaviour _leader],
 		format ["veh=%1", ["-", typeOf _vehicle] select (_vehicle != _leader)],
-		format ["warlord=%1", [0, 1] select _isWarlord]
+		format ["warlord=%1", [0, 1] select _isWarlord],
+		format ["state=%1", _group getVariable ["SWLC_state", "-"]],
+		format ["wave=%1", _group getVariable ["SWLC_waveId", "-"]]
 	]] call SWL_fnc_emit;
 };
 

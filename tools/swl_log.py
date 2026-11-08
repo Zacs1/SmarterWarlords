@@ -39,6 +39,8 @@ class Sample:
     leader: str
     wp: str
     warlord: bool
+    state: str = "-"
+    wave: str = "-"
 
 
 @dataclass
@@ -148,6 +150,11 @@ class Round:
     script_errors: list[ScriptError] = field(default_factory=list)
     warnings: dict[str, int] = field(default_factory=dict)
     extra_starts: int = 0
+    events: dict[str, list[dict[str, str]]] = field(default_factory=dict)
+
+    def of(self, kind: str) -> list[dict[str, str]]:
+        """Every line of a type the parser has no dedicated structure for (ADAPTER, C_WAVE, ...)."""
+        return self.events.get(kind, [])
 
     @property
     def last_t(self) -> int:
@@ -275,6 +282,8 @@ def parse_log(path: str | Path) -> Round:
                         leader=fields.get("leader", "?"),
                         wp=fields.get("wp", "?"),
                         warlord=fields.get("warlord") == "1",
+                        state=fields.get("state", "-"),
+                        wave=fields.get("wave", "-"),
                     )
                 )
             elif kind in ("SECTORINIT", "SEC"):
@@ -319,6 +328,8 @@ def parse_log(path: str | Path) -> Round:
                     data.round_end = fields
             elif kind == "ENDED":
                 data.ended.append(fields)
+            else:
+                data.events.setdefault(kind, []).append(fields)
 
     close_pending()
     data.script_errors = list(errors.values())
@@ -359,6 +370,26 @@ def idle_stretches(group: Group) -> list[Stretch]:
             i = j + 1
         else:
             i += 1
+    return out
+
+
+def idle_outside_staging(group: Group, exempt: tuple[str, ...] = ("Staging",)) -> list[Stretch]:
+    """Idle stretches counted only over samples not in an exempt state, and not mostly in combat."""
+    out: list[Stretch] = []
+    run: list[Sample] = []
+    groups_of_samples: list[list[Sample]] = []
+    for sample in group.samples:
+        if sample.state in exempt or sample.units == 0:
+            if run:
+                groups_of_samples.append(run)
+            run = []
+        else:
+            run.append(sample)
+    if run:
+        groups_of_samples.append(run)
+    for samples in groups_of_samples:
+        partial = Group(group.id, group.name, group.side, samples)
+        out.extend(s for s in idle_stretches(partial) if s.combat_fraction < 0.5)
     return out
 
 

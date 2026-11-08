@@ -270,6 +270,13 @@ From the [official setup guide](https://community.bistudio.com/wiki/MP_Warlords)
 
 Step one of the build is to unpack the Warlords function and mission PBOs and answer these four questions before writing any commander code.
 
+### Answers (from reading the code, then checked in the phase 0 gate round)
+
+1. **Target and ownership.** The target is the public `BIS_WL_currentSector_<side>`, objNull while a vote is running (19 s or more) and not cleared when the enemy takes the sector. Owner is `BIS_WL_sectorSide` on the sector logic. `BIS_WL_conqueredSectors_*` is not the same thing as owned. Sector logics are moved to [100,100] briefly during capture, so positions are cached once at start.
+2. **Warlords' AI loop.** There is one `fn_WLAICore.fsm` per Warlord on the server and no per-group off switch. It only writes waypoints when it enters `fight`, `fast_travel`, `defend` or `defend_1`, so the commander **steers** instead of forking: it writes its own waypoints and a guard restores them every 3 s if anything changes them. In the gate round the ordered group walked 870 m on the commander's order with no drift, and the order was back on the group after its members died and respawned at base. The stuck-unit script (nudge, then `setDamage 1` after about 9 minutes under 1 m of movement per 90 s) means holding groups must shuffle.
+3. **Purchases and fast travel.** The AI buys through `BIS_fnc_WLAirdrop` after a random pick; the commander debits funds and calls the same function. CP (`BIS_WL_funds`) sits on each unit with no side pool, and every Warlord gets the full side income; the commander only spends AI Warlords' funds. AI fast travel is an FSM state with an FSM-level rule check, so the adapter enforces the rules itself: owned sector only, not while enemies are within 200 m, 50 CP (`BIS_WL_FTCost`) charged like vanilla.
+4. **Dedicated server.** Tracker T156979 (AI stall after the first sector with fast travel off) is not confirmed by the code. `BIS_WLFTEnabled` values are: 1 everyone, 0 off, 2 off for AI, 3 off for players, 4 only to owned sectors (attack fast travel off in the FSM, defend fast travel on). The commander targets value 4 and the gate round confirmed voting continues past the first capture. Hosted games: the server waits for the host's own side setup; vanilla scans look broken on an all-AI side, so the commander reads scan results itself.
+
 ## Soldier-level AI
 
 The commander does not touch how individual soldiers fight; for cover, suppression and flinching, pair it with an existing soldier AI mod, with LAMBS Danger as the default. Vanilla soldiers' weak reaction to being shot at is a separate problem from the one this design solves, and it is already well served by mods.
@@ -342,6 +349,13 @@ The biggest risk is fighting Warlords' own AI loop for control of the same group
 1. **Who it's for.** The v1.0 bar is a locally hosted co-op round: two humans plus AI on one side against an all-AI enemy side, around 8v8. Single-player and public servers with mixed AI are goals after that, and the design shouldn't block them.
 2. **Map.** v1.0 targets Tanoa. All base-game maps (Altis, Stratis, Malden, Livonia and the rest) come after, so nothing map-specific goes outside per-map settings.
 3. **Release.** Built for personal use first; a Workshop release follows if it turns out well, so code should stay in releasable shape (no hardcoded paths, settings in one file).
+
+### Decision log (from the build)
+
+1. **Steer rather than fork Warlords' AI.** One FSM per Warlord, no per-group off switch, so the commander re-asserts its own waypoints. A forked scenario would break on every Bohemia patch.
+2. **The commander replaces vehicle buying; infantry top-ups stay vanilla until phase 3.** Vanilla buys armed vehicles at random and never buys unarmed transport.
+3. **Fast travel value 4 is the scenario default.** Only owned sectors, so fast travel never lands in the contested sector.
+4. **A wave cap beats the "one wave in flight" rule.** The prompt's "no extensions" wins over the design doc's one-at-a-time rule: the next wave waits for the previous wave to reach its assault, but the 4-minute staging cap always launches it.
 
 ## Sources
 

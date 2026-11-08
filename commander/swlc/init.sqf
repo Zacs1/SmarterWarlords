@@ -1,0 +1,35 @@
+// SmarterWarlords commander entry point. Run from initServer.sqf.
+// Runs wherever isServer is true: dedicated server or a player hosting.
+if (!isServer) exitWith {};
+
+[] spawn {
+	scriptName "SWLC init";
+
+	call compile preprocessFileLineNumbers "swlc\settings.sqf";
+
+	// Map overrides, then test overrides.
+	private _mapFile = format ["swlc\maps\%1.sqf", worldName];
+	if (fileExists _mapFile) then {
+		{SWLC_settings set [_x # 0, _x # 1]} forEach (call compile preprocessFileLineNumbers _mapFile);
+	};
+	if (!isNil "SWLC_overrides") then {
+		{SWLC_settings set [_x # 0, _x # 1]} forEach SWLC_overrides;
+	};
+
+	{
+		call compile preprocessFileLineNumbers format ["swlc\%1.sqf", _x];
+	} forEach ["util", "adapter", "radio", "intel", "groups", "staging", "logistics", "vehicles", "wave", "watchdog", "defence", "commander", "debug"];
+
+	waitUntil {sleep 1; [] call SWLC_fnc_adReady};
+	[] call SWLC_fnc_adInit;
+	SWLC_ready = true;
+	["C_READY", [["world", worldName], ["sectors", count SWLC_sectors], ["warlords", count BIS_WL_allWarlords], ["ftparam", missionNamespace getVariable ["BIS_WL_FTEnabled", -1]]]] call SWLC_fnc_log;
+
+	if (SWLC_settings get "commanderEnabled") then {
+		[] call SWLC_fnc_intelInstallHandlers;
+		[west] call SWLC_fnc_startCommander;
+		[east] call SWLC_fnc_startCommander;
+		SWLC_debug = SWLC_settings get "debugOverlay";
+		[] spawn SWLC_fnc_debugLoop;
+	};
+};
