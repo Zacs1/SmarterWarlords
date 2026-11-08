@@ -142,6 +142,9 @@ SWLC_fnc_smartReinforceTick = {
 								_g setVariable ["SWLC_reinforced", true];
 								(_a get "groups") deleteAt ((_a get "groups") find _g);
 								(_good get "groups") pushBackUnique _g;
+								private _moved = _g getVariable ["SWLC_launchMen", 0];
+								_a set ["men", ((_a getOrDefault ["men", 0]) - _moved) max 0];
+								_good set ["men", (_good getOrDefault ["men", 0]) + _moved];
 								private _order = [[_good get "hold", "MOVE", 30]] + ([_target] call SWLC_fnc_sweepOrder);
 								[_g, "Assaulting", _tpos, "reinforce"] call SWLC_fnc_setState;
 								[_g, _order, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
@@ -210,7 +213,7 @@ SWLC_fnc_smartPrepFire = {
 	private _target = _w get "target";
 	private _pos = [_cmd, _target] call SWLC_fnc_smartEnemyCentre;
 	private _pieces = vehicles select {
-		alive _x && {getNumber (configOf _x >> "artilleryScanner") > 0} && {!isNull gunner _x} && {alive gunner _x} && {!isPlayer gunner _x} && {side group gunner _x == _side} && {local gunner _x}
+		alive _x && {getNumber (configOf _x >> "artilleryScanner") > 0} && {!isNull gunner _x} && {alive gunner _x} && {!isPlayer gunner _x} && {!isPlayer leader group gunner _x} &&{side group gunner _x == _side} && {local gunner _x}
 	};
 	if (_pieces isEqualTo []) exitWith {
 		[_cmd, "prepfire", "no_piece", [["wave", _w get "id"]]] call SWLC_fnc_smartLog;
@@ -244,6 +247,9 @@ SWLC_fnc_smartMomentum = {
 	if !(CFG("smartMomentum")) exitWith {};
 	private _f = [_cmd, "momentum"] call SWLC_fnc_persona;
 	private _side = _cmd get "side";
+	if (([_side] call SWLC_fnc_adSideHasPlayers) && {!CFG("voteOnPlayerSide")}) exitWith {
+		[_cmd, "momentum", "players_vote", []] call SWLC_fnc_smartLog;
+	};
 	private _took = time - (_w get "launched");
 	private _men = [_live] call SWLC_fnc_groupsMen;
 	if (_took > CFG("momentumFastSeconds") * _f || {_men < (CFG("momentumMinStrength") / _f) * (_w get "launchStrength")}) exitWith {
@@ -256,9 +262,11 @@ SWLC_fnc_smartMomentum = {
 		if (([_x] call SWLC_fnc_adOwner) != _side && {!([_x] call SWLC_fnc_adIsBase)} && {_x in _avail}) then {
 			private _t = [_cmd, _x] call SWLC_fnc_threatOf;
 			private _known = (_t get "infantry") + 3 * (_t get "light");
-			if ((_t get "armour") == 0 && {_known <= CFG("momentumWeakMen")} && {_known < _bestMen}) then {
+			// A neighbour nobody has seen can stand in only when no scouted weak one exists.
+			private _rank = _known + ([1000, 0] select (_t get "scouted"));
+			if ((_t get "armour") == 0 && {_known <= CFG("momentumWeakMen")} && {_rank < _bestMen}) then {
 				_best = _x;
-				_bestMen = _known;
+				_bestMen = _rank;
 			};
 		};
 	} forEach ([_w get "target"] call SWLC_fnc_adLinks);
@@ -266,7 +274,7 @@ SWLC_fnc_smartMomentum = {
 		[_cmd, "momentum", "no_weak_neighbour", [["took", round _took]]] call SWLC_fnc_smartLog;
 	};
 	_cmd set ["momentum", [_best, time + CFG("momentumHoldSeconds")]];
-	[_cmd, "momentum", "push", [["from", [_w get "target"] call SWLC_fnc_adName], ["to", [_best] call SWLC_fnc_adName], ["took", round _took], ["men", _men], ["known_defenders", _bestMen]]] call SWLC_fnc_smartLog;
+	[_cmd, "momentum", "push", [["from", [_w get "target"] call SWLC_fnc_adName], ["to", [_best] call SWLC_fnc_adName], ["took", round _took], ["men", _men], ["known_defenders", _bestMen mod 1000], ["scouted", _bestMen < 1000]]] call SWLC_fnc_smartLog;
 	[_side, "momentum", [[_best] call SWLC_fnc_adName]] call SWLC_fnc_radio;
 };
 
@@ -280,7 +288,8 @@ SWLC_fnc_smartScoutTick = {
 		private _target = _w get "target";
 		private _groups = [_w] call SWLC_fnc_waveLive;
 		if !(([_cmd, _target] call SWLC_fnc_threatOf) get "scouted") then {
-			if ((count _groups) >= CFG("scoutMinGroups")) then {
+			// The wave must still reach the go count without the scout.
+			if ((count _groups) >= (CFG("scoutMinGroups") max (CFG("goMinGroups") + ([_cmd, "goMinAdd", 0] call SWLC_fnc_persona) + 1))) then {
 				private _sorted = [_groups select {([_x] call SWLC_fnc_state) in ["Staging", "Travelling"]}, [], {[_x] call SWLC_fnc_groupMen}, "ASCEND"] call BIS_fnc_sortBy;
 				if (_sorted isNotEqualTo []) then {
 					_w set ["scoutSent", true];
@@ -289,7 +298,8 @@ SWLC_fnc_smartScoutTick = {
 					private _spot = [_side, _tpos, [_tpos, _cmd get "stagingPos"] call SWLC_fnc_bearing, CFG("scoutDist")] call SWLC_fnc_validHoldPoint;
 					[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
 					[_g, "Recon", _spot, "scout"] call SWLC_fnc_setState;
-					_g setVariable ["SWLC_scoutUntil", time + CFG("scoutMaxSeconds")];
+					private _limit = ((leader _g distance2D _spot) / CFG("footSpeedEstimate")) max CFG("scoutMaxSeconds") min CFG("scoutCapSeconds");
+					_g setVariable ["SWLC_scoutUntil", time + _limit];
 					_g setVariable ["SWLC_scoutVeh", objNull];
 					_g setVariable ["SWLC_scoutSpot", _spot];
 					private _men = [_g] call SWLC_fnc_groupMen;
@@ -302,8 +312,10 @@ SWLC_fnc_smartScoutTick = {
 							_v removeAllEventHandlers "GetIn";
 							_v setVariable ["SWLC_side", _side];
 							_g setVariable ["SWLC_scoutVeh", _v];
-							_g setVariable ["SWLC_scoutEntry", _entry];
-							_g setVariable ["SWLC_scoutUntil", time + CFG("scoutMaxSeconds") + CFG("scoutVehicleWait")];
+							private _bought = _cmd getOrDefault ["scoutVehicles", []];
+							_bought pushBack [_v, _entry, _g];
+							_cmd set ["scoutVehicles", _bought];
+							_g setVariable ["SWLC_scoutUntil", time + _limit + CFG("scoutVehicleWait")];
 							_rode = true;
 						};
 					};
@@ -337,14 +349,6 @@ SWLC_fnc_smartScoutTick = {
 					{unassignVehicle _x} forEach _u;
 					_u orderGetIn false;
 					{if (vehicle _x == _v) then {doGetOut _x}} forEach _u;
-					// The vehicle joins the motor pool, parked, for a later wave.
-					if (alive _v) then {
-						(_g getVariable "SWLC_scoutEntry") params ["_cls", "_cost", "_seats", "_role", "_heavy"];
-						private _id = (_cmd get "vehCounter") + 1;
-						_cmd set ["vehCounter", _id];
-						(_cmd get "vehicles") pushBack (createHashMapFromArray [["id", _id], ["obj", _v], ["cls", _cls], ["role", _role], ["heavy", _heavy], ["seats", _seats], ["state", "parked"],
-							["group", grpNull], ["wave", -1], ["boughtAt", time], ["stuck", 0], ["mounted", false]]);
-					};
 				};
 				[_g] call SWLC_fnc_adClearOrder;
 				[_g, "Unassigned", [], "scout_done"] call SWLC_fnc_setState;
@@ -352,6 +356,28 @@ SWLC_fnc_smartScoutTick = {
 			};
 		};
 	} forEach (_cmd get "groups");
+
+	// A scout's vehicle joins the motor pool, parked, as soon as its group has finished with it,
+	// including when the group was wiped out or stopped being the commander's.
+	private _bought = _cmd getOrDefault ["scoutVehicles", []];
+	if (_bought isNotEqualTo []) then {
+		private _keep = [];
+		{
+			_x params ["_v", "_entry", "_g"];
+			if ((_g in (_cmd get "groups")) && {([_g] call SWLC_fnc_state) == "Recon"}) then {
+				_keep pushBack _x;
+			} else {
+				if (alive _v) then {
+					_entry params ["_cls", "_cost", "_seats", "_role", "_heavy"];
+					private _id = (_cmd get "vehCounter") + 1;
+					_cmd set ["vehCounter", _id];
+					(_cmd get "vehicles") pushBack (createHashMapFromArray [["id", _id], ["obj", _v], ["cls", _cls], ["role", _role], ["heavy", _heavy], ["seats", _seats], ["state", "parked"],
+						["group", grpNull], ["wave", -1], ["boughtAt", time], ["stuck", 0], ["mounted", false]]);
+				};
+			};
+		} forEach _bought;
+		_cmd set ["scoutVehicles", _keep];
+	};
 };
 
 // 8. Hunt unseen AT: something killed a vehicle and nobody saw who, so the nearest free group sweeps the area.
@@ -375,17 +401,19 @@ SWLC_fnc_smartHuntTick = {
 		_cmd set ["huntQueue", []];
 		{
 			_x params ["_pos", "_firing"];
-			private _free = (_cmd get "groups") select {([_x] call SWLC_fnc_state) in ["Unassigned", "Staging", "Reserve"] && {(leader _x distance2D _firing) <= CFG("huntRadius")}};
+			if (surfaceIsWater _firing || {[_cmd get "side", _firing] call SWLC_fnc_adRestricted}) then {_firing = +_pos};
+			private _blocked = [_cmd get "side", _firing] call SWLC_fnc_adRestricted;
+			private _free = (_cmd get "groups") select {!_blocked && {([_x] call SWLC_fnc_state) in ["Unassigned", "Staging", "Reserve"]} && {(leader _x distance2D _firing) <= CFG("huntRadius")}};
 			if (_free isNotEqualTo []) then {
 				private _g = ([_free, [], {leader _x distance2D _firing}, "ASCEND"] call BIS_fnc_sortBy) # 0;
 				[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
 				[_g, "Hunting", _firing, "hunt"] call SWLC_fnc_setState;
-				_g setVariable ["SWLC_huntUntil", time + CFG("huntSeconds")];
+				_g setVariable ["SWLC_huntUntil", time + ((leader _g distance2D _firing) / CFG("footSpeedEstimate")) + CFG("huntSeconds")];
 				[_g, [[_firing, "SAD", 60]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
 				[_cmd, "hunt", "sent", [["group", groupId _g], ["x", round (_firing # 0)], ["y", round (_firing # 1)], ["dist", round (leader _g distance2D _firing)]]] call SWLC_fnc_smartLog;
 				[_cmd get "side", "hunt", [mapGridPosition _firing], _g] call SWLC_fnc_radio;
 			} else {
-				[_cmd, "hunt", "no_free_group", [["x", round (_firing # 0)], ["y", round (_firing # 1)]]] call SWLC_fnc_smartLog;
+				[_cmd, "hunt", "no_free_group", [["x", round (_firing # 0)], ["y", round (_firing # 1)], ["restricted", _blocked]]] call SWLC_fnc_smartLog;
 			};
 		} forEach _queue;
 	};

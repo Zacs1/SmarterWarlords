@@ -207,16 +207,19 @@ SWLC_settings = createHashMapFromArray [
 	["momentumWeakMen", 6],
 	["momentumHoldSeconds", 120],
 	["momentumGoWait", 20],
+	["momentumGoWindow", 120],        // the short go-wait only applies for this long after the vote window closes
 	["smartScout", true],
 	["scoutMinGroups", 4],
 	["scoutDist", 300],
-	["scoutMaxSeconds", 150],
+	["scoutMaxSeconds", 150],         // at least this long; more when the walk needs it
+	["scoutCapSeconds", 360],
+	["footSpeedEstimate", 4],         // metres per second, for time limits on walking orders
 	["scoutVehicleSpareCP", 300],
 	["scoutVehicleWait", 70],         // extra time allowed for a bought vehicle to land before the scout gives up
 	["smartHunt", true],
-	["huntRadius", 1500],
+	["huntRadius", 800],
 	["huntOffset", 150],              // metres from the wreck towards the objective; AT teams fire from about this far
-	["huntSeconds", 150],
+	["huntSeconds", 150],             // time at the spot, on top of the walk
 	["smartDigIn", true],
 	["digInGroups", 1],
 	["digInSeconds", 90],

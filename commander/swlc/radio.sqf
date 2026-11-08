@@ -21,7 +21,7 @@ SWLC_radioLines = createHashMapFromArray [
 	["heavy", ["Taking heavy fire!", "We're getting hammered here.", "Heavy losses, need help.", "They've got us pinned, taking casualties."]],
 	["breaking", ["We're falling back to staging.", "Too many down, pulling back.", "Breaking contact, returning to staging.", "We can't hold, falling back."]],
 	["cheer", ["Sector's ours, well done!", "Yes! We took it!", "That's the way, it's ours!", "Nice work, everyone, it's ours."]],
-	["momentum", ["Don't stop, push on %1!", "They're running. On to %1.", "Keep the pressure on, next is %1.", "%1 is wide open, go now."]],
+	["momentum", ["Don't stop, push on %1!", "They're running. On to %1.", "Keep the pressure on, next is %1.", "Next is %1, go now."]],
 	["scout", ["Scout element moving ahead to %1.", "Sending eyes forward to %1.", "Recon team heading for %1.", "Scouts going out to %1."]],
 	["hunt", ["Hidden AT somewhere near %1, sweep for it.", "Something unseen got a vehicle at %1, hunting it.", "Hunting a hidden shooter at %1.", "Vehicle lost at %1, we're going after them."]],
 	["digin", ["Digging in at %1.", "Taking positions at %1, watch for a counterattack.", "Hold %1, expect them back.", "Set up on %1, they'll be back."]],

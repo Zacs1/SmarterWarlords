@@ -61,7 +61,7 @@ SWLC_fnc_gatherTick = {
 	[_cmd, _w, _staged] call SWLC_fnc_kitTick;
 	private _first = _w get "firstArrive";
 	private _momentum = _cmd getOrDefault ["momentum", []];
-	private _goWait = if (_momentum isNotEqualTo [] && {(_momentum # 0) isEqualTo (_w get "target")}) then {CFG("momentumGoWait")} else {CFG("goMaxWait") * ([_cmd, "goWait"] call SWLC_fnc_persona)};
+	private _goWait = if (_momentum isNotEqualTo [] && {(_momentum # 0) isEqualTo (_w get "target")} && {time < (_momentum # 1) + CFG("momentumGoWindow")}) then {CFG("momentumGoWait")} else {CFG("goMaxWait") * ([_cmd, "goWait"] call SWLC_fnc_persona)};
 	private _capReached = _first >= 0 && {(time - _first) >= _goWait};
 	private _countReached = (count _staged) >= CFG("goMinGroups") + ([_cmd, "goMinAdd", 0] call SWLC_fnc_persona) || {_w getOrDefault ["forceGo", false]};
 	if !(_capReached || _countReached) exitWith {};
