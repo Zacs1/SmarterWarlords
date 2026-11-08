@@ -61,6 +61,26 @@ The whole point is that a round reads as an active military operation, not telep
 ## Phase 5: Polish that needs no human
 - Difficulty settings (intel decay, wave size, reaction delay, scan buying). Performance: log commander tick cost and server FPS; aim for an average tick cost well under 5 ms and server FPS within about 10% of the vanilla baseline. One LAMBS compatibility round. No Workshop packaging.
 
+## Phase 6: smarter behaviours
+(Added by the user during the run. Finish phases 0 to 5 as planned, then do this as phase 6, before the "if time remains" list. Add a "Phase 6: smarter behaviours" section to the design doc describing each one as built.)
+
+Twelve cheap rules that make the commander read as thinking. Each gets its own on/off switch and tunables in the settings file, defaulting to on, so I can disable any one without touching code. Build them roughly in this order (the first three change the feel most), commit after each, and tag phase-6-done at the end. Test each with a short scenario test and an analyser check where it can be measured; one soak round at the end with everything on.
+
+1. Break and consolidate. A group down to about a third of its strength pulls back to staging rather than fighting to the last man, then merges with another weak group of the same side into one usable group. Check: weakened groups retreat and merge rather than dying in place.
+2. Livelier radio. Varied phrasings for every message type (several options each, picked at random), plus new calls: a group taking heavy fire or losses, a group breaking and falling back, a cheer when a sector falls. Keep cooldowns so it never spams. All radio text is player-visible: list every line you wrote in the hand-off so I can review them.
+3. Reinforce success. If one approach breaks into the sector while another is pinned or stalled, redirect the stalled groups to follow the approach that's working. Check: in a scenario where one approach is blocked, its groups re-route.
+4. Smoke before the push. Groups throw smoke between the holding point and the sector before the final push, angled to screen the approach from known enemy positions. Uses the units' own smoke grenades; give a smoke grenade or two at the staging crate if they have none.
+5. Prep fire. If the side has mortars or artillery available (owned or affordable within the CP reserve rule), a short barrage lands on the target just before the infantry leave the holding points, and lifts before they arrive. Never fire on positions friendly units are in or close to.
+6. Exploit momentum. If a wave takes its sector quickly with most of its strength left, and an adjacent sector is weakly held according to the intel board, push straight on to it without the full regroup cycle. Must still respect the defence reserve. Check: a fast, cheap capture next to a weak sector triggers a follow-on push.
+7. Scout first. For an unscouted target, one small fast group (a quad bike or light vehicle where affordable) goes ahead to look while the wave gathers at staging. Its sightings feed the board before the go. It must not delay the go signal.
+8. Hunt the unseen AT. When a friendly vehicle is destroyed by an attacker nobody saw, the nearest suitable group not in a wave's assault sweeps the likely firing area, then returns to its task.
+9. Dig in after capture. Groups holding a newly captured sector take positions facing the most likely counterattack direction from the board (or towards enemy-held sectors if the board is empty), at building edges and cover, not in the middle of the circle.
+10. Commander personality. At round start each side's commander randomly gets one personality (aggressive, cautious or sneaky) that shifts a few weights: go-signal timing, how wide the approaches spread, how much it spends on vehicles, how readily it exploits momentum. Log the chosen personality. Allow forcing one via a setting for testing.
+11. Memory within a round. The commander remembers approaches where a wave took heavy losses at each sector and avoids or penalises them for later waves on that sector, so repeating the same ambush stops working. Check: a costly approach isn't reused for that sector's next wave.
+12. Join the player's push. When a human player on the side is moving towards the current target, nearby AI groups that are free can attach and move with them, and the radio says so. Never take control away from the player or their own AI. Can't be tested without players: confirm it causes no errors with none connected, and list it for me to test.
+
+In the hand-off and final message, add phase 6 results per feature (built, tested, PASS or FAIL, or untested and why), plus the radio lines list.
+
 ## If time remains
 - More tuning soak rounds, aimed at pace: shorten anything that makes rounds drag without making them messier. An Altis smoke test proving nothing is Tanoa-specific. A local-only HEMTT addon packaging dry run.
 
