@@ -68,7 +68,7 @@ To parse: find `SWL|` in the line and split from there. `tools/swl_log.py` does 
 | `veh` | Vehicle class if the leader is mounted, otherwise `-` |
 | `warlord` | 1 if the leader is one of the mode's warlords (playable units) |
 
-Sectors that have no location name are named `Sector_<x>_<y>`, because their localised default name is empty on a dedicated server. Positions are cached before any capture, because Warlords briefly moves a sector's logic object to `[100,100]` when it changes hands.
+Sectors that have no location name are named `Sector_<x>_<y>`, because their localised default name is empty on a dedicated server. A sector's name can change during a round: it can start as `Sector_<x>_<y>` and later gain its location name, such as `Rautake`. Position is the sector's identity, so `tools/swl_log.py` merges both names and reports the location name. Positions are cached before any capture, because Warlords briefly moves a sector's logic object to `[100,100]` when it changes hands.
 
 ## Analyser definitions
 

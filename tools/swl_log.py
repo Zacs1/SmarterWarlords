@@ -17,6 +17,7 @@ _ERROR_START = re.compile(r"Error in expression")
 _ERROR_DETAIL = re.compile(r"\bError (?!in expression|position)(.+)$")
 _ERROR_FILE = re.compile(r"\bFile (.+?)(?:\.\.\.)?, line (\d+)")
 _WARNING_MESSAGE = re.compile(r"Warning Message: (.+)$")
+_PLACEHOLDER_NAME = re.compile(r"(?i)^sector_")
 
 
 def _num(value: str | None) -> float | None:
@@ -191,6 +192,8 @@ def parse_log(path: str | Path) -> Round:
     path = Path(path)
     data = Round(path=path)
     errors: dict[tuple[str, str], ScriptError] = {}
+    by_pos: dict[tuple[float, float], Sector] = {}
+    aliases: dict[str, tuple[float, float]] = {}
     in_first_round = True
     pending: dict | None = None
     pending_left = 0
@@ -275,19 +278,29 @@ def parse_log(path: str | Path) -> Round:
                     )
                 )
             elif kind in ("SECTORINIT", "SEC"):
-                existing = data.sectors.get(fields["name"])
-                if existing is None:
-                    data.sectors[fields["name"]] = Sector(
-                        name=fields["name"],
-                        x=_num(fields.get("x")) or 0.0,
-                        y=_num(fields.get("y")) or 0.0,
+                # A sector can gain its location name during the round, so position is its identity.
+                name = fields["name"]
+                pos = (_num(fields.get("x")) or 0.0, _num(fields.get("y")) or 0.0)
+                sector = by_pos.get(pos)
+                if sector is None:
+                    sector = Sector(
+                        name=name,
+                        x=pos[0],
+                        y=pos[1],
                         base=fields.get("base") == "1",
                         owner=fields.get("owner", "?"),
                         size=_num(fields.get("size")) or -1.0,
                     )
-                elif existing.size < 0 and fields.get("size"):
-                    existing.size = _num(fields.get("size")) or -1.0
+                    by_pos[pos] = sector
+                if sector.size < 0 and fields.get("size"):
+                    sector.size = _num(fields.get("size")) or -1.0
+                aliases[name] = pos
+                if not _PLACEHOLDER_NAME.match(name):
+                    sector.name = name
             elif kind == "CAPTURE":
+                pos = (_num(fields.get("x")) or 0.0, _num(fields.get("y")) or 0.0)
+                if pos in by_pos:
+                    aliases[fields.get("sector", "?")] = pos
                 data.captures.append(
                     Capture(
                         t=t,
@@ -309,6 +322,23 @@ def parse_log(path: str | Path) -> Round:
 
     close_pending()
     data.script_errors = list(errors.values())
+
+    def canonical(name: str) -> str:
+        pos = aliases.get(name)
+        return by_pos[pos].name if pos is not None else name
+
+    data.sectors = {sector.name: sector for sector in by_pos.values()}
+    for capture in data.captures:
+        capture.sector = canonical(capture.sector)
+        sector = data.sectors.get(capture.sector)
+        if sector is not None:
+            capture.x, capture.y = sector.x, sector.y
+    for target in data.targets:
+        target.sector = canonical(target.sector)
+    for tick in data.ticks:
+        for key in ("west_target", "east_target"):
+            if key in tick.fields:
+                tick.fields[key] = canonical(tick.fields[key])
     return data
 
 
