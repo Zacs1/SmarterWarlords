@@ -153,6 +153,9 @@ SWLC_fnc_waveLaunch = {
 		_x setVariable ["SWLC_legAbandon", false];
 		_x setVariable ["SWLC_launchMen", [_x] call SWLC_fnc_groupMen];
 		_x setVariable ["SWLC_broke", false];
+		if (CFG("smartSmoke") && {alive leader _x} && {((magazines leader _x) findIf {_x isKindOf ["SmokeShell", configFile >> "CfgMagazines"]}) < 0}) then {
+			(leader _x) addMagazines ["SmokeShell", 2];
+		};
 		_x setVariable ["SWLC_reinforced", false];
 		_x setVariable ["SWLC_bestD", 1e9];
 		_x setVariable ["SWLC_bestAt", time];
@@ -405,6 +408,7 @@ SWLC_fnc_waveGoIn = {
 			[_x, [_target] call SWLC_fnc_sweepOrder, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
 		};
 	} forEach _live;
+	[_cmd, _w, _live] call SWLC_fnc_smartSmoke;
 	_w set ["phase", "ASSAULT"];
 	_w set ["assaultStart", time];
 	_w set ["lastProgress", time];

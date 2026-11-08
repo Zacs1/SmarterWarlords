@@ -148,3 +148,47 @@ SWLC_fnc_smartReinforceTick = {
 		};
 	} forEach (_cmd get "flying");
 };
+
+// The centre of what the side knows about near a sector, or the sector centre.
+SWLC_fnc_smartEnemyCentre = {
+	params ["_cmd", "_target"];
+	private _c = [_target] call SWLC_fnc_adPos;
+	private _r = ([_target] call SWLC_fnc_adSize) / 2 + 150;
+	private _sx = 0;
+	private _sy = 0;
+	private _n = 0;
+	{
+		private _p = _x get "pos";
+		if ((_p distance2D _c) <= _r) then {
+			_sx = _sx + (_p # 0);
+			_sy = _sy + (_p # 1);
+			_n = _n + 1;
+		};
+	} forEach (_cmd get "board");
+	if (_n == 0) exitWith {+_c};
+	[_sx / _n, _sy / _n, 0]
+};
+
+// 4. Smoke before the push: laid forward of the lead group, on the line to the enemy.
+SWLC_fnc_smartSmoke = {
+	params ["_cmd", "_w", "_live"];
+	if !(CFG("smartSmoke")) exitWith {};
+	private _enemy = [_cmd, _w get "target"] call SWLC_fnc_smartEnemyCentre;
+	private _thrown = 0;
+	{
+		private _a = _x;
+		{
+			private _u = leader _x;
+			private _mag = (magazines _u) select {_x isKindOf ["SmokeShell", configFile >> "CfgMagazines"]};
+			if (_x in _live && {alive _u} && {(_x getVariable ["SWLC_leg", ""]) == "FOOT"} && {_mag isNotEqualTo []}) then {
+				private _here = getPosATL _u;
+				private _p = [_here, [_here, _enemy] call SWLC_fnc_bearing, CFG("smokeThrowDist")] call SWLC_fnc_offset;
+				_u removeMagazine (_mag # 0);
+				createVehicle ["SmokeShell", _p, [], 0, "CAN_COLLIDE"];
+				_thrown = _thrown + 1;
+				[_cmd, "smoke", "thrown", [["group", groupId _x], ["x", round (_p # 0)], ["y", round (_p # 1)], ["known_enemy", _enemy isNotEqualTo ([_w get "target"] call SWLC_fnc_adPos)]]] call SWLC_fnc_smartLog;
+			};
+		} forEach (((_a get "groups") select {_x in _live}) select [0, CFG("smokeGroupsPerApproach")]);
+	} forEach (_w get "approaches");
+	if (_thrown > 0) then {[_cmd get "side", "smoke", [], _live # 0] call SWLC_fnc_radio};
+};
