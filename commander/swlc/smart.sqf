@@ -18,6 +18,7 @@ SWLC_fnc_smartTick = {
 	[_cmd] call SWLC_fnc_smartBreakTick;
 	[_cmd] call SWLC_fnc_smartRadioTick;
 	[_cmd] call SWLC_fnc_smartReinforceTick;
+	[_cmd] call SWLC_fnc_smartScoutTick;
 	// SMART_CALLS
 };
 
@@ -263,4 +264,88 @@ SWLC_fnc_smartMomentum = {
 	_cmd set ["momentum", [_best, time + CFG("momentumHoldSeconds")]];
 	[_cmd, "momentum", "push", [["from", [_w get "target"] call SWLC_fnc_adName], ["to", [_best] call SWLC_fnc_adName], ["took", round _took], ["men", _men], ["known_defenders", _bestMen]]] call SWLC_fnc_smartLog;
 	[_side, "momentum", [[_best] call SWLC_fnc_adName]] call SWLC_fnc_radio;
+};
+
+// 7. Scout first: a small group goes ahead while the wave gathers. Never holds up the go.
+SWLC_fnc_smartScoutTick = {
+	params ["_cmd"];
+	if !(CFG("smartScout")) exitWith {};
+	private _side = _cmd get "side";
+	private _w = _cmd get "gather";
+	if (!isNil "_w" && {!(_w getOrDefault ["scoutSent", false])}) then {
+		private _target = _w get "target";
+		private _groups = [_w] call SWLC_fnc_waveLive;
+		if !(([_cmd, _target] call SWLC_fnc_threatOf) get "scouted") then {
+			if ((count _groups) >= CFG("scoutMinGroups")) then {
+				private _sorted = [_groups select {([_x] call SWLC_fnc_state) in ["Staging", "Travelling"]}, [], {[_x] call SWLC_fnc_groupMen}, "ASCEND"] call BIS_fnc_sortBy;
+				if (_sorted isNotEqualTo []) then {
+					_w set ["scoutSent", true];
+					private _g = _sorted # 0;
+					private _tpos = [_target] call SWLC_fnc_adPos;
+					private _spot = [_side, _tpos, [_tpos, _cmd get "stagingPos"] call SWLC_fnc_bearing, CFG("scoutDist")] call SWLC_fnc_validHoldPoint;
+					[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
+					[_g, "Recon", _spot, "scout"] call SWLC_fnc_setState;
+					_g setVariable ["SWLC_scoutUntil", time + CFG("scoutMaxSeconds")];
+					_g setVariable ["SWLC_scoutVeh", objNull];
+					_g setVariable ["SWLC_scoutSpot", _spot];
+					private _men = [_g] call SWLC_fnc_groupMen;
+					private _entry = [_cmd, _men] call SWLC_fnc_vehCheapestTransport;
+					private _rode = false;
+					if (_entry isNotEqualTo [] && {([_side] call SWLC_fnc_cpFree) >= (_entry # 1) + CFG("scoutVehicleSpareCP")} && {alive leader _g} && {[leader _g] call SWLC_fnc_adIsWarlord}) then {
+						private _items = [_cmd, leader _g, [_entry # 0], _entry # 1, "scout"] call SWLC_fnc_logBuy;
+						if (_items isNotEqualTo []) then {
+							private _v = _items # 0;
+							_v removeAllEventHandlers "GetIn";
+							_v setVariable ["SWLC_side", _side];
+							_g setVariable ["SWLC_scoutVeh", _v];
+							_g setVariable ["SWLC_scoutEntry", _entry];
+							_g setVariable ["SWLC_scoutUntil", time + CFG("scoutMaxSeconds") + CFG("scoutVehicleWait")];
+							_rode = true;
+						};
+					};
+					if (!_rode) then {[_g, [[_spot, "MOVE", 40]], "AWARE", "FULL", "WEDGE", "GREEN"] call SWLC_fnc_adSetOrder};
+					_g setVariable ["SWLC_scoutMoving", !_rode];
+					[_cmd, "scout", "sent", [["group", groupId _g], ["wave", _w get "id"], ["target", [_target] call SWLC_fnc_adName], ["vehicle", _rode]]] call SWLC_fnc_smartLog;
+					[_side, "scout", [[_target] call SWLC_fnc_adName], _g] call SWLC_fnc_radio;
+				};
+			};
+		};
+	};
+
+	{
+		private _g = _x;
+		if (([_g] call SWLC_fnc_state) == "Recon" && {!isNil {_g getVariable "SWLC_scoutUntil"}}) then {
+			private _v = _g getVariable ["SWLC_scoutVeh", objNull];
+			if (!(_g getVariable ["SWLC_scoutMoving", false]) && {!isNull _v} && {alive _v} && {isNull attachedTo _v} && {((getPosATL _v) # 2) < 2}) then {
+				_g setVariable ["SWLC_scoutMoving", true];
+				private _units = [_g] call SWLC_fnc_alive;
+				_g addVehicle _v;
+				(_units # 0) assignAsDriver _v;
+				{_x assignAsCargo _v} forEach (_units - [_units # 0]);
+				_units orderGetIn true;
+				[_g, [[_g getVariable "SWLC_scoutSpot", "MOVE", 40]], "AWARE", "FULL", "WEDGE", "GREEN"] call SWLC_fnc_adSetOrder;
+			};
+			if (time >= (_g getVariable "SWLC_scoutUntil") || {(_g getVariable ["SWLC_scoutMoving", false]) && {[_g] call SWLC_fnc_adOrderDone}}) then {
+				_g setVariable ["SWLC_scoutUntil", nil];
+				if (!isNull _v) then {
+					_g leaveVehicle _v;
+					private _u = (units _g) select {alive _x};
+					{unassignVehicle _x} forEach _u;
+					_u orderGetIn false;
+					{if (vehicle _x == _v) then {doGetOut _x}} forEach _u;
+					// The vehicle joins the motor pool, parked, for a later wave.
+					if (alive _v) then {
+						(_g getVariable "SWLC_scoutEntry") params ["_cls", "_cost", "_seats", "_role", "_heavy"];
+						private _id = (_cmd get "vehCounter") + 1;
+						_cmd set ["vehCounter", _id];
+						(_cmd get "vehicles") pushBack (createHashMapFromArray [["id", _id], ["obj", _v], ["cls", _cls], ["role", _role], ["heavy", _heavy], ["seats", _seats], ["state", "parked"],
+							["group", grpNull], ["wave", -1], ["boughtAt", time], ["stuck", 0], ["mounted", false]]);
+					};
+				};
+				[_g] call SWLC_fnc_adClearOrder;
+				[_g, "Unassigned", [], "scout_done"] call SWLC_fnc_setState;
+				[_cmd, "scout", "done", [["group", groupId _g], ["alive", [_g] call SWLC_fnc_groupMen]]] call SWLC_fnc_smartLog;
+			};
+		};
+	} forEach (_cmd get "groups");
 };
