@@ -12,7 +12,7 @@ What success looks like in play:
 
 - Every AI group is visibly doing something purposeful at all times: travelling, staging, attacking, defending or regrouping.
 - Attacks arrive as waves of several groups at once, not a trickle.
-- Groups heading into a sector with known armour carry AT; groups heading into a heavily held town wait for numbers.
+- Groups heading into a sector with known armour carry AT; groups heading into a heavily held town bring more firepower.
 - Radio chatter tells human players what the AI knows and what it is about to do.
 - The commander only acts on what its soldiers have seen, so it can be surprised, misled and outplayed.
 
@@ -25,7 +25,7 @@ Six rules shape every decision below; when a feature conflicts with one, the rul
 3. **Rule-based and readable.** Every decision comes from explicit rules and weighted scores, with no machine learning and no LLM at runtime. If the AI does something dumb, the debug overlay shows which rule fired and why.
 4. **Layer on Warlords, don't fork it.** Warlords keeps owning sectors, CP, voting, purchasing and respawn. The commander sits on top and steers AI groups. This keeps maintenance small when Bohemia patches the mode.
 5. **Cheap to run.** The commander thinks on a slow tick (every 10 to 20 seconds), runs only on the server, and does no per-frame work. Big games with 100+ AI must not lose frame rate to it.
-6. **Visible intent.** Players should be able to read what the AI is doing from radio chatter and behaviour alone. An army that is clearly gathering in a village feels alive even before it attacks.
+6. **Visible intent.** Players should be able to read what the AI is doing from radio chatter and behaviour alone. An army that is clearly gathering in a village feels alive even before it attacks. Staging should look like an operation gearing up, not men standing around: soldiers running to the crate, vehicles arriving and lining up, a mount-up call on the radio, then convoys pulling out together. Fast travel only ever goes to safe owned sectors, never into the contested one, so the last leg is always driven or walked.
 
 ## Architecture
 
@@ -109,14 +109,16 @@ The commander announces the staging sector on radio and marks it for the side.
 ### 3. Assemble the wave
 
 - Unassigned and regrouped groups are sent to staging, by fast travel where Warlords allows it for AI, otherwise on foot or by transport.
-- **Required strength** comes from the target's threat summary: roughly 1.5 times the known defending infantry, plus the AT rule from Loadout and asset prep. Unscouted targets need a recon report first or a fixed minimum of three groups.
-- **Staging timer:** the wave launches when required strength is met, or when the timer runs out (about 4 minutes after the first group arrives). On timeout it goes with what it has if it has at least 60% of required strength; otherwise it waits one more timer and asks for purchases.
+- **Who goes** is every group that has reached staging when the go signal comes. The threat summary shapes what the wave takes (AT, extra transport, a combat vehicle), not how long it waits. Unscouted targets get a sector scan before the go if it's affordable.
+- **Go signal:** the wave goes when 3 or more groups have reached staging, or 4 minutes after the first one arrived, whichever comes first. No extensions: pace matters more than a perfect wave, and late arrivals join the next one.
 
 ### 4. Launch
 
+**Mount up first.** On the go signal, groups don't drop what they're doing: they finish kit swaps, collect vehicles they've bought that are still arriving, board, and pull out together, with a mount-up call on the radio. Mount-up is capped at about 90 seconds; anything not ready by then follows the same approach as a second element rather than being abandoned.
+
 - Groups get attack waypoints at the same moment, split across two or three approach directions about 60 to 120 degrees apart, chosen to avoid known static weapon arcs and open ground where possible.
 - Each approach has a holding point 300 to 400 m out; groups pause there until all approaches report in (or 60 seconds pass), then go in together.
-- Armour, if the wave has any, moves behind the infantry on the main approach.
+- Where the wave has vehicles, they drive groups to each approach's dismount point first, and combat vehicles then advance with the infantry (see Vehicles in the attack).
 
 ### 5. Resolve
 
@@ -130,11 +132,11 @@ While groups wait at the staging sector, the commander equips the wave for the t
 
 | Known threat at target | Kit change at staging | CP purchase if kit isn't enough | Wave rule |
 | --- | --- | --- | --- |
-| 1+ tanks or IFVs | 2 AT launchers per group (one AT specialist plus one swapped rifleman) | AT team, or own IFV/tank if the side has more CP than the threshold | Don't launch until AT count ≥ 2 × armour count |
+| 1+ tanks or IFVs | 2 AT launchers per group (one AT specialist plus one swapped rifleman) | AT team, or own IFV/tank if the side has more CP than the threshold | Kit swaps bring AT to 2 × armour count before the go |
 | Light vehicles or technicals | 1 AT or LAT per group | none | Normal launch |
 | Static MGs or GMGs | Extra smoke, 1 marksman per wave | Mortar or artillery strike if available in the asset list | Approach from the static's flank, not its arc |
 | Helicopters overhead | 1 AA launcher per wave | AA vehicle | Prefer approaches with tree cover |
-| Heavy infantry (2× our wave or more) | Extra ammo and grenades | More infantry, or an APC to carry the wave | Wait for one more group, or call artillery first |
+| Heavy infantry (2× our wave or more) | Extra ammo and grenades | More infantry, or an APC to carry the wave | Call artillery first if available; add a combat vehicle if affordable |
 | Nothing known (unscouted) | Standard kit | Sector scan before launch if affordable | Send a recon group first, launch on its report |
 
 ### How kit is changed
@@ -148,7 +150,22 @@ While groups wait at the staging sector, the commander equips the wave for the t
 Warlords AI already buy units and vehicles from the requisition list. The commander changes what they buy, not how: it sets a side-wide shopping list from the threat summary, and AI purchases are steered to it. Two limits keep spending sane:
 
 - A **reserve** of CP is held back for counterattack defence and scans.
-- **Vehicles bought for a wave are transport to staging only.** Once at the staging sector, crews and passengers join the wave on foot unless the vehicle is armour going in as support. This kills the late-game problem of AI driving off across the island alone.
+- **Vehicles only move as part of a wave.** They carry groups from staging towards the target and fight alongside the infantry (see Vehicles in the attack), but never make solo trips across the island. This kills the late-game problem of AI driving off alone.
+
+### Vehicles in the attack
+
+Where CP allows, waves drive most of the way to the target and walk only the last stretch. Vehicles in a wave have one of two roles.
+
+| Role | Examples | What it does | Stops at |
+| --- | --- | --- | --- |
+| Transport | Offroads, trucks, quad bikes, unarmed MRAPs | Carries infantry from staging to a dismount point on its approach | The dismount point, where it parks for regroup pickups or the next wave |
+| Combat | APCs, IFVs, tanks, armed MRAPs | Carries its own infantry if it can, then fights with the wave | Goes in with the infantry, staying 50 to 100 m behind the lead groups |
+
+- **Dismount point.** One per approach, about 500 to 800 m from the target, out of the target's line of sight where the terrain allows and outside the range of known AT and static weapons. Infantry get out and continue on foot to the holding point, then in.
+- **Affordability.** Before a wave launches, any group without transport gets one if the side's CP stays above its reserve after buying: the cheapest vehicle that seats the group, bought at staging. Vehicles already parked at staging or at dismount points from earlier waves are reused first. Combat vehicles are bought when the threat summary calls for them (enemy armour, heavy statics) or when CP is plentiful. Transport is the default whenever it's affordable, quad bikes included; only a side that can afford nothing but troops walks, which mostly means the first attack of a round. The CP reserve scales with income so it never stops an early side buying cheap transport.
+- **Combat vehicles never go in alone.** If the infantry stall, the vehicle holds and gives fire support from where it is rather than pushing ahead.
+- **Short, road-first drives.** Staging is within about 2.5 km, so drives are short. Routes prefer roads. A vehicle stuck twice gets abandoned, and its passengers walk from there.
+- **Unscouted targets.** Dismount further out (the far end of the range) since nothing is known about AT in the target.
 
 ## Squad behaviour and watchdog
 
@@ -298,9 +315,9 @@ Six phases, numbered 0 to 5, each ending in something testable, and each gated o
 2. **Phase 1, staging, waves and watchdog.** Staging sector choice, the wave cycle, task states, the watchdog, the debug overlay and logs. No intel board yet: waves use group count only.
    - Gate: in an AI vs AI round, no group sits idle for more than three minutes, and attacks arrive as waves of three or more groups.
 3. **Phase 2, intel board and radio.** Sightings, decay, per-sector summaries, radio messages, and threat-aware wave sizes.
-   - Gate: armour spotted at a target appears on the board and on radio within ten seconds, and the next wave waits for more groups if the target is heavily held.
-4. **Phase 3, loadouts and purchasing.** Kit swaps at staging, the shopping list, CP reserve, vehicles as transport only, and buying scans for unscouted targets.
-   - Gate: a wave heading into known armour leaves staging with at least twice as many AT launchers as reported tanks.
+   - Gate: armour spotted at a target appears on the board and on radio within ten seconds, and the next wave's kit and vehicles change to match.
+4. **Phase 3, loadouts and purchasing.** Kit swaps at staging, the shopping list, CP reserve, transport and combat vehicles in the attack, and buying scans for unscouted targets.
+   - Gate: a wave heading into known armour leaves staging with at least twice as many AT launchers as reported tanks, and an affordable wave drives to its dismount points instead of walking from staging.
 5. **Phase 4, defence and players.** Reserve, counterattack response, player reports on the board, side map markers for the plan, and the player request actions.
    - Gate: a counterattack on an owned sector gets a response within one commander tick of being detected.
 6. **Phase 5, polish and release.** Settings for difficulty, performance profiling on the largest scenario, LAMBS compatibility testing, packaging as an addon, and a Workshop page.
