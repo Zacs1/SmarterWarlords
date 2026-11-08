@@ -258,6 +258,7 @@ SWLC_fnc_intelOnKilled = {
 					private _p = getPosATL _killed;
 					private _e = [_cmd, "unknownAT", _p, objNull, CFG("intelLossConf"), grpNull, "loss", 0, typeOf _killed] call SWLC_fnc_intelNew;
 					_board pushBack _e;
+					[_cmd, _p] call SWLC_fnc_smartHuntQueue;
 				};
 			};
 		};

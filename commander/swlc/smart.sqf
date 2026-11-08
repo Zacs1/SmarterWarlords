@@ -19,6 +19,7 @@ SWLC_fnc_smartTick = {
 	[_cmd] call SWLC_fnc_smartRadioTick;
 	[_cmd] call SWLC_fnc_smartReinforceTick;
 	[_cmd] call SWLC_fnc_smartScoutTick;
+	[_cmd] call SWLC_fnc_smartHuntTick;
 	// SMART_CALLS
 };
 
@@ -346,6 +347,50 @@ SWLC_fnc_smartScoutTick = {
 				[_g, "Unassigned", [], "scout_done"] call SWLC_fnc_setState;
 				[_cmd, "scout", "done", [["group", groupId _g], ["alive", [_g] call SWLC_fnc_groupMen]]] call SWLC_fnc_smartLog;
 			};
+		};
+	} forEach (_cmd get "groups");
+};
+
+// 8. Hunt unseen AT: something killed a vehicle and nobody saw who, so the nearest free group sweeps the area.
+SWLC_fnc_smartHuntQueue = {
+	params ["_cmd", "_pos"];
+	if !(CFG("smartHunt")) exitWith {};
+	// The shooter is unseen, so this is an estimate: from the wreck towards the objective, the likely side.
+	private _target = _cmd get "target";
+	private _towards = if (isNull _target) then {random 360} else {[_pos, [_target] call SWLC_fnc_adPos] call SWLC_fnc_bearing};
+	private _firing = [_pos, _towards + (random 60 - 30), CFG("huntOffset")] call SWLC_fnc_offset;
+	private _q = _cmd getOrDefault ["huntQueue", []];
+	_q pushBack [_pos, _firing];
+	_cmd set ["huntQueue", _q];
+};
+
+SWLC_fnc_smartHuntTick = {
+	params ["_cmd"];
+	if !(CFG("smartHunt")) exitWith {};
+	private _queue = _cmd getOrDefault ["huntQueue", []];
+	if (_queue isNotEqualTo []) then {
+		_cmd set ["huntQueue", []];
+		{
+			_x params ["_pos", "_firing"];
+			private _free = (_cmd get "groups") select {([_x] call SWLC_fnc_state) in ["Unassigned", "Staging", "Reserve"] && {(leader _x distance2D _firing) <= CFG("huntRadius")}};
+			if (_free isNotEqualTo []) then {
+				private _g = ([_free, [], {leader _x distance2D _firing}, "ASCEND"] call BIS_fnc_sortBy) # 0;
+				[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
+				[_g, "Hunting", _firing, "hunt"] call SWLC_fnc_setState;
+				_g setVariable ["SWLC_huntUntil", time + CFG("huntSeconds")];
+				[_g, [[_firing, "SAD", 60]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
+				[_cmd, "hunt", "sent", [["group", groupId _g], ["x", round (_firing # 0)], ["y", round (_firing # 1)], ["dist", round (leader _g distance2D _firing)]]] call SWLC_fnc_smartLog;
+				[_cmd get "side", "hunt", [mapGridPosition _firing], _g] call SWLC_fnc_radio;
+			} else {
+				[_cmd, "hunt", "no_free_group", [["x", round (_firing # 0)], ["y", round (_firing # 1)]]] call SWLC_fnc_smartLog;
+			};
+		} forEach _queue;
+	};
+	{
+		if (([_x] call SWLC_fnc_state) == "Hunting" && {time >= (_x getVariable ["SWLC_huntUntil", 0])}) then {
+			[_x] call SWLC_fnc_adClearOrder;
+			[_x, "Unassigned", [], "hunt_done"] call SWLC_fnc_setState;
+			[_cmd, "hunt", "done", [["group", groupId _x]]] call SWLC_fnc_smartLog;
 		};
 	} forEach (_cmd get "groups");
 };
