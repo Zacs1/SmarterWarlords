@@ -115,7 +115,8 @@ SWLC_fnc_defSend = {
 SWLC_fnc_defSectorValue = {
 	params ["_cmd", "_s"];
 	private _v = [_s] call SWLC_fnc_adValue;
-	if (_s isEqualTo (_cmd get "stagingSector")) then {_v = _v + CFG("defenceValueStaging")};
+	private _rec = (_cmd get "musters") getOrDefault [[_s] call SWLC_fnc_adName, createHashMap];
+	if (count _rec > 0 && {(_rec get "groups") isNotEqualTo [] || {(_rec get "batch") isNotEqualTo []}}) then {_v = _v + CFG("defenceValueStaging")};
 	if ([_s] call SWLC_fnc_adIsBase) then {_v = _v + CFG("defenceValueBase")};
 	_v
 };
@@ -140,13 +141,13 @@ SWLC_fnc_defRespond = {
 		[_cmd, _rec, _x, "reserve"] call SWLC_fnc_defSend;
 	} forEach _reserve;
 
-	// 2. The staging sector: every staging group defends at once.
-	private _isStaging = _s isEqualTo (_cmd get "stagingSector");
-	if (_isStaging && {!isNil {_cmd get "gather"}}) then {
-		private _staged = ((_cmd get "gather") get "groups") select {([_x] call SWLC_fnc_state) in ["Staging", "Travelling"]};
+	// 2. A sector with a muster in progress: its groups defend at once.
+	private _muster = (_cmd get "musters") getOrDefault [[_s] call SWLC_fnc_adName, createHashMap];
+	if (count _muster > 0) then {
+		private _staged = ((_muster get "groups") + (_muster get "batch")) select {([_x] call SWLC_fnc_state) in ["Mustering", "Travelling", "Mounting"]};
 		if (_staged isNotEqualTo []) then {
 			{[_cmd, _rec, _x, "staging_abort"] call SWLC_fnc_defSend} forEach _staged;
-			(_cmd get "gather") set ["firstArrive", -1];
+			_muster set ["firstArrive", -1];
 			["C_DEF", [["side", _side], ["event", "staging_abort"], ["sector", [_s] call SWLC_fnc_adName], ["groups", count _staged]]] call SWLC_fnc_log;
 			[_side, "stagingattack"] call SWLC_fnc_radio;
 		};
@@ -162,11 +163,8 @@ SWLC_fnc_defRespond = {
 				["C_DEF", [["side", _side], ["event", "not_pulling"], ["sector", [_s] call SWLC_fnc_adName], ["need", _need], ["have", count (_rec get "groups")]]] call SWLC_fnc_log;
 			};
 		} else {
-			private _pool = [];
-			if (!isNil {_cmd get "gather"}) then {_pool append (((_cmd get "gather") get "groups") select {([_x] call SWLC_fnc_state) in ["Staging", "Travelling"]})};
-			{
-				if ((_x get "phase") in ["MOUNT", "TO_HOLD"]) then {_pool append ((_x get "groups") select {({alive _x} count units _x) > 0})};
-			} forEach (_cmd get "flying");
+			private _op = _cmd get "op";
+			private _pool = if (isNil "_op") then {[]} else {([_op] call SWLC_fnc_waveLive) select {([_x] call SWLC_fnc_state) in ["Mustering", "Travelling", "Mounting", "Advancing"]}};
 			{
 				if ((count (_rec get "groups")) >= _need) exitWith {};
 				[_cmd, _rec, _x, "pulled"] call SWLC_fnc_defSend;
@@ -345,10 +343,10 @@ SWLC_fnc_playerReport = {
 SWLC_fnc_playerAttack = {
 	params ["_cmd", "_player"];
 	private _side = _cmd get "side";
-	private _w = _cmd get "gather";
+	private _w = _cmd get "op";
 	private _ok = false;
 	if (!isNil "_w") then {
-		private _staged = ([_w] call SWLC_fnc_waveLive) select {([_x] call SWLC_fnc_state) == "Staging"};
+		private _staged = ([_w] call SWLC_fnc_waveLive) select {([_x] call SWLC_fnc_state) in ["Mustering", "Waiting"]};
 		if ((count _staged) >= CFG("requestGoMinGroups")) then {
 			_w set ["forceGo", true];
 			_ok = true;
@@ -395,17 +393,15 @@ SWLC_fnc_planPublish = {
 	_cmd set ["planAt", time];
 	private _target = _cmd get "target";
 	private _plan = [];
-	if (!isNull _target) then {
-		private _w = _cmd get "gather";
+	private _op = _cmd get "op";
+	if (!isNull _target && {!isNil "_op"}) then {
 		private _eta = -1;
-		if (!isNil "_w" && {(_w get "firstArrive") >= 0}) then {_eta = round ((CFG("goMaxWait") - (time - (_w get "firstArrive"))) max 0)};
-		private _approaches = [];
+		if ((_op get "firstAtRally") >= 0) then {_eta = round (((_op get "firstAtRally") + ([_cmd, _op] call SWLC_fnc_rallyLoneWait) - time) max 0)};
+		private _musters = [];
 		{
-			if ((_x get "phase") in ["MOUNT", "TO_HOLD", "ASSAULT"]) then {
-				_approaches append ((_x get "approaches") apply {[_x get "hold", _x get "bearing"]});
-			};
-		} forEach (_cmd get "flying");
-		_plan = [[_target] call SWLC_fnc_adPos, [_target] call SWLC_fnc_adName, _cmd get "stagingPos", [_cmd] call SWLC_fnc_stagingName, _eta, _approaches];
+			if ((_y get "groups") isNotEqualTo [] || {(_y get "batch") isNotEqualTo []}) then {_musters pushBack [_y get "pos", _y get "name"]};
+		} forEach (_cmd get "musters");
+		_plan = [[_target] call SWLC_fnc_adPos, [_target] call SWLC_fnc_adName, _op get "rally", _op get "bearing", _eta, _musters];
 	};
 	missionNamespace setVariable [format ["SWLC_plan_%1", _side], _plan, true];
 };

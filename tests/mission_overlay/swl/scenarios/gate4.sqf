@@ -1,6 +1,6 @@
 // Phase 4 gate: a visible enemy group next to a WEST sector must draw a response within one tick of
 // being detected, and the defenders must stand down once the threat is gone. Runs twice: once at the
-// base, which is the staging sector early on, and once at the first other sector WEST captures.
+// base, which is a muster sector early on, and once at the first other sector WEST captures.
 // Ends by driving the player request code paths with an AI stand-in, since no player is connected.
 
 waitUntil {sleep 1; !isNil "SWLC_ready"};
@@ -29,7 +29,7 @@ SWLG_attack = {
 	_g setBehaviour "AWARE";
 	_g setCombatMode "GREEN";
 	["G4", [format ["event=spawn|label=%1|sector=%2|staging=%3|dist=%4", _label, [_s] call SWLC_fnc_adName,
-		_s isEqualTo ((missionNamespace getVariable "SWLC_cmd_WEST") get "stagingSector"), round (_spot distance2D _c)]]] call SWLG_emit;
+		count (((missionNamespace getVariable "SWLC_cmd_WEST") get "musters") getOrDefault [[_s] call SWLC_fnc_adName, createHashMap]) > 0, round (_spot distance2D _c)]]] call SWLG_emit;
 	// The board only holds what soldiers saw, and the attackers can spawn out of anyone's sight. A lone
 	// WEST observer, outside the commander's groups, keeps them in view for the length of the test.
 	private _og = createGroup [west, true];
@@ -52,13 +52,13 @@ sleep 90;
 
 [[west] call SWLC_fnc_adBase, "base"] call SWLG_attack;
 
-// Wait for a sector that isn't the base or the current staging sector.
+// Wait for a sector that isn't the base and has no muster running.
 private _cmd = missionNamespace getVariable "SWLC_cmd_WEST";
 private _sector = objNull;
 private _deadline = time + 720;
 waitUntil {
 	sleep 5;
-	private _list = ([west] call SWLC_fnc_adOwned) select {!([_x] call SWLC_fnc_adIsBase) && {_x isNotEqualTo (_cmd get "stagingSector")}};
+	private _list = ([west] call SWLC_fnc_adOwned) select {!([_x] call SWLC_fnc_adIsBase) && {count ((_cmd get "musters") getOrDefault [[_x] call SWLC_fnc_adName, createHashMap]) == 0}};
 	if (_list isNotEqualTo []) then {_sector = _list # 0};
 	!isNull _sector || {time > _deadline}
 };

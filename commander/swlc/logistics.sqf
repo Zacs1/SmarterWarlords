@@ -1,4 +1,4 @@
-// Spending and kit: the CP reserve, the side's shopping list, sector scans, and kit swaps at the staging crate.
+// Spending and kit: the CP reserve, the side's shopping list, sector scans, and kit swaps at the muster crate.
 #include "macros.hpp"
 
 // Buy lists come from Warlords' own requisition data, read once it exists.
@@ -43,26 +43,9 @@ SWLC_fnc_logBuy = {
 	_items
 };
 
-// The crate units draw kit from and the object Warlords drops purchases around.
-SWLC_fnc_logStagingAssets = {
-	params ["_cmd"];
-	private _side = _cmd get "side";
-	{
-		private _o = _cmd get _x;
-		if (!isNull _o) then {deleteVehicle _o};
-	} forEach ["crate", "dropHelper"];
-	private _spots = _cmd get "stagingSpots";
-	private _anchor = _spots # 0;
-	private _pos = _anchor findEmptyPosition [3, 30, "B_CargoNet_01_ammo_F"];
-	if (_pos isEqualTo []) then {_pos = +_anchor};
-	private _cls = ["O_CargoNet_01_ammo_F", "B_CargoNet_01_ammo_F"] select (_side == west);
-	_cmd set ["crate", createVehicle [_cls, _pos, [], 0, "NONE"]];
-	_cmd set ["dropHelper", createVehicle ["Land_HelipadEmpty_F", _cmd get "stagingPos", [], 0, "CAN_COLLIDE"]];
-};
-
-// The shopping list for a wave at staging, most important first. Never delays the go signal.
+// The shopping list for groups mustering at a sector, most important first. Never delays the go signal.
 SWLC_fnc_shopTick = {
-	params ["_cmd", "_w", "_staged"];
+	params ["_cmd", "_w", "_staged", "_musterPos"];
 	if (isNil {_cmd get "catalog"}) exitWith {};
 	private _side = _cmd get "side";
 	private _plan = _w get "plan";
@@ -71,7 +54,7 @@ SWLC_fnc_shopTick = {
 	// A scan comes first when there's money for it and for the wave's transport too.
 	private _scanWanted = CFG("scanBuying") && {_plan get "scan"} && {!(_w getOrDefault ["scanned", false])};
 	private _transportCost = 0;
-	if (CFG("vehiclesEnabled") && {[_cmd, _w] call SWLC_fnc_vehWorthDriving}) then {
+	if (CFG("vehiclesEnabled") && {[_cmd, _w, _musterPos] call SWLC_fnc_vehWorthDriving}) then {
 		{
 			private _men = [_x] call SWLC_fnc_groupMen;
 			private _pick = [_cmd, _men] call SWLC_fnc_vehCheapestTransport;
@@ -84,7 +67,7 @@ SWLC_fnc_shopTick = {
 	};
 
 	[_cmd, _w, _staged] call SWLC_fnc_shopInfantry;
-	[_cmd, _w, _staged] call SWLC_fnc_vehShop;
+	[_cmd, _w, _staged, _musterPos] call SWLC_fnc_vehShop;
 
 	if (_scanWanted && {([_side] call SWLC_fnc_cpFree) >= ([] call SWLC_fnc_adScanCost)}) then {
 		[_cmd, _w] call SWLC_fnc_shopScan;

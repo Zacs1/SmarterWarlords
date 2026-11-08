@@ -38,28 +38,23 @@ SWLC_settings = createHashMapFromArray [
 	["voteRecentFailSeconds", 600],
 	["deadlockSeconds", 720],         // force a new vote if a target hasn't fallen after this long
 
-	// Staging
-	["stagingMaxDist", 2500],
-	["stagingFallbackMin", 600],
-	["stagingFallbackMax", 900],
+	// Muster: groups form up at their own sector, then leave for the rally
+	["musterSeconds", 30],            // the short wait after the first group arrives at a sector
+	["musterMaxSeconds", 70],         // longer only while men just bought are still landing
+	["musterHopGain", 800],           // fast travel to a sector this much closer to the target, if the group has one
 	["stagingPlaceExpr", "(1 + houses * 2 + trees) * (1 - sea)"],
 	["stagingSpotSeparation", 18],
-	["stagingEnemyPenalty", 2],       // score lost per enemy on the board within 500 m
-	["stagingFarThreshold", 500],     // farther than this from staging: fast travel if allowed
+	["stagingFarThreshold", 500],     // farther than this from a muster or defence spot: fast travel if allowed
 	["arriveRadius", 75],
 
-	// Go signal
-	["goMinGroups", 3],
-	["goMaxWait", 230],             // 4 minutes minus tick length, so the 4-minute cap holds
-
-	// Launch
-	["approachSpreadMin", 60],
-	["approachSpreadMax", 120],
-	["holdDistMin", 300],
-	["holdDistMax", 400],
+	// Rally and go
+	["goMinGroups", 2],               // groups ready at the rally that go in together
+	["rallyLoneWait", 180],           // a lone group with nobody fighting waits this long, then goes in anyway
+	["rallyOutside", 200],            // metres outside the sector square
+	["rallyJoinRadius", 500],         // a group this close to the rally skips the muster
+	["rallyMinAgreement", 0.3],       // how much the groups' directions must agree before their average is used
 	["holdArriveRadius", 60],
-	["holdWaitMax", 60],
-	["toHoldTimeout", 420],
+	["waveNearRadius", 700],          // groups this close count as having taken part when a sector falls
 	["sweepPoints", 3],
 	["sweepInset", 0.75],
 
@@ -100,7 +95,7 @@ SWLC_settings = createHashMapFromArray [
 	// Radio
 	["radioEnabled", true],
 	["radioCooldownDefault", 30],
-	["radioCooldowns", createHashMapFromArray [["sighting", 15], ["arrived", 20], ["staging", 20], ["seized", 5], ["moveout", 10], ["failed", 20], ["mount", 20], ["kit", 30], ["stuck", 30], ["defend", 20], ["standdown", 20], ["stagingattack", 20], ["reqok", 5], ["reqno", 5], ["report", 15], ["heavy", 25], ["breaking", 15], ["cheer", 5], ["momentum", 30], ["scout", 30], ["hunt", 30], ["digin", 30], ["prepfire", 30], ["joinpush", 30], ["smoke", 20]]],
+	["radioCooldowns", createHashMapFromArray [["sighting", 15], ["arrived", 20], ["leaving", 15], ["rally", 15], ["reinforce", 20], ["staging", 20], ["seized", 5], ["moveout", 10], ["failed", 20], ["mount", 20], ["kit", 30], ["stuck", 30], ["defend", 20], ["standdown", 20], ["stagingattack", 20], ["reqok", 5], ["reqno", 5], ["report", 15], ["heavy", 25], ["breaking", 15], ["cheer", 5], ["momentum", 30], ["scout", 30], ["hunt", 30], ["digin", 30], ["prepfire", 30], ["joinpush", 30], ["smoke", 20]]],
 
 	// The wave's plan comes from the threat summary
 	["planAtPerArmour", 2],
@@ -114,7 +109,6 @@ SWLC_settings = createHashMapFromArray [
 	["cpCombatFraction", 0.6],        // most of the spare CP one combat vehicle may use
 	["shopGroupSize", 3],
 	["shopMaxInfantryPerTick", 6],
-	["goMinGatherSeconds", 40],       // hold the go this long after the first arrival while men can still be bought
 	["scanBuying", true],
 	["scanStampSeconds", 130],        // blocks Warlords' own random AI scan on an all-AI side
 
@@ -141,7 +135,7 @@ SWLC_settings = createHashMapFromArray [
 	["dismountThreatRange", 900],     // stay this far from known AT and static weapons
 	["dismountRoadSnap", 120],
 	["dismountArriveRadius", 50],
-	["mountCapSeconds", 85],          // about 90 s with the tick
+	["mountCapSeconds", 60],          // after the muster ends
 	["mountLateExtra", 45],           // a group not ready at the cap is a second element, this long at most
 	["vehStuckWindow", 40],
 	["vehStuckMinMetres", 15],
@@ -160,26 +154,27 @@ SWLC_settings = createHashMapFromArray [
 	["defenceStandDownSeconds", 120],
 	["defenceMenPerGroup", 5],
 	["defenceMaxGroups", 3],
-	["defenceValueStaging", 100],     // a staging or base sector is always worth pulling attackers for
+	["defenceValueStaging", 100],     // a sector with a muster running, or a base, is always worth pulling attackers for
 	["defenceValueBase", 100],
 
 	// Players
 	["playerReportRange", 2500],
 	["playerReportConf", 0.9],
 	["playerReportMax", 8],
-	["requestGoMinGroups", 2],
+	["requestGoMinGroups", 1],
 	["requestDefendRange", 600],
 	["requestDefendSeconds", 300],
 	["planPublishSeconds", 20],
+	["statusPublishSeconds", 10],     // the commander panel's data
 	["planAlwaysPublish", false],     // test switch: publish the plan with no players connected
 
 	// Difficulty. The lobby parameter wins over "difficulty" in hosted games. A preset sets the keys listed.
 	["difficulty", "normal"],         // "easy", "normal" or "hard"
 	["reactionDelay", 0],             // seconds before a new sighting affects plans and defence (radio is not delayed)
 	["difficultyPresets", createHashMapFromArray [
-		["easy", [["intelDecayMultiplier", 0.6], ["goMinGroups", 2], ["shopGroupSize", 2], ["reactionDelay", 20], ["scanBuying", false]]],
-		["normal", [["intelDecayMultiplier", 1], ["goMinGroups", 3], ["shopGroupSize", 3], ["reactionDelay", 0], ["scanBuying", true]]],
-		["hard", [["intelDecayMultiplier", 1.5], ["goMinGroups", 4], ["shopGroupSize", 4], ["reactionDelay", 0], ["scanBuying", true]]]
+		["easy", [["intelDecayMultiplier", 0.6], ["shopGroupSize", 2], ["reactionDelay", 20], ["scanBuying", false]]],
+		["normal", [["intelDecayMultiplier", 1], ["shopGroupSize", 3], ["reactionDelay", 0], ["scanBuying", true]]],
+		["hard", [["intelDecayMultiplier", 1.5], ["shopGroupSize", 4], ["reactionDelay", 0], ["scanBuying", true]]]
 	]],
 	["verboseLog", true],             // per-vehicle and per-guard lines for the test analyser; the playable build turns them off
 	["profileStages", false],         // test switch: log the cost of each stage of the commander tick
@@ -188,6 +183,7 @@ SWLC_settings = createHashMapFromArray [
 	["smartBreak", true],
 	["breakFraction", 0.34],          // a group at or below this share of its launch strength breaks off
 	["breakMinLaunchMen", 3],
+	["breakRestSeconds", 60],         // a group that fell back waits at least this long at the rally
 	["mergeRadius", 150],
 	["mergeMaxMen", 3],
 	["smartRadio", true],
@@ -197,7 +193,7 @@ SWLC_settings = createHashMapFromArray [
 	["reinforceMinMetres", 40],
 	["smartSmoke", true],
 	["smokeThrowDist", 40],
-	["smokeGroupsPerApproach", 1],
+	["smokeGroupsPerPush", 1],
 	["smartPrepFire", true],
 	["prepRounds", 6],
 	["prepFireLeadSeconds", 30],      // infantry wait this long after the fire mission, so it lifts before they arrive
@@ -229,7 +225,7 @@ SWLC_settings = createHashMapFromArray [
 	["smartMemory", true],
 	["memoryLossFraction", 0.5],
 	["memoryMinMen", 3],
-	["memoryAvoidDegrees", 40],
+	["memoryAvoidDegrees", 25],
 	["smartJoinPush", true],
 	["joinPushRange", 900],           // only players this close to the target count as pushing it
 	["joinPushMinMetres", 20],        // closer by this much since the last tick counts as moving towards it

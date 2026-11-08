@@ -6,14 +6,10 @@ SWLC_fnc_startCommander = {
 	private _cmd = createHashMapFromArray [
 		["side", _side],
 		["groups", []],
-		["flying", []],
+		["musters", createHashMap],
 		["waveCounter", 0],
 		["target", objNull],
 		["targetSince", 0],
-		["stagingSector", objNull],
-		["stagingPos", []],
-		["stagingSpots", []],
-		["stagingSlot", 0],
 		["sectorFailures", createHashMap],
 		["threats", createHashMap],
 		["vehicles", []],
@@ -81,7 +77,7 @@ SWLC_fnc_cmdLogCost = {
 	_cmd set ["tickCount", _n];
 	if (_n >= 6) then {
 		["C_TICK", [["side", _cmd get "side"], ["avg_ms", ((_cmd get "tickCost") / _n) toFixed 2], ["groups", count (_cmd get "groups")],
-			["flying", count (_cmd get "flying")], ["fps", round diag_fps],
+			["op", [0, 1] select (!isNil {_cmd get "op"})], ["fps", round diag_fps],
 			["poll_ms", (((_cmd getOrDefault ["pollCost", 0]) / ((_cmd getOrDefault ["pollCount", 0]) max 1))) toFixed 2],
 			["guard_ms", (((_cmd getOrDefault ["guardCost", 0]) / ((_cmd getOrDefault ["guardCount", 0]) max 1))) toFixed 2]]] call SWLC_fnc_log;
 		_cmd set ["tickCost", 0];
@@ -96,7 +92,7 @@ SWLC_fnc_cmdLogCost = {
 	};
 };
 
-SWLC_cmdStages = ["refreshGroups", "cmdTarget", "intelSummarise", "logInit", "vehTick", "watchdogTick", "waveTick", "defenceTick", "smartTick", "cmdAssign", "planPublish"];
+SWLC_cmdStages = ["refreshGroups", "cmdTarget", "intelSummarise", "logInit", "vehTick", "watchdogTick", "waveTick", "defenceTick", "smartTick", "cmdAssign", "planPublish", "statusPublish"];
 
 SWLC_fnc_cmdTick = {
 	params ["_cmd"];
@@ -122,9 +118,10 @@ SWLC_fnc_cmdTarget = {
 		_cmd set ["target", _t];
 		_cmd set ["targetSince", time];
 		["C_TARGET", [["side", _side], ["target", if (isNull _t) then {"-"} else {[_t] call SWLC_fnc_adName}], ["prev", if (isNull _old) then {"-"} else {[_old] call SWLC_fnc_adName}]]] call SWLC_fnc_log;
-		if (isNull _t) then {
-			_cmd deleteAt "gather";
-		} else {
+		if (!isNil {_cmd get "op"} && {!isNull _old}) then {
+			[_cmd, ["target_changed", "seized"] select (([_old] call SWLC_fnc_adOwner) == _side)] call SWLC_fnc_waveResolve;
+		};
+		if (!isNull _t) then {
 			[_side] call SWLC_fnc_adClearVotes;
 			[_side, _t] call SWLC_fnc_adBlockVanillaScan;
 			[_cmd] call SWLC_fnc_cmdNewPlan;
@@ -142,33 +139,20 @@ SWLC_fnc_cmdTarget = {
 	};
 };
 
-// New target: new staging, new gather wave.
+// New target: one rally point for this operation. Groups muster wherever they are.
 SWLC_fnc_cmdNewPlan = {
 	params ["_cmd"];
-	private _target = _cmd get "target";
-	_cmd set ["stagingChoice", [_cmd, _target] call SWLC_fnc_chooseStaging];
-	[_cmd] call SWLC_fnc_setStaging;
-	private _w = [_cmd] call SWLC_fnc_waveNew;
-	_cmd set ["gather", _w];
-	[_cmd get "side", "staging", [[_cmd] call SWLC_fnc_stagingName, [_target] call SWLC_fnc_adName]] call SWLC_fnc_radio;
-
-	// Groups that were gathering for the old target move to the new plan.
-	{
-		if (([_x] call SWLC_fnc_state) in ["Staging", "Travelling", "Regrouping"]) then {
-			[_cmd, _x] call SWLC_fnc_vehRelease;
-			[_cmd, _x, "Travelling"] call SWLC_fnc_sendToStaging;
-		};
-	} forEach (_cmd get "groups");
+	private _op = [_cmd] call SWLC_fnc_waveNew;
+	_cmd set ["op", _op];
+	[_cmd get "side", "staging", [[_op get "target"] call SWLC_fnc_adName, mapGridPosition (_op get "rally")]] call SWLC_fnc_radio;
 };
 
-// Unassigned groups join the gathering wave.
+// Unassigned groups join the operation.
 SWLC_fnc_cmdAssign = {
 	params ["_cmd"];
-	if (isNil {_cmd get "gather"}) exitWith {};
+	if (isNil {_cmd get "op"}) exitWith {};
 	{
-		if (([_x] call SWLC_fnc_state) == "Unassigned") then {
-			[_cmd, _x, "Travelling"] call SWLC_fnc_sendToStaging;
-		};
+		if (([_x] call SWLC_fnc_state) == "Unassigned") then {[_cmd, _x] call SWLC_fnc_musterAssign};
 	} forEach (_cmd get "groups");
 };
 

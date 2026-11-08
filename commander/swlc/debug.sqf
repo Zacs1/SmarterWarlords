@@ -55,20 +55,16 @@ SWLC_fnc_debugDraw = {
 		if (!isNull _t) then {
 			[_prefix + "target", [_t] call SWLC_fnc_adPos, "mil_objective", _color, format ["%1 TARGET", _side]] call SWLC_fnc_debugMarker;
 		};
-		private _sp = _cmd get "stagingPos";
-		if (_sp isNotEqualTo []) then {
-			[_prefix + "staging", _sp, "mil_flag", _color, format ["%1 STAGING", _side]] call SWLC_fnc_debugMarker;
+		private _op = _cmd get "op";
+		if (!isNil "_op") then {
+			[_prefix + "rally", _op get "rally", "mil_flag", _color, format ["%1 RALLY", _side]] call SWLC_fnc_debugMarker;
+			[_prefix + "line", _op get "rally", _op get "tpos", _color] call SWLC_fnc_debugPoly;
 		};
-
-		// Approaches
 		{
-			private _w = _x;
-			private _wid = _w get "id";
-			{
-				[_prefix + format ["ap_%1_%2", _wid, _forEachIndex], _x get "hold", [_w get "target"] call SWLC_fnc_adPos, _color] call SWLC_fnc_debugPoly;
-				[_prefix + format ["hold_%1_%2", _wid, _forEachIndex], _x get "hold", "mil_circle", _color, format ["W%1 hold %2", _wid, _forEachIndex + 1]] call SWLC_fnc_debugMarker;
-			} forEach (_w getOrDefault ["approaches", []]);
-		} forEach (_cmd get "flying");
+			if ((_y get "groups") isNotEqualTo [] || {(_y get "batch") isNotEqualTo []}) then {
+				[_prefix + "m_" + _x, _y get "pos", "mil_circle", _color, format ["%1 MUSTER %2", _side, _x]] call SWLC_fnc_debugMarker;
+			};
+		} forEach (_cmd get "musters");
 
 		// Groups
 		{

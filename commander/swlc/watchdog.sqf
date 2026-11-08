@@ -21,25 +21,25 @@ SWLC_fnc_watchdogGroup = {
 	} else {
 		if ((_g getVariable ["SWLC_wasCombat", false]) && {(time - (_g getVariable ["SWLC_lastCombat", 0])) >= CFG("postContactQuietSeconds")}) then {
 			_g setVariable ["SWLC_wasCombat", false];
-			if (_state in ["Travelling", "Regrouping", "Assaulting", "Recon", "Defending"]) then {
+			if (_state in ["Travelling", "Advancing", "Regrouping", "Assaulting", "Recon", "Defending"]) then {
 				[_g, _g getVariable ["SWLC_wpProgress", 0]] call SWLC_fnc_adApplyOrder;
 				["C_WD", [["side", side _g], ["group", groupId _g], ["action", "post_contact_reset"], ["state", _state]]] call SWLC_fnc_log;
 			};
 		};
 	};
 
-	if !(_state in ["Travelling", "Regrouping", "Assaulting", "Recon"]) exitWith {};
+	if !(_state in ["Travelling", "Advancing", "Regrouping", "Assaulting", "Recon"]) exitWith {};
 	if ((_g getVariable ["SWLC_leg", ""]) in ["DRIVE", "FOLLOW", "LATE"]) exitWith {};
 
 	private _goal = _g getVariable ["SWLC_goal", []];
 	if (_goal isEqualTo []) exitWith {};
 
-	// Assaulting groups at their hold point, or inside the target square, are in position, not stuck.
+	// Assaulting groups inside the target square are in position, not stuck.
 	if (_state == "Assaulting") then {
-		private _w = [_cmd, _g] call SWLC_fnc_waveOfGroup;
-		if (!isNil "_w") then {
-			if ((_w get "phase") == "TO_HOLD" && {_g getVariable ["SWLC_atHold", false]}) exitWith {_g setVariable ["SWLC_progress", []]; _goal = []};
-			if ((_w get "phase") == "ASSAULT" && {[_w get "target", getPosATL _leader] call SWLC_fnc_adInSquare}) exitWith {_g setVariable ["SWLC_progress", []]; _goal = []};
+		private _op = _cmd get "op";
+		if (!isNil "_op" && {[_op get "target", getPosATL _leader] call SWLC_fnc_adInSquare}) then {
+			_g setVariable ["SWLC_progress", []];
+			_goal = [];
 		};
 	};
 	if (_goal isEqualTo []) exitWith {};
@@ -69,19 +69,6 @@ SWLC_fnc_watchdogGroup = {
 	};
 
 	[_cmd, _g, _state, _goal] call SWLC_fnc_watchdogEscalate;
-};
-
-SWLC_fnc_waveOfGroup = {
-	params ["_cmd", "_g"];
-	private _id = _g getVariable ["SWLC_waveId", -1];
-	private _found = nil;
-	{
-		if ((_x get "id") == _id) exitWith {_found = _x};
-	} forEach (_cmd get "flying");
-	if (isNil "_found" && {!isNil {_cmd get "gather"}} && {((_cmd get "gather") get "id") == _id}) then {
-		_found = _cmd get "gather";
-	};
-	if (isNil "_found") then {nil} else {_found}
 };
 
 // Stuck after resets: fast travel to the owned sector nearest the goal, or give the group a new job.

@@ -96,35 +96,35 @@ Warlords' vote decides the target, so the commander normally takes it as given. 
 - **Cost:** known defenders from the intel board, scaled up if the sector is unscouted
 - Prefer sectors adjacent to a sector we already own, so a staging point exists
 
-### 2. Staging sector
+### 2. Operation and rally point
 
-The staging sector is the owned sector that best balances closeness to the target and safety:
+Each target gets one operation and one attack direction: the general direction the groups are coming from, worked out as the average bearing from the target to the attacking groups. If they're on opposite sides, the owned sector nearest the target decides. The rally point sits about 200 m outside the sector square on that bearing, moved sideways if needed to stay on land and out of restricted sectors.
 
-- Candidates: owned sectors within about 2.5 km of the target, otherwise the closest owned sector on the sector graph
-- Score: shorter distance to target is better; known enemy within 500 m of the candidate is a heavy penalty; good cover (buildings, woods) is a small bonus
-- If no owned sector qualifies, stage at a safe point 600 to 900 m from the target on the side facing our territory
+There's no shared staging base and there are no flanking approaches. Play-testing showed that groups driving round to an assigned approach passed enemies on the way, and that a single staging area back at base left most groups confused about where to be.
 
-The commander announces the staging sector on radio and marks it for the side.
+### 3. Mustering at each sector
 
-### 3. Assemble the wave
+- Groups muster at the owned sector nearest them, so several sectors can feed the same attack. A group that can fast travel to a sector at least 800 m closer to the target does so first.
+- A group already within 500 m of the rally skips the muster and goes straight there.
+- About 30 seconds after the first group arrives, everyone present leaves, even if that is one group. The wait stretches to at most 70 seconds only while men just bought are still parachuting in.
+- Shopping and kit swaps happen during the muster, using a crate and drop point at that sector. They never delay departure. The threat summary shapes what groups take (AT, extra transport, a combat vehicle), not how long they wait.
 
-- Unassigned and regrouped groups are sent to staging, by fast travel where Warlords allows it for AI, otherwise on foot or by transport.
-- **Who goes** is every group that has reached staging when the go signal comes. The threat summary shapes what the wave takes (AT, extra transport, a combat vehicle), not how long it waits. Unscouted targets get a sector scan before the go if it's affordable.
-- **Go signal:** the wave goes when 3 or more groups have reached staging, or 4 minutes after the first one arrived, whichever comes first. No extensions: pace matters more than a perfect wave, and late arrivals join the next one.
+### 4. Going in
 
-### 4. Launch
-
-**Mount up first.** On the go signal, groups don't drop what they're doing: they finish kit swaps, collect vehicles they've bought that are still arriving, board, and pull out together, with a mount-up call on the radio. Mount-up is capped at about 90 seconds; anything not ready by then follows the same approach as a second element rather than being abandoned.
-
-- Groups get attack waypoints at the same moment, split across two or three approach directions about 60 to 120 degrees apart, chosen to avoid known static weapon arcs and open ground where possible.
-- Each approach has a holding point 300 to 400 m out; groups pause there until all approaches report in (or 60 seconds pass), then go in together.
-- Where the wave has vehicles, they drive groups to each approach's dismount point first, and combat vehicles then advance with the infantry (see Vehicles in the attack).
+- Groups that ride drive to one dismount point on the attack bearing, then walk to the rally. Combat vehicles drive to the rally and then follow the infantry in.
+- **Two groups ready at the rally go in together.** Later arrivals go straight in as reinforcements while friends are fighting there, including a player of the side inside the sector.
+- **A lone group with nobody to join waits** about 3 minutes (scaled by the commander's personality), then attacks anyway.
+- Smoke and prep fire happen on a full go, not for reinforcements.
 
 ### 5. Resolve
 
-- **Success:** the sector is seized. Survivors become the garrison or rejoin the next wave; the next target's staging begins.
-- **Failure:** the wave falls below 35% of launch strength, or makes no progress for several minutes. Survivors regroup at staging; the next wave launches with the board updated by everything the failed wave saw.
-- **Abort:** the staging sector comes under threat. Every staging and holding group switches to Defence.
+- **Success:** the sector is seized. The operation ends and its groups get new orders with the next target.
+- **Failure:** the push falls below 35% of the strength that went in, or makes no progress for 5 minutes. Survivors fall back to the rally, rest for a minute and count towards the next go. The operation carries on until the sector falls or the target changes.
+- **Abort:** a sector with a muster running comes under threat. Its groups switch to Defence.
+
+### The commander panel
+
+A scroll action or the Insert key opens a live list of every AI commander on the player's side: current job, place, why, and for how long. Enemy commanders appear only with the debug overlay on. The server publishes the list every 10 seconds, and only for sides with players, and the clocks count locally between updates.
 
 ## Loadout and asset prep
 
@@ -360,6 +360,9 @@ The biggest risk is fighting Warlords' own AI loop for control of the same group
 6. **A wave rides only if the drive is worth it.** Staging must be at least the maximum dismount distance from the target (about 1100 m); closer than that, the wave walks, because boarding and dismounting cost more than the walk saves.
 7. **Men first, then vehicles.** The first waves went at 34 s with lone men after the shop bought a GMG MRAP first. The shop now tops up groups to 3 men, at most 6 men per tick, before it buys vehicles, and a wave gathers for at least 40 s.
 8. **The vanilla purchase list is filled with unaffordable entries, not emptied.** An empty list caused script errors in Warlords' purchase FSM. The entries are re-applied every tick so vanilla never buys anything.
+9. **Muster and rally replace staging and approaches.** The user's play-test asked for this: units near each other group up at their own sector, everyone meets just outside the target, and all attack from the direction they came from. Two groups ready is the go count, a lone group waits about 3 minutes then goes anyway, a local muster lasts about 30 seconds. These override the original 3-group, 4-minute staging rule.
+10. **"Staging" and "holding point" in the rules-variant prompt map onto this model.** That prompt was written before the rework, so "staging" there means a sector's muster point or the rally, and "holding point" means the rally point.
+11. **Direction memory is now a 25 degree shift.** With one direction per attack, the old 40 degree avoidance would send groups well off their line of travel. A costly direction only moves the rally slightly next time.
 
 ## Sources
 

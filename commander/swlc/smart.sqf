@@ -33,39 +33,34 @@ SWLC_fnc_smartOnSeized = {
 	// SMART_SEIZED
 };
 
-// 1. Break and consolidate: a group down to about a third pulls back to staging and merges.
+// 1. Break and consolidate: a group down to about a third pulls back to the rally and merges.
 SWLC_fnc_smartBreakTick = {
 	params ["_cmd"];
 	if !(CFG("smartBreak")) exitWith {};
-	{
-		private _w = _x;
-		if ((_w get "phase") in ["TO_HOLD", "ASSAULT"]) then {
-			{
-				private _g = _x;
-				private _launch = _g getVariable ["SWLC_launchMen", 0];
-				private _men = [_g] call SWLC_fnc_groupMen;
-				if (_launch >= CFG("breakMinLaunchMen") && {(_g getVariable ["SWLC_leg", ""]) == "FOOT"} && {_men <= ((floor (_launch * CFG("breakFraction"))) max 1)}) then {
-					[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
-					_g setVariable ["SWLC_broke", true];
-					if (!isNil {_cmd get "gather"}) then {
-						[_cmd, _g, "Regrouping"] call SWLC_fnc_sendToStaging;
-					} else {
-						[_g] call SWLC_fnc_adClearOrder;
-						[_g, "Unassigned", [], "broke"] call SWLC_fnc_setState;
-					};
-					[_cmd, "break", "retreat", [["group", groupId _g], ["men", _men], ["launched", _launch], ["wave", _w get "id"]]] call SWLC_fnc_smartLog;
-					[_cmd get "side", "breaking", [], _g] call SWLC_fnc_radio;
-				};
-			} forEach ([_w] call SWLC_fnc_waveLive);
-		};
-	} forEach (_cmd get "flying");
+	private _op = _cmd get "op";
+	if (!isNil "_op") then {
+		{
+			private _g = _x;
+			private _launch = _g getVariable ["SWLC_launchMen", 0];
+			private _men = [_g] call SWLC_fnc_groupMen;
+			if (_launch >= CFG("breakMinLaunchMen") && {(_g getVariable ["SWLC_leg", ""]) == "FOOT"} && {([_g] call SWLC_fnc_state) in ["Advancing", "Assaulting"]} && {_men <= ((floor (_launch * CFG("breakFraction"))) max 1)}) then {
+				if (([_g] call SWLC_fnc_state) == "Assaulting") then {_op set ["launchStrength", ((_op get "launchStrength") - _men) max 0]};
+				_g setVariable ["SWLC_broke", true];
+				_g setVariable ["SWLC_launchMen", _men];
+				[_g, "Regrouping", _op get "rally", "broke"] call SWLC_fnc_setState;
+				[_g, [[_op get "rally", "MOVE", 30]], "AWARE", "FULL", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;
+				[_cmd, "break", "retreat", [["group", groupId _g], ["men", _men], ["launched", _launch], ["wave", _op get "id"]]] call SWLC_fnc_smartLog;
+				[_cmd get "side", "breaking", [], _g] call SWLC_fnc_radio;
+			};
+		} forEach ([_op] call SWLC_fnc_waveLive);
+	};
 
-	// Merge at staging. Warlords stay in their own groups, so only their bought men change group.
+	// Merge at the rally. Warlords stay in their own groups, so only their bought men change group.
 	private _groups = _cmd get "groups";
 	{
 		private _g = _x;
 		private _partners = _groups select {
-			_x isNotEqualTo _g && {([_x] call SWLC_fnc_state) == "Staging"}
+			_x isNotEqualTo _g && {([_x] call SWLC_fnc_state) == "Waiting"}
 			&& {([_x] call SWLC_fnc_groupMen) <= CFG("mergeMaxMen")} && {(leader _x distance2D leader _g) <= CFG("mergeRadius")}
 		};
 		if (_partners isNotEqualTo []) then {
@@ -77,25 +72,23 @@ SWLC_fnc_smartBreakTick = {
 			_g setVariable ["SWLC_broke", false];
 			[_cmd, "break", "merge", [["group", groupId _g], ["with", groupId _other], ["moved", count _movers]]] call SWLC_fnc_smartLog;
 		};
-	} forEach (_groups select {(_x getVariable ["SWLC_broke", false]) && {([_x] call SWLC_fnc_state) == "Staging"}});
+	} forEach (_groups select {(_x getVariable ["SWLC_broke", false]) && {([_x] call SWLC_fnc_state) == "Waiting"}});
 };
 
 // 2. Livelier radio: heavy-losses calls. Breaking and cheer calls are sent where those events happen.
 SWLC_fnc_smartRadioTick = {
 	params ["_cmd"];
 	if !(CFG("smartRadio")) exitWith {};
+	private _op = _cmd get "op";
+	if (isNil "_op") exitWith {};
 	{
-		if ((_x get "phase") in ["TO_HOLD", "ASSAULT"]) then {
-			{
-				private _g = _x;
-				private _launch = _g getVariable ["SWLC_launchMen", 0];
-				if (_launch >= 2 && {!(_g getVariable ["SWLC_heavyCalled", false])} && {([_g] call SWLC_fnc_groupMen) <= _launch * (1 - CFG("radioHeavyFraction"))}) then {
-					_g setVariable ["SWLC_heavyCalled", true];
-					[_cmd get "side", "heavy", [], _g] call SWLC_fnc_radio;
-				};
-			} forEach ([_x] call SWLC_fnc_waveLive);
+		private _g = _x;
+		private _launch = _g getVariable ["SWLC_launchMen", 0];
+		if (([_g] call SWLC_fnc_state) in ["Advancing", "Assaulting"] && {_launch >= 2} && {!(_g getVariable ["SWLC_heavyCalled", false])} && {([_g] call SWLC_fnc_groupMen) <= _launch * (1 - CFG("radioHeavyFraction"))}) then {
+			_g setVariable ["SWLC_heavyCalled", true];
+			[_cmd get "side", "heavy", [], _g] call SWLC_fnc_radio;
 		};
-	} forEach (_cmd get "flying");
+	} forEach ([_op] call SWLC_fnc_waveLive);
 };
 
 SWLC_fnc_smartCheer = {
@@ -104,58 +97,40 @@ SWLC_fnc_smartCheer = {
 	if (_live isNotEqualTo []) then {[_cmd get "side", "cheer", [], selectRandom _live] call SWLC_fnc_radio};
 };
 
-// 3. Reinforce success: groups stalled on one approach follow an approach that has broken in.
+// 3. Reinforce success: groups stalled outside the sector move up to a group that has broken in.
 SWLC_fnc_smartReinforceTick = {
 	params ["_cmd"];
 	if !(CFG("smartReinforce")) exitWith {};
+	private _op = _cmd get "op";
+	if (isNil "_op" || {(_op get "phase") != "ASSAULT"}) exitWith {};
+	private _target = _op get "target";
+	private _tpos = _op get "tpos";
+	private _foot = ([_op] call SWLC_fnc_waveLive) select {(_x getVariable ["SWLC_leg", ""]) == "FOOT" && {([_x] call SWLC_fnc_state) == "Assaulting"}};
+
+	// Track each group's closest approach to the target.
 	{
-		private _w = _x;
-		if ((_w get "phase") == "ASSAULT") then {
-			private _target = _w get "target";
-			private _tpos = [_target] call SWLC_fnc_adPos;
-			private _live = [_w] call SWLC_fnc_waveLive;
-
-			// Track each group's closest approach to the target.
-			private _foot = _live select {(_x getVariable ["SWLC_leg", ""]) == "FOOT"};
-			{
-				private _d = (leader _x) distance2D _tpos;
-				if (_d < ((_x getVariable ["SWLC_bestD", 1e9]) - CFG("reinforceMinMetres"))) then {
-					_x setVariable ["SWLC_bestD", _d];
-					_x setVariable ["SWLC_bestAt", time];
-				};
-			} forEach _foot;
-
-			private _approaches = _w get "approaches";
-			private _working = _approaches findIf {
-				((_x get "groups") select {_x in _foot}) findIf {[_target, getPosATL leader _x] call SWLC_fnc_adInSquare} >= 0
-			};
-			if (_working >= 0) then {
-				private _good = _approaches # _working;
-				{
-					private _a = _x;
-					if (_forEachIndex != _working) then {
-						{
-							private _g = _x;
-							if (_g in _foot && {!([_target, getPosATL leader _g] call SWLC_fnc_adInSquare)}
-								&& {(time - (_g getVariable ["SWLC_bestAt", time])) >= CFG("reinforceStallSeconds")}
-								&& {!(_g getVariable ["SWLC_reinforced", false])}) then {
-								_g setVariable ["SWLC_reinforced", true];
-								(_a get "groups") deleteAt ((_a get "groups") find _g);
-								(_good get "groups") pushBackUnique _g;
-								private _moved = _g getVariable ["SWLC_launchMen", 0];
-								_a set ["men", ((_a getOrDefault ["men", 0]) - _moved) max 0];
-								_good set ["men", (_good getOrDefault ["men", 0]) + _moved];
-								private _order = [[_good get "hold", "MOVE", 30]] + ([_target] call SWLC_fnc_sweepOrder);
-								[_g, "Assaulting", _tpos, "reinforce"] call SWLC_fnc_setState;
-								[_g, _order, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
-								[_cmd, "reinforce", "redirect", [["group", groupId _g], ["wave", _w get "id"], ["from_bearing", round (_a get "bearing")], ["to_bearing", round (_good get "bearing")]]] call SWLC_fnc_smartLog;
-							};
-						} forEach ((_a get "groups") select {true});
-					};
-				} forEach _approaches;
-			};
+		private _d = (leader _x) distance2D _tpos;
+		if (_d < ((_x getVariable ["SWLC_bestD", 1e9]) - CFG("reinforceMinMetres"))) then {
+			_x setVariable ["SWLC_bestD", _d];
+			_x setVariable ["SWLC_bestAt", time];
 		};
-	} forEach (_cmd get "flying");
+	} forEach _foot;
+
+	private _i = _foot findIf {[_target, getPosATL leader _x] call SWLC_fnc_adInSquare};
+	if (_i < 0) exitWith {};
+	private _inside = _foot # _i;
+	{
+		private _g = _x;
+		if (!([_target, getPosATL leader _g] call SWLC_fnc_adInSquare)
+			&& {(time - (_g getVariable ["SWLC_bestAt", time])) >= CFG("reinforceStallSeconds")}
+			&& {!(_g getVariable ["SWLC_reinforced", false])}) then {
+			_g setVariable ["SWLC_reinforced", true];
+			private _order = [[getPosATL leader _inside, "MOVE", 30]] + ([_target] call SWLC_fnc_sweepOrder);
+			[_g, "Assaulting", _tpos, "reinforce"] call SWLC_fnc_setState;
+			[_g, _order, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
+			[_cmd, "reinforce", "redirect", [["group", groupId _g], ["wave", _op get "id"], ["to_group", groupId _inside]]] call SWLC_fnc_smartLog;
+		};
+	} forEach _foot;
 };
 
 // The centre of what the side knows about near a sector, or the sector centre.
@@ -185,20 +160,17 @@ SWLC_fnc_smartSmoke = {
 	private _enemy = [_cmd, _w get "target"] call SWLC_fnc_smartEnemyCentre;
 	private _thrown = 0;
 	{
-		private _a = _x;
-		{
-			private _u = leader _x;
-			private _mag = (magazines _u) select {_x isKindOf ["SmokeShell", configFile >> "CfgMagazines"]};
-			if (_x in _live && {alive _u} && {(_x getVariable ["SWLC_leg", ""]) == "FOOT"} && {_mag isNotEqualTo []}) then {
-				private _here = getPosATL _u;
-				private _p = [_here, [_here, _enemy] call SWLC_fnc_bearing, CFG("smokeThrowDist")] call SWLC_fnc_offset;
-				_u removeMagazine (_mag # 0);
-				createVehicle ["SmokeShell", _p, [], 0, "CAN_COLLIDE"];
-				_thrown = _thrown + 1;
-				[_cmd, "smoke", "thrown", [["group", groupId _x], ["x", round (_p # 0)], ["y", round (_p # 1)], ["known_enemy", _enemy isNotEqualTo ([_w get "target"] call SWLC_fnc_adPos)]]] call SWLC_fnc_smartLog;
-			};
-		} forEach (((_a get "groups") select {_x in _live}) select [0, CFG("smokeGroupsPerApproach")]);
-	} forEach (_w get "approaches");
+		private _u = leader _x;
+		private _mag = (magazines _u) select {_x isKindOf ["SmokeShell", configFile >> "CfgMagazines"]};
+		if (alive _u && {(_x getVariable ["SWLC_leg", ""]) == "FOOT"} && {_mag isNotEqualTo []}) then {
+			private _here = getPosATL _u;
+			private _p = [_here, [_here, _enemy] call SWLC_fnc_bearing, CFG("smokeThrowDist")] call SWLC_fnc_offset;
+			_u removeMagazine (_mag # 0);
+			createVehicle ["SmokeShell", _p, [], 0, "CAN_COLLIDE"];
+			_thrown = _thrown + 1;
+			[_cmd, "smoke", "thrown", [["group", groupId _x], ["x", round (_p # 0)], ["y", round (_p # 1)], ["known_enemy", _enemy isNotEqualTo ([_w get "target"] call SWLC_fnc_adPos)]]] call SWLC_fnc_smartLog;
+		};
+	} forEach (_live select [0, CFG("smokeGroupsPerPush")]);
 	if (_thrown > 0) then {[_cmd get "side", "smoke", [], _live # 0] call SWLC_fnc_radio};
 };
 
@@ -278,24 +250,24 @@ SWLC_fnc_smartMomentum = {
 	[_side, "momentum", [[_best] call SWLC_fnc_adName]] call SWLC_fnc_radio;
 };
 
-// 7. Scout first: a small group goes ahead while the wave gathers. Never holds up the go.
+// 7. Scout first: a small group goes ahead while the others muster. Never holds up the go.
 SWLC_fnc_smartScoutTick = {
 	params ["_cmd"];
 	if !(CFG("smartScout")) exitWith {};
 	private _side = _cmd get "side";
-	private _w = _cmd get "gather";
+	private _w = _cmd get "op";
 	if (!isNil "_w" && {!(_w getOrDefault ["scoutSent", false])}) then {
 		private _target = _w get "target";
 		private _groups = [_w] call SWLC_fnc_waveLive;
 		if !(([_cmd, _target] call SWLC_fnc_threatOf) get "scouted") then {
-			// The wave must still reach the go count without the scout.
-			if ((count _groups) >= (CFG("scoutMinGroups") max (CFG("goMinGroups") + ([_cmd, "goMinAdd", 0] call SWLC_fnc_persona) + 1))) then {
-				private _sorted = [_groups select {([_x] call SWLC_fnc_state) in ["Staging", "Travelling"]}, [], {[_x] call SWLC_fnc_groupMen}, "ASCEND"] call BIS_fnc_sortBy;
+			// The attack must still reach the go count without the scout.
+			if ((count _groups) >= (CFG("scoutMinGroups") max (CFG("goMinGroups") + 1))) then {
+				private _sorted = [_groups select {([_x] call SWLC_fnc_state) in ["Mustering", "Travelling"]}, [], {[_x] call SWLC_fnc_groupMen}, "ASCEND"] call BIS_fnc_sortBy;
 				if (_sorted isNotEqualTo []) then {
 					_w set ["scoutSent", true];
 					private _g = _sorted # 0;
 					private _tpos = [_target] call SWLC_fnc_adPos;
-					private _spot = [_side, _tpos, [_tpos, _cmd get "stagingPos"] call SWLC_fnc_bearing, CFG("scoutDist")] call SWLC_fnc_validHoldPoint;
+					private _spot = [_side, _tpos, _w get "bearing", CFG("scoutDist")] call SWLC_fnc_validHoldPoint;
 					[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
 					[_g, "Recon", _spot, "scout"] call SWLC_fnc_setState;
 					private _limit = ((leader _g distance2D _spot) / CFG("footSpeedEstimate")) max CFG("scoutMaxSeconds") min CFG("scoutCapSeconds");
@@ -403,7 +375,7 @@ SWLC_fnc_smartHuntTick = {
 			_x params ["_pos", "_firing"];
 			if (surfaceIsWater _firing || {[_cmd get "side", _firing] call SWLC_fnc_adRestricted}) then {_firing = +_pos};
 			private _blocked = [_cmd get "side", _firing] call SWLC_fnc_adRestricted;
-			private _free = (_cmd get "groups") select {!_blocked && {([_x] call SWLC_fnc_state) in ["Unassigned", "Staging", "Reserve"]} && {(leader _x distance2D _firing) <= CFG("huntRadius")}};
+			private _free = (_cmd get "groups") select {!_blocked && {([_x] call SWLC_fnc_state) in ["Unassigned", "Mustering", "Reserve"]} && {(leader _x distance2D _firing) <= CFG("huntRadius")}};
 			if (_free isNotEqualTo []) then {
 				private _g = ([_free, [], {leader _x distance2D _firing}, "ASCEND"] call BIS_fnc_sortBy) # 0;
 				[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
@@ -476,36 +448,29 @@ SWLC_fnc_smartInit = {
 	private _force = CFG("personalityForce");
 	private _name = if (_force != "") then {_force} else {selectRandom ["aggressive", "cautious", "sneaky"]};
 	private _p = switch (_name) do {
-		case "aggressive": {[["goWait", 0.75], ["goMinAdd", 0], ["spread", 1], ["combat", 1.3], ["momentum", 1.3]]};
-		case "cautious": {[["goWait", 1], ["goMinAdd", 1], ["spread", 0.9], ["combat", 0.8], ["momentum", 0.7]]};
-		default {[["goWait", 0.9], ["goMinAdd", 0], ["spread", 1.4], ["combat", 0.7], ["momentum", 1]]};
+		case "aggressive": {[["goWait", 0.75], ["combat", 1.3], ["momentum", 1.3]]};
+		case "cautious": {[["goWait", 1.2], ["combat", 0.8], ["momentum", 0.7]]};
+		default {[["goWait", 0.9], ["combat", 0.7], ["momentum", 1]]};
 	};
 	_cmd set ["persona", createHashMapFromArray (_p + [["name", _name]])];
 	[_cmd, "personality", "chosen", [["name", _name], ["forced", _force != ""]]] call SWLC_fnc_smartLog;
 };
 
-// 11. Memory within a round: approaches that cost heavy losses aren't reused for that sector.
+// 11. Memory within a round: a direction that cost heavy losses isn't reused for that sector.
 SWLC_fnc_smartRemember = {
-	params ["_cmd", "_w"];
+	params ["_cmd", "_op", "_attackers"];
 	if !(CFG("smartMemory")) exitWith {};
-	if (isNil {_w get "approaches"}) exitWith {};
-	private _name = [_w get "target"] call SWLC_fnc_adName;
-	{
-		private _a = _x;
-		private _launched = _a getOrDefault ["men", 0];
-		if (_launched >= CFG("memoryMinMen")) then {
-			private _left = 0;
-			{_left = _left + ({alive _x} count units _x)} forEach (_a get "groups");
-			if ((1 - (_left min _launched) / _launched) >= CFG("memoryLossFraction")) then {
-				private _map = _cmd getOrDefault ["costly", createHashMap];
-				private _list = _map getOrDefault [_name, []];
-				_list pushBack (_a get "bearing");
-				_map set [_name, _list];
-				_cmd set ["costly", _map];
-				[_cmd, "memory", "costly", [["sector", _name], ["bearing", round (_a get "bearing")], ["launched", _launched], ["left", _left]]] call SWLC_fnc_smartLog;
-			};
-		};
-	} forEach (_w get "approaches");
+	private _launched = _op get "launchStrength";
+	if (_launched < CFG("memoryMinMen")) exitWith {};
+	private _left = [_attackers] call SWLC_fnc_groupsMen;
+	if ((1 - (_left min _launched) / _launched) < CFG("memoryLossFraction")) exitWith {};
+	private _name = [_op get "target"] call SWLC_fnc_adName;
+	private _map = _cmd getOrDefault ["costly", createHashMap];
+	private _list = _map getOrDefault [_name, []];
+	_list pushBack (_op get "bearing");
+	_map set [_name, _list];
+	_cmd set ["costly", _map];
+	[_cmd, "memory", "costly", [["sector", _name], ["bearing", round (_op get "bearing")], ["launched", _launched], ["left", _left]]] call SWLC_fnc_smartLog;
 };
 
 SWLC_fnc_smartAvoid = {
@@ -533,7 +498,7 @@ SWLC_fnc_smartJoinHuman = {
 	private _target = _cmd get "target";
 	if (isNull _target) exitWith {};
 	private _tpos = [_target] call SWLC_fnc_adPos;
-	private _free = (_cmd get "groups") select {([_x] call SWLC_fnc_state) in ["Unassigned", "Staging"] && {(leader _x distance2D _p) <= CFG("joinPushRadius")}};
+	private _free = (_cmd get "groups") select {([_x] call SWLC_fnc_state) in ["Unassigned", "Mustering", "Waiting"] && {(leader _x distance2D _p) <= CFG("joinPushRadius")}};
 	private _free2 = [_free, [], {leader _x distance2D _p}, "ASCEND"] call BIS_fnc_sortBy;
 	{
 		[_cmd, _x] call SWLC_fnc_waveRemoveGroup;

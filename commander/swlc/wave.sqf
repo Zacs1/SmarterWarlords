@@ -1,38 +1,78 @@
-// The wave cycle: gather at staging, go signal, launch on approaches, hold points, assault, resolve.
+// The attack on the current target. Groups muster at their own sectors (staging.sqf), meet at one rally
+// point outside the target on the side they're coming from, and go in together. Later arrivals reinforce.
 #include "macros.hpp"
+
+// Bearing from the target towards where the attackers are coming from.
+SWLC_fnc_opBearing = {
+	params ["_cmd", "_target"];
+	private _side = _cmd get "side";
+	private _tpos = [_target] call SWLC_fnc_adPos;
+	private _groups = (_cmd get "groups") select {!(([_x] call SWLC_fnc_state) in ["Reserve", "Defending"])};
+	private _sx = 0;
+	private _sy = 0;
+	{
+		private _b = [_tpos, getPosATL leader _x] call SWLC_fnc_bearing;
+		_sx = _sx + sin _b;
+		_sy = _sy + cos _b;
+	} forEach _groups;
+	// Groups on opposite sides cancel out; then the side's nearest ground is the better guide.
+	if (_groups isNotEqualTo [] && {sqrt (_sx * _sx + _sy * _sy) >= CFG("rallyMinAgreement") * (count _groups)}) exitWith {_sx atan2 _sy};
+	private _owned = [_side] call SWLC_fnc_adOwned;
+	private _from = if (_owned isEqualTo []) then {[[_side] call SWLC_fnc_adBase] call SWLC_fnc_adPos} else {
+		[([_owned, [], {([_x] call SWLC_fnc_adPos) distance2D _tpos}, "ASCEND"] call BIS_fnc_sortBy) # 0] call SWLC_fnc_adPos
+	};
+	[_tpos, _from] call SWLC_fnc_bearing
+};
 
 SWLC_fnc_waveNew = {
 	params ["_cmd"];
 	private _id = (_cmd get "waveCounter") + 1;
 	_cmd set ["waveCounter", _id];
+	private _target = _cmd get "target";
+	private _tpos = [_target] call SWLC_fnc_adPos;
+	private _bearing = [_cmd, _target, [_cmd, _target] call SWLC_fnc_opBearing] call SWLC_fnc_smartAvoid;
+	private _d = ([_target] call SWLC_fnc_adSize) / 2 + CFG("rallyOutside");
+	private _rally = [_cmd get "side", _tpos, _bearing, _d] call SWLC_fnc_validHoldPoint;
+	["C_WAVE", [["side", _cmd get "side"], ["wave", _id], ["event", "new"], ["target", [_target] call SWLC_fnc_adName], ["bearing", round _bearing], ["x", round (_rally # 0)], ["y", round (_rally # 1)]]] call SWLC_fnc_log;
 	createHashMapFromArray [
 		["id", _id],
-		["target", _cmd get "target"],
-		["phase", "GATHER"],
+		["target", _target],
+		["tpos", _tpos],
+		["bearing", _bearing],
+		["rally", _rally],
+		["phase", "RALLY"],
 		["groups", []],
-		["firstArrive", -1],
+		["firstAtRally", -1],
+		["launched", -1],
+		["launchStrength", 0],
+		["lastProgress", time],
 		["created", time]
 	]
 };
 
 SWLC_fnc_waveRemoveGroup = {
 	params ["_cmd", "_g"];
-	private _waves = (_cmd get "flying") select {true};
-	if (!isNil {_cmd get "gather"}) then {_waves pushBack (_cmd get "gather")};
-	{
-		private _i = (_x get "groups") find _g;
-		if (_i >= 0) then {
-			(_x get "groups") deleteAt _i;
-			if (!isNil {_x get "launchStrength"}) then {
-				_x set ["launchStrength", ((_x get "launchStrength") - ([_g] call SWLC_fnc_groupMen)) max 0];
-			};
+	private _op = _cmd get "op";
+	if (!isNil "_op") then {
+		private _i = (_op get "groups") find _g;
+		if (_i >= 0) then {(_op get "groups") deleteAt _i};
+		if (([_g] call SWLC_fnc_state) == "Assaulting") then {
+			_op set ["launchStrength", ((_op get "launchStrength") - ([_g] call SWLC_fnc_groupMen)) max 0];
 		};
-	} forEach _waves;
+	};
+	{
+		private _rec = _y;
+		{
+			private _list = _rec get _x;
+			private _i = _list find _g;
+			if (_i >= 0) then {_list deleteAt _i};
+		} forEach ["groups", "batch"];
+	} forEach (_cmd get "musters");
 	_g setVariable ["SWLC_waveId", -1];
 	[_cmd, _g] call SWLC_fnc_vehRelease;
 };
 
-// Live groups of a wave that are still its own.
+// Live groups of the operation that are still its own.
 SWLC_fnc_waveLive = {
 	params ["_w"];
 	(_w get "groups") select {({alive _x} count units _x) > 0 && {(_x getVariable ["SWLC_waveId", -1]) == (_w get "id")}}
@@ -40,46 +80,22 @@ SWLC_fnc_waveLive = {
 
 SWLC_fnc_waveTick = {
 	params ["_cmd"];
-	{
-		[_cmd, _x] call SWLC_fnc_waveAdvance;
-	} forEach ((_cmd get "flying") select {true});
-	_cmd set ["flying", (_cmd get "flying") select {(_x get "phase") != "DONE"}];
-	[_cmd] call SWLC_fnc_gatherTick;
+	[_cmd] call SWLC_fnc_musterSweep;
+	private _op = _cmd get "op";
+	if (isNil "_op") exitWith {};
+	private _target = _op get "target";
+	if (([_target] call SWLC_fnc_adOwner) == (_cmd get "side")) exitWith {[_cmd, "seized"] call SWLC_fnc_waveResolve};
+	if ((_cmd get "target") isNotEqualTo _target) exitWith {[_cmd, "target_changed"] call SWLC_fnc_waveResolve};
+	[_cmd, _op] call SWLC_fnc_wavePlan;
+	[_cmd, _op] call SWLC_fnc_musterArrivals;
+	{[_cmd, _op, _y] call SWLC_fnc_musterTick} forEach (_cmd get "musters");
+	private _live = [_op] call SWLC_fnc_waveLive;
+	[_cmd, _op, _live] call SWLC_fnc_waveVehicleLegs;
+	[_cmd, _op, _live] call SWLC_fnc_rallyArrivals;
+	[_cmd, _op, _live] call SWLC_fnc_rallyTick;
 };
 
-// Go signal: 3+ groups at staging, or 4 minutes after the first arrival. No extensions.
-SWLC_fnc_gatherTick = {
-	params ["_cmd"];
-	private _w = _cmd get "gather";
-	if (isNil "_w") exitWith {};
-	if (([_w get "target"] call SWLC_fnc_adOwner) == (_cmd get "side")) exitWith {};
-	[_cmd, _w] call SWLC_fnc_wavePlan;
-	[_cmd] call SWLC_fnc_stagingArrivals;
-	private _live = [_w] call SWLC_fnc_waveLive;
-	private _staged = _live select {([_x] call SWLC_fnc_state) == "Staging"};
-	[_cmd, _w, _staged] call SWLC_fnc_shopTick;
-	[_cmd, _w, _staged] call SWLC_fnc_kitTick;
-	private _first = _w get "firstArrive";
-	private _momentum = _cmd getOrDefault ["momentum", []];
-	private _goWait = if (_momentum isNotEqualTo [] && {(_momentum # 0) isEqualTo (_w get "target")} && {time < (_momentum # 1) + CFG("momentumGoWindow")}) then {CFG("momentumGoWait")} else {CFG("goMaxWait") * ([_cmd, "goWait"] call SWLC_fnc_persona)};
-	private _capReached = _first >= 0 && {(time - _first) >= _goWait};
-	private _countReached = (count _staged) >= CFG("goMinGroups") + ([_cmd, "goMinAdd", 0] call SWLC_fnc_persona) || {_w getOrDefault ["forceGo", false]};
-	if !(_capReached || _countReached) exitWith {};
-	if (_staged isEqualTo []) exitWith {};
-
-	// A short hold after the first arrival while top-ups are affordable, so groups don't leave as lone men.
-	if (!_capReached && {_first >= 0} && {(time - _first) < CFG("goMinGatherSeconds")} && {!(_w getOrDefault ["forceGo", false])}
-		&& {([_cmd get "side"] call SWLC_fnc_cpFree) >= 100}
-		&& {(_staged findIf {([_x] call SWLC_fnc_groupMen) < CFG("shopGroupSize")}) >= 0}) exitWith {};
-
-	// Let the previous wave get to its assault first, but the 4-minute cap always wins.
-	private _prevMoving = ((_cmd get "flying") findIf {(_x get "phase") in ["MOUNT", "TO_HOLD"]}) >= 0;
-	if (_prevMoving && {!_capReached}) exitWith {};
-
-	[_cmd, _w, _staged, _capReached && {!_countReached}] call SWLC_fnc_waveLaunch;
-};
-
-// What the wave should bring, from the threat summary. Never affects how long it waits.
+// What the groups should bring, from the threat summary. Never affects how long they wait.
 SWLC_fnc_wavePlan = {
 	params ["_cmd", "_w"];
 	private _threat = [_cmd, _w get "target"] call SWLC_fnc_threatOf;
@@ -101,292 +117,265 @@ SWLC_fnc_wavePlan = {
 	_plan
 };
 
-SWLC_fnc_makeApproaches = {
-	params ["_cmd", "_target", "_groupCount"];
-	private _side = _cmd get "side";
-	private _tpos = [_target] call SWLC_fnc_adPos;
-	private _centre = [_tpos, _cmd get "stagingPos"] call SWLC_fnc_bearing;
-	private _spread = (CFG("approachSpreadMin") + random (CFG("approachSpreadMax") - CFG("approachSpreadMin"))) * ([_cmd, "spread"] call SWLC_fnc_persona);
-	private _offsets = if (_groupCount >= 4) then {[-_spread, 0, _spread]} else {[-_spread / 2, _spread / 2]};
-	private _out = [];
-	{
-		private _bearing = [_cmd, _target, _centre + _x] call SWLC_fnc_smartAvoid;
-		private _d = CFG("holdDistMin") + random (CFG("holdDistMax") - CFG("holdDistMin"));
-		private _pos = [_side, _tpos, _bearing, _d] call SWLC_fnc_validHoldPoint;
-		_out pushBack (createHashMapFromArray [["bearing", _bearing], ["hold", _pos], ["groups", []]]);
-	} forEach _offsets;
-	_out
-};
-
-// Rotates up to +-75 degrees to keep the hold point on land and out of restricted sectors.
+// Rotates up to +-75 degrees to keep the point on land and out of restricted sectors.
 SWLC_fnc_validHoldPoint = {
 	params ["_side", "_tpos", "_bearing", "_d"];
 	private _found = [];
 	{
 		private _p = [_tpos, _bearing + _x, _d] call SWLC_fnc_offset;
-		if (!surfaceIsWater _p && {!([_side, _p] call SWLC_fnc_adRestricted)}) exitWith {_found = _p};
+		if (!surfaceIsWater _p && {!([_side, _p, 50] call SWLC_fnc_adRestricted)}) exitWith {_found = _p};
 	} forEach [0, 15, -15, 30, -30, 45, -45, 60, -60, 75, -75];
 	if (_found isEqualTo []) then {_found = [_tpos, _bearing, _d] call SWLC_fnc_offset};
 	_found
 };
 
-// The go signal. Groups finish kit and board (capped), then all leave together in waveDepart.
-SWLC_fnc_waveLaunch = {
-	params ["_cmd", "_w", "_goers", "_byTimer"];
-	private _side = _cmd get "side";
-	private _target = _w get "target";
-	private _others = (_w get "groups") - _goers;
-
-	_w set ["groups", _goers];
-	private _approaches = [_cmd, _target, count _goers] call SWLC_fnc_makeApproaches;
-	{
-		_x set ["dismount", [_cmd, _target, _x get "bearing"] call SWLC_fnc_makeDismount];
-	} forEach _approaches;
-	private _sorted = [_goers, [], {
-		private _b = [getPosATL leader _x, [_target] call SWLC_fnc_adPos] call SWLC_fnc_bearing;
-		_b
-	}, "ASCEND"] call BIS_fnc_sortBy;
-	{
-		private _a = _approaches # (_forEachIndex mod count _approaches);
-		(_a get "groups") pushBack _x;
-		_a set ["men", (_a getOrDefault ["men", 0]) + ([_x] call SWLC_fnc_groupMen)];
-		_x setVariable ["SWLC_atHold", false];
-		_x setVariable ["SWLC_leg", ""];
-		_x setVariable ["SWLC_legLost", false];
-		_x setVariable ["SWLC_legAbandon", false];
-		_x setVariable ["SWLC_launchMen", [_x] call SWLC_fnc_groupMen];
-		_x setVariable ["SWLC_broke", false];
-		if (CFG("smartSmoke") && {alive leader _x} && {((magazines leader _x) findIf {_x isKindOf ["SmokeShell", configFile >> "CfgMagazines"]}) < 0}) then {
-			(leader _x) addMagazines ["SmokeShell", 2];
-		};
-		_x setVariable ["SWLC_reinforced", false];
-		_x setVariable ["SWLC_bestD", 1e9];
-		_x setVariable ["SWLC_bestAt", time];
-		_x setVariable ["SWLC_heavyCalled", false];
-		[_x, "Mounting", _a get "hold", "go"] call SWLC_fnc_setState;
-	} forEach _sorted;
-
-	_w set ["approaches", _approaches];
-	_w set ["phase", "MOUNT"];
-	_w set ["goTime", time];
-	_w set ["launched", time];
-	_w set ["launchStrength", [_goers] call SWLC_fnc_groupsMen];
-	_w set ["firstHold", -1];
-	_w set ["lastProgress", time];
-	private _wait = if ((_w get "firstArrive") >= 0) then {round (time - (_w get "firstArrive"))} else {-1};
-	["C_WAVE", [["side", _side], ["wave", _w get "id"], ["event", "go"], ["groups", count _goers], ["men", _w get "launchStrength"],
-		["target", [_target] call SWLC_fnc_adName], ["approaches", count _approaches], ["by_timer", _byTimer], ["wait", _wait], ["bearings", (_approaches apply {str round (_x get "bearing")}) joinString "/"]]] call SWLC_fnc_log;
-
-	(_cmd get "flying") pushBack _w;
-	if (({count ([_x] call SWLC_fnc_vehRecOf) > 0} count _goers) > 0) then {[_side, "mount"] call SWLC_fnc_radio};
-
-	private _next = [_cmd] call SWLC_fnc_waveNew;
-	_next set ["groups", _others];
-	{_x setVariable ["SWLC_waveId", _next get "id"]} forEach _others;
-	_cmd set ["gather", _next];
-
-	// Nothing to board and no kit to draw: the wave leaves on the same tick as the go.
-	[_cmd, _w, _goers] call SWLC_fnc_waveMountTick;
-};
-
-SWLC_fnc_waveAdvance = {
-	params ["_cmd", "_w"];
-	private _side = _cmd get "side";
-	private _target = _w get "target";
-	private _live = [_w] call SWLC_fnc_waveLive;
-
-	// Resolve
-	if (([_target] call SWLC_fnc_adOwner) == _side) exitWith {[_cmd, _w, "seized"] call SWLC_fnc_waveResolve};
-	if (!isNull (_cmd get "target") && {_target isNotEqualTo (_cmd get "target")}) exitWith {[_cmd, _w, "target_changed"] call SWLC_fnc_waveResolve};
-	private _strength = [_live] call SWLC_fnc_groupsMen;
-	if (_strength < CFG("waveFailStrength") * (_w get "launchStrength")) exitWith {[_cmd, _w, "attrition"] call SWLC_fnc_waveResolve};
-	if (_live isEqualTo []) exitWith {[_cmd, _w, "wiped"] call SWLC_fnc_waveResolve};
-
-	switch (_w get "phase") do {
-		case "MOUNT": {
-			[_cmd, _w, _live] call SWLC_fnc_waveMountTick;
-		};
-		case "TO_HOLD": {
-			[_cmd, _w, _live] call SWLC_fnc_waveToHold;
-		};
-		case "ASSAULT": {
-			[_cmd, _w, _live] call SWLC_fnc_waveAssault;
-		};
+// Resets what a group remembers from its last attack.
+SWLC_fnc_waveGroupStart = {
+	params ["_g"];
+	_g setVariable ["SWLC_leg", ""];
+	_g setVariable ["SWLC_legLost", false];
+	_g setVariable ["SWLC_legAbandon", false];
+	_g setVariable ["SWLC_launchMen", [_g] call SWLC_fnc_groupMen];
+	_g setVariable ["SWLC_broke", false];
+	_g setVariable ["SWLC_restUntil", -1];
+	_g setVariable ["SWLC_reinforced", false];
+	_g setVariable ["SWLC_bestD", 1e9];
+	_g setVariable ["SWLC_bestAt", time];
+	_g setVariable ["SWLC_heavyCalled", false];
+	if (CFG("smartSmoke") && {alive leader _g} && {((magazines leader _g) findIf {_x isKindOf ["SmokeShell", configFile >> "CfgMagazines"]}) < 0}) then {
+		(leader _g) addMagazines ["SmokeShell", 2];
 	};
 };
 
-// Boarding and kit. Everyone ready, or the cap reached: the wave leaves together.
 SWLC_fnc_groupReady = {
 	params ["_g"];
 	!([_g] call SWLC_fnc_kitPending) && {[_g] call SWLC_fnc_vehAboard}
 };
 
-SWLC_fnc_waveMountTick = {
-	params ["_cmd", "_w", "_live"];
-	[_cmd, _w, _live] call SWLC_fnc_kitTick;
-	{
-		// Kit first, then board, so nobody climbs in on the way to the crate.
-		if !([_x] call SWLC_fnc_kitPending) then {[_cmd, _x] call SWLC_fnc_vehMountGroup};
-	} forEach _live;
-	private _capped = (time - (_w get "goTime")) >= CFG("mountCapSeconds");
-	if (_capped || {(_live findIf {!([_x] call SWLC_fnc_groupReady)}) < 0}) then {
-		[_cmd, _w, _live] call SWLC_fnc_waveDepart;
-	};
-};
-
-// Sends a group off on its leg: driving to the dismount point, following the infantry, or walking.
+// Sends a group off on its leg: driving to the dismount point, a combat vehicle to the rally, or walking.
 SWLC_fnc_waveSendGroup = {
-	params ["_cmd", "_w", "_a", "_g"];
+	params ["_cmd", "_op", "_g"];
 	private _rec = [_g] call SWLC_fnc_vehRecOf;
 	if (count _rec > 0 && {(_rec get "role") == "combat"}) exitWith {
 		_g setVariable ["SWLC_leg", "FOLLOW"];
 		_rec set ["state", "moving"];
-		[_cmd, _w, [_g]] call SWLC_fnc_vehFollowTick;
+		[_g, "Advancing", _op get "rally", "to_rally"] call SWLC_fnc_setState;
+		[_g, [[_op get "rally", "MOVE", 40]], "AWARE", "NORMAL", "COLUMN", "RED"] call SWLC_fnc_adSetOrder;
 	};
 	if (count _rec > 0) exitWith {
+		private _dismount = [_cmd, _op] call SWLC_fnc_waveDismount;
 		_g setVariable ["SWLC_leg", "DRIVE"];
+		_g setVariable ["SWLC_dismount", _dismount];
 		_rec set ["state", "moving"];
-		[_g, "Assaulting", _a get "dismount", "drive"] call SWLC_fnc_setState;
-		[_g, [[_a get "dismount", "MOVE", 30]], "SAFE", "NORMAL", "COLUMN", "YELLOW"] call SWLC_fnc_adSetOrder;
+		[_g, "Advancing", _dismount, "drive"] call SWLC_fnc_setState;
+		[_g, [[_dismount, "MOVE", 30]], "SAFE", "NORMAL", "COLUMN", "YELLOW"] call SWLC_fnc_adSetOrder;
 	};
-	[_cmd, _w, _a, _g] call SWLC_fnc_waveFootOrder;
+	[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
+};
+
+// Where vehicles stop. Worked out from current intel, and reused for a minute.
+SWLC_fnc_waveDismount = {
+	params ["_cmd", "_op"];
+	if ((time - (_op getOrDefault ["dismountAt", -1e6])) >= 60) then {
+		_op set ["dismount", [_cmd, _op get "target", _op get "bearing"] call SWLC_fnc_makeDismount];
+		_op set ["dismountAt", time];
+	};
+	_op get "dismount"
 };
 
 SWLC_fnc_waveFootOrder = {
-	params ["_cmd", "_w", "_a", "_g"];
+	params ["_cmd", "_op", "_g"];
 	_g setVariable ["SWLC_leg", "FOOT"];
-	if ((_w get "phase") == "ASSAULT") then {
-		[_g, "Assaulting", [_w get "target"] call SWLC_fnc_adPos, "assault"] call SWLC_fnc_setState;
-		[_g, [_w get "target"] call SWLC_fnc_sweepOrder, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
-	} else {
-		[_g, "Assaulting", _a get "hold", "launch"] call SWLC_fnc_setState;
-		[_g, [[_a get "hold", "MOVE", 30]]] call SWLC_fnc_adSetOrder;
-	};
+	[_g, "Advancing", _op get "rally", "to_rally"] call SWLC_fnc_setState;
+	[_g, [[_op get "rally", "MOVE", 30]]] call SWLC_fnc_adSetOrder;
 };
 
-// All orders together. Anyone not ready at the cap becomes a second element on the same approach.
+// One sector's groups leave together. Anyone not ready at the cap follows when it can.
 SWLC_fnc_waveDepart = {
-	params ["_cmd", "_w", "_live"];
-	[_cmd, _w, _live] call SWLC_fnc_kitFinish;
+	params ["_cmd", "_op", "_rec", "_batch"];
+	[_cmd, _op, _batch] call SWLC_fnc_kitFinish;
 	private _riding = 0;
 	private _walking = 0;
 	private _late = 0;
-	private _unused = 0;
 	{
-		private _a = _x;
-		{
-			private _g = _x;
-			if (_g in _live) then {
-				if ([_g] call SWLC_fnc_groupReady) then {
-					[_cmd, _w, _a, _g] call SWLC_fnc_waveSendGroup;
-					if (count ([_g] call SWLC_fnc_vehRecOf) > 0) then {_riding = _riding + 1} else {_walking = _walking + 1};
-				} else {
-					_g setVariable ["SWLC_leg", "LATE"];
-					_late = _late + 1;
-				};
-			};
-		} forEach (_a get "groups");
-	} forEach (_w get "approaches");
-	_w set ["phase", "TO_HOLD"];
-	_w set ["launched", time];
-	_w set ["lastProgress", time];
-	["C_WAVE", [["side", _cmd get "side"], ["wave", _w get "id"], ["event", "depart"], ["mount_s", round (time - (_w get "goTime"))], ["riding", _riding], ["walking", _walking], ["late", _late], ["worth_driving", [_cmd, _w] call SWLC_fnc_vehWorthDriving],
-		["at_launchers", [_live] call SWLC_fnc_kitCountAT], ["at_wanted", (_w get "plan") get "atWanted"]]] call SWLC_fnc_log;
-	[_cmd get "side", "moveout", [count (_w get "approaches"), _w get "id", [_w get "target"] call SWLC_fnc_adName]] call SWLC_fnc_radio;
+		private _g = _x;
+		if ([_g] call SWLC_fnc_groupReady) then {
+			[_cmd, _op, _g] call SWLC_fnc_waveSendGroup;
+			if (count ([_g] call SWLC_fnc_vehRecOf) > 0) then {_riding = _riding + 1} else {_walking = _walking + 1};
+		} else {
+			_g setVariable ["SWLC_leg", "LATE"];
+			_late = _late + 1;
+		};
+	} forEach _batch;
+	_rec set ["batch", []];
+	["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "depart"], ["sector", _rec get "name"], ["mount_s", round (time - (_rec get "goTime"))], ["riding", _riding], ["walking", _walking], ["late", _late],
+		["worth_driving", [_cmd, _op, _rec get "pos"] call SWLC_fnc_vehWorthDriving], ["at_launchers", [_batch] call SWLC_fnc_kitCountAT], ["at_wanted", (_op get "plan") get "atWanted"]]] call SWLC_fnc_log;
+	[_cmd get "side", "leaving", [_rec get "name", [_op get "target"] call SWLC_fnc_adName], _batch # 0] call SWLC_fnc_radio;
 };
 
-// Per-group vehicle legs, run during both the approach and the assault.
+// Per-group vehicle legs, run throughout the attack.
 SWLC_fnc_waveVehicleLegs = {
-	params ["_cmd", "_w", "_live"];
+	params ["_cmd", "_op", "_live"];
 	{
-		private _a = _x;
-		{
-			private _g = _x;
-			if (_g in _live) then {
-				switch (_g getVariable ["SWLC_leg", ""]) do {
-					case "LATE": {
-						[_cmd, _g] call SWLC_fnc_vehMountGroup;
-						private _deadline = (_w get "goTime") + CFG("mountCapSeconds") + CFG("mountLateExtra");
-						if ([_g] call SWLC_fnc_groupReady) then {
-							[_cmd, _w, _a, _g] call SWLC_fnc_waveSendGroup;
+		private _g = _x;
+		switch (_g getVariable ["SWLC_leg", ""]) do {
+			case "LATE": {
+				[_cmd, _g] call SWLC_fnc_vehMountGroup;
+				private _deadline = (_g getVariable ["SWLC_mountGo", time]) + CFG("mountCapSeconds") + CFG("mountLateExtra");
+				if ([_g] call SWLC_fnc_groupReady) then {
+					[_cmd, _op, _g] call SWLC_fnc_waveSendGroup;
+				} else {
+					if (time >= _deadline) then {
+						private _rec = [_g] call SWLC_fnc_vehRecOf;
+						if (count _rec > 0 && {(_rec get "state") != "arriving"}) then {
+							[_g] call SWLC_fnc_vehForceBoard;
+							[_cmd, _op, _g] call SWLC_fnc_waveSendGroup;
 						} else {
-							if (time >= _deadline) then {
-								private _rec = [_g] call SWLC_fnc_vehRecOf;
-								if (count _rec > 0 && {(_rec get "state") != "arriving"}) then {
-									[_g] call SWLC_fnc_vehForceBoard;
-									[_cmd, _w, _a, _g] call SWLC_fnc_waveSendGroup;
-								} else {
-									if (count _rec > 0) then {
-										["C_VEH", [["side", _cmd get "side"], ["id", _rec get "id"], ["event", "left_unused"], ["group", groupId _g]]] call SWLC_fnc_log;
-										_rec set ["group", grpNull];
-										_rec set ["state", "parked"];
-										_g setVariable ["SWLC_rec", createHashMap];
-									};
-									[_cmd, _w, _a, _g] call SWLC_fnc_waveFootOrder;
-								};
+							if (count _rec > 0) then {
+								["C_VEH", [["side", _cmd get "side"], ["id", _rec get "id"], ["event", "left_unused"], ["group", groupId _g]]] call SWLC_fnc_log;
+								_rec set ["group", grpNull];
+								_rec set ["state", "parked"];
+								_g setVariable ["SWLC_rec", createHashMap];
 							};
-						};
-					};
-					case "DRIVE": {
-						private _abandon = (_g getVariable ["SWLC_legAbandon", false]) || {_g getVariable ["SWLC_legLost", false]};
-						if (_abandon) then {
-							_g setVariable ["SWLC_legAbandon", false];
-							_g setVariable ["SWLC_legLost", false];
-							[_cmd, _g, "abandoned"] call SWLC_fnc_vehDismount;
-							[_cmd get "side", "stuck", [], _g] call SWLC_fnc_radio;
-							[_cmd, _w, _a, _g] call SWLC_fnc_waveFootOrder;
-						} else {
-							if (((leader _g) distance2D (_a get "dismount")) <= CFG("dismountArriveRadius") || {[_g] call SWLC_fnc_adOrderDone}) then {
-								[_cmd, _g, "dismount"] call SWLC_fnc_vehDismount;
-								[_cmd, _w, _a, _g] call SWLC_fnc_waveFootOrder;
-							};
-						};
-					};
-					case "FOLLOW": {
-						if ((_g getVariable ["SWLC_legLost", false]) || {_g getVariable ["SWLC_legAbandon", false]}) then {
-							_g setVariable ["SWLC_legAbandon", false];
-							_g setVariable ["SWLC_legLost", false];
-							[_cmd, _g, "abandoned"] call SWLC_fnc_vehDismount;
-							[_cmd, _w, _a, _g] call SWLC_fnc_waveFootOrder;
+							[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
 						};
 					};
 				};
 			};
-		} forEach (_a get "groups");
-	} forEach (_w get "approaches");
-	[_cmd, _w, _live] call SWLC_fnc_vehFollowTick;
+			case "DRIVE": {
+				if ((_g getVariable ["SWLC_legAbandon", false]) || {_g getVariable ["SWLC_legLost", false]}) then {
+					_g setVariable ["SWLC_legAbandon", false];
+					_g setVariable ["SWLC_legLost", false];
+					[_cmd, _g, "abandoned"] call SWLC_fnc_vehDismount;
+					[_cmd get "side", "stuck", [], _g] call SWLC_fnc_radio;
+					[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
+				} else {
+					if (((leader _g) distance2D (_g getVariable "SWLC_dismount")) <= CFG("dismountArriveRadius") || {[_g] call SWLC_fnc_adOrderDone}) then {
+						[_cmd, _g, "dismount"] call SWLC_fnc_vehDismount;
+						[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
+					};
+				};
+			};
+			case "FOLLOW": {
+				if ((_g getVariable ["SWLC_legLost", false]) || {_g getVariable ["SWLC_legAbandon", false]}) then {
+					_g setVariable ["SWLC_legAbandon", false];
+					_g setVariable ["SWLC_legLost", false];
+					[_cmd, _g, "abandoned"] call SWLC_fnc_vehDismount;
+					if (([_g] call SWLC_fnc_state) == "Assaulting") then {
+						_g setVariable ["SWLC_leg", "FOOT"];
+						[_g, [_op get "target"] call SWLC_fnc_sweepOrder, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
+					} else {
+						[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
+					};
+				};
+			};
+		};
+	} forEach _live;
+	[_cmd, _op, _live] call SWLC_fnc_vehFollowTick;
 };
 
-SWLC_fnc_waveToHold = {
-	params ["_cmd", "_w", "_live"];
-	private _approaches = _w get "approaches";
+// Who has reached the rally.
+SWLC_fnc_rallyArrivals = {
+	params ["_cmd", "_op", "_live"];
+	private _rally = _op get "rally";
 	private _r = CFG("holdArriveRadius");
-	[_cmd, _w, _live] call SWLC_fnc_waveVehicleLegs;
 	{
-		private _a = _x;
-		{
-			if (_x in _live && {(_x getVariable ["SWLC_leg", ""]) == "FOOT"} && {!(_x getVariable ["SWLC_atHold", false])}) then {
-				private _dist = (leader _x) distance2D (_a get "hold");
-				if (_dist <= _r || {[_x] call SWLC_fnc_adOrderDone}) then {
-					_x setVariable ["SWLC_atHold", true];
-					if ((_w get "firstHold") < 0) then {_w set ["firstHold", time]};
-				};
+		private _g = _x;
+		private _st = [_g] call SWLC_fnc_state;
+		if (_st == "Regrouping" || {_st == "Advancing" && {(_g getVariable ["SWLC_leg", ""]) in ["FOOT", "FOLLOW"]}}) then {
+			if ((leader _g distance2D _rally) <= _r || {[_g] call SWLC_fnc_adOrderDone}) then {
+				if (_st == "Regrouping") then {_g setVariable ["SWLC_restUntil", time + CFG("breakRestSeconds")]};
+				[_g, "Waiting", _rally, "at_rally"] call SWLC_fnc_setState;
+				["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "rally_arrival"], ["group", groupId _g], ["from", _st]]] call SWLC_fnc_log;
+				[_cmd get "side", "rally", [], _g] call SWLC_fnc_radio;
 			};
-		} forEach (_a get "groups");
-	} forEach _approaches;
+		};
+	} forEach _live;
+};
 
-	private _allIn = true;
-	{
-		private _groups = (_x get "groups") select {_x in _live && {(_x getVariable ["SWLC_leg", ""]) != "FOLLOW"}};
-		if (_groups isNotEqualTo [] && {(_groups findIf {_x getVariable ["SWLC_atHold", false]}) < 0}) exitWith {_allIn = false};
-	} forEach _approaches;
+// True while a player of this side is in or right next to the sector.
+SWLC_fnc_playersFighting = {
+	params ["_side", "_target"];
+	(allPlayers findIf {alive _x && {side group _x == _side} && {[_target, getPosATL _x, 100] call SWLC_fnc_adInSquare}}) >= 0
+};
 
-	private _firstHold = _w get "firstHold";
-	private _timeout = (_firstHold >= 0 && {(time - _firstHold) >= CFG("holdWaitMax")})
-		|| {(time - (_w get "launched")) >= CFG("toHoldTimeout")};
-	if (_allIn || _timeout) then {
-		if ([_cmd, _w] call SWLC_fnc_smartPrepFire) exitWith {};
-		[_cmd, _w, _live, _allIn] call SWLC_fnc_waveGoIn;
+// The go rule. Two groups ready go together; with friends already fighting, a group goes in on its own;
+// a lone group with nobody to join waits, then goes anyway.
+SWLC_fnc_rallyTick = {
+	params ["_cmd", "_op", "_live"];
+	private _side = _cmd get "side";
+	private _target = _op get "target";
+	private _attackers = _live select {([_x] call SWLC_fnc_state) == "Assaulting"};
+	private _waiting = _live select {([_x] call SWLC_fnc_state) == "Waiting"};
+
+	if ((_op get "phase") == "ASSAULT") then {
+		private _over = [_cmd, _op, _attackers] call SWLC_fnc_assaultTick;
+		if (_over != "") then {
+			[_cmd, _op, _attackers, _over] call SWLC_fnc_pushOver;
+		};
+	};
+
+	private _ready = _waiting select {time >= (_x getVariable ["SWLC_restUntil", -1])};
+	if (_ready isEqualTo []) exitWith {
+		if (_waiting isEqualTo []) then {_op set ["firstAtRally", -1]};
+	};
+
+	if ((_op get "phase") == "ASSAULT" || {[_side, _target] call SWLC_fnc_playersFighting}) exitWith {
+		_op set ["firstAtRally", -1];
+		if ((_op get "phase") != "ASSAULT") then {[_cmd, _op] call SWLC_fnc_pushStart};
+		{
+			[_cmd, _op, _x] call SWLC_fnc_waveGoIn;
+			["C_WAVE", [["side", _side], ["wave", _op get "id"], ["event", "reinforce"], ["group", groupId _x]]] call SWLC_fnc_log;
+			[_side, "reinforce", [[_target] call SWLC_fnc_adName], _x] call SWLC_fnc_radio;
+		} forEach _ready;
+	};
+
+	if ((_op get "firstAtRally") < 0) then {_op set ["firstAtRally", time]};
+	private _waited = time - (_op get "firstAtRally");
+	private _forced = _op getOrDefault ["forceGo", false];
+	private _byCount = (count _ready) >= CFG("goMinGroups");
+	private _byTimer = _waited >= ([_cmd, _op] call SWLC_fnc_rallyLoneWait);
+	if !(_byCount || {_byTimer} || {_forced}) exitWith {};
+	if ([_cmd, _op] call SWLC_fnc_smartPrepFire) exitWith {};
+
+	_op set ["forceGo", false];
+	_op set ["firstAtRally", -1];
+	[_cmd, _op] call SWLC_fnc_pushStart;
+	{[_cmd, _op, _x] call SWLC_fnc_waveGoIn} forEach _ready;
+	[_cmd, _op, _ready] call SWLC_fnc_smartSmoke;
+	["C_WAVE", [["side", _side], ["wave", _op get "id"], ["event", "assault"], ["groups", count _ready], ["men", _op get "launchStrength"], ["target", [_target] call SWLC_fnc_adName],
+		["by_timer", _byTimer && {!_byCount}], ["forced", _forced], ["wait", round _waited]]] call SWLC_fnc_log;
+	[_side, "moveout", [count _ready, [_target] call SWLC_fnc_adName]] call SWLC_fnc_radio;
+};
+
+// How long a lone group waits at the rally before going in anyway.
+SWLC_fnc_rallyLoneWait = {
+	params ["_cmd", "_op"];
+	private _momentum = _cmd getOrDefault ["momentum", []];
+	if (_momentum isNotEqualTo [] && {(_momentum # 0) isEqualTo (_op get "target")} && {time < (_momentum # 1) + CFG("momentumGoWindow")}) exitWith {CFG("momentumGoWait")};
+	CFG("rallyLoneWait") * ([_cmd, "goWait"] call SWLC_fnc_persona)
+};
+
+SWLC_fnc_pushStart = {
+	params ["_cmd", "_op"];
+	_op set ["phase", "ASSAULT"];
+	_op set ["launchStrength", 0];
+	_op set ["assaultStart", time];
+	_op set ["lastProgress", time];
+	if ((_op get "launched") < 0) then {_op set ["launched", time]};
+};
+
+SWLC_fnc_waveGoIn = {
+	params ["_cmd", "_op", "_g"];
+	private _target = _op get "target";
+	private _men = [_g] call SWLC_fnc_groupMen;
+	_g setVariable ["SWLC_launchMen", _men];
+	_op set ["launchStrength", (_op get "launchStrength") + _men];
+	if ((_g getVariable ["SWLC_leg", ""]) == "FOLLOW") then {
+		[_g, "Assaulting", getPosATL leader _g, "follow"] call SWLC_fnc_setState;
+	} else {
+		[_g, "Assaulting", [_target] call SWLC_fnc_adPos, "assault"] call SWLC_fnc_setState;
+		[_g, [_target] call SWLC_fnc_sweepOrder, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
 	};
 };
 
@@ -403,71 +392,73 @@ SWLC_fnc_sweepOrder = {
 	_out
 };
 
-SWLC_fnc_waveGoIn = {
-	params ["_cmd", "_w", "_live", "_allIn"];
-	private _target = _w get "target";
-	{
-		if ((_x getVariable ["SWLC_leg", ""]) == "FOOT") then {
-			[_x, "Assaulting", [_target] call SWLC_fnc_adPos, "assault"] call SWLC_fnc_setState;
-			[_x, [_target] call SWLC_fnc_sweepOrder, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
-		};
-	} forEach _live;
-	[_cmd, _w, _live] call SWLC_fnc_smartSmoke;
-	_w set ["phase", "ASSAULT"];
-	_w set ["assaultStart", time];
-	_w set ["lastProgress", time];
-	["C_WAVE", [["side", _cmd get "side"], ["wave", _w get "id"], ["event", "assault"], ["groups", count _live], ["all_in", _allIn], ["hold_time", round (time - (_w get "launched"))]]] call SWLC_fnc_log;
-};
-
-SWLC_fnc_waveAssault = {
-	params ["_cmd", "_w", "_live"];
-	private _target = _w get "target";
+// Returns "" while the assault goes on, or why it's over.
+SWLC_fnc_assaultTick = {
+	params ["_cmd", "_op", "_attackers"];
+	if (_attackers isEqualTo []) exitWith {"wiped"};
+	if (([_attackers] call SWLC_fnc_groupsMen) < CFG("waveFailStrength") * (_op get "launchStrength")) exitWith {"attrition"};
+	private _target = _op get "target";
 	private _active = false;
-	[_cmd, _w, _live] call SWLC_fnc_waveVehicleLegs;
 	{
 		private _g = _x;
-		private _inside = [_target, getPosATL leader _g] call SWLC_fnc_adInSquare;
-		if (_inside || {(behaviour leader _g) == "COMBAT"}) then {_active = true};
+		if (([_target, getPosATL leader _g] call SWLC_fnc_adInSquare) || {(behaviour leader _g) == "COMBAT"}) then {_active = true};
 		// Waypoints used up: keep sweeping until the sector flips.
 		if ((_g getVariable ["SWLC_leg", ""]) == "FOOT" && {[_g] call SWLC_fnc_adOrderDone}) then {
 			[_g, [_target] call SWLC_fnc_sweepOrder, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
 		};
-	} forEach _live;
-	if (_active) then {_w set ["lastProgress", time]};
-	if ((time - (_w get "lastProgress")) >= CFG("waveNoProgressSeconds")) then {
-		[_cmd, _w, "no_progress"] call SWLC_fnc_waveResolve;
-	};
+	} forEach _attackers;
+	if (_active) then {_op set ["lastProgress", time]};
+	if ((time - (_op get "lastProgress")) >= CFG("waveNoProgressSeconds")) exitWith {"no_progress"};
+	""
 };
 
-SWLC_fnc_waveResolve = {
-	params ["_cmd", "_w", "_result"];
+// An assault has failed but the target stands: survivors fall back to the rally for the next go.
+SWLC_fnc_pushOver = {
+	params ["_cmd", "_op", "_attackers", "_result"];
 	private _side = _cmd get "side";
-	private _live = [_w] call SWLC_fnc_waveLive;
-	private _men = [_live] call SWLC_fnc_groupsMen;
-	[_cmd, _w] call SWLC_fnc_smartRemember;
-	["C_WAVE", [["side", _side], ["wave", _w get "id"], ["event", "resolved"], ["result", _result], ["men_left", _men], ["men_launched", _w get "launchStrength"],
-		["duration", round (time - (_w get "launched"))]]] call SWLC_fnc_log;
-	_w set ["phase", "DONE"];
+	[_cmd, _op, _attackers] call SWLC_fnc_smartRemember;
+	["C_WAVE", [["side", _side], ["wave", _op get "id"], ["event", "push_over"], ["result", _result], ["men_left", [_attackers] call SWLC_fnc_groupsMen], ["men_launched", _op get "launchStrength"],
+		["duration", round (time - (_op getOrDefault ["assaultStart", time]))]]] call SWLC_fnc_log;
+	_cmd set ["lastResult", _result];
+	if (_result in ["attrition", "no_progress"]) then {[_side, "failed"] call SWLC_fnc_radio};
+	_op set ["phase", "RALLY"];
+	_op set ["launchStrength", 0];
+	_op set ["firstAtRally", -1];
+	_op set ["prepDone", false];
+	{
+		[_x, "Regrouping", _op get "rally", "fall_back"] call SWLC_fnc_setState;
+		[_x, [[_op get "rally", "MOVE", 30]], "AWARE", "FULL", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;
+	} forEach _attackers;
+};
+
+// The operation ends: the sector fell or the target changed. Every group goes back to the commander.
+SWLC_fnc_waveResolve = {
+	params ["_cmd", "_result"];
+	private _op = _cmd get "op";
+	if (isNil "_op") exitWith {};
+	private _side = _cmd get "side";
+	private _live = [_op] call SWLC_fnc_waveLive;
+	private _near = _live select {(leader _x distance2D (_op get "tpos")) <= CFG("waveNearRadius")};
+	[_cmd, _op, _live select {([_x] call SWLC_fnc_state) == "Assaulting"}] call SWLC_fnc_smartRemember;
+	["C_WAVE", [["side", _side], ["wave", _op get "id"], ["event", "resolved"], ["result", _result], ["men_left", [_near] call SWLC_fnc_groupsMen], ["men_launched", _op get "launchStrength"],
+		["duration", round (time - ((_op get "launched") max (_op get "created")))]]] call SWLC_fnc_log;
 	_cmd set ["lastResult", _result];
 	if (_result == "seized") then {
 		_cmd set ["lastCaptureAt", time];
-		[_side, "seized", [[_w get "target"] call SWLC_fnc_adName]] call SWLC_fnc_radio;
+		[_side, "seized", [[_op get "target"] call SWLC_fnc_adName]] call SWLC_fnc_radio;
 	};
-	if (_result in ["attrition", "no_progress"]) then {[_side, "failed"] call SWLC_fnc_radio};
-
 	{
 		_x setVariable ["SWLC_waveId", -1];
 		[_cmd, _x] call SWLC_fnc_vehRelease;
-		if (_result in ["attrition", "no_progress"]) then {
-			if (!isNil {_cmd get "gather"}) then {
-				[_cmd, _x, "Regrouping"] call SWLC_fnc_sendToStaging;
-			} else {
-				[_x, "Unassigned", [], "wave_failed"] call SWLC_fnc_setState;
-			};
-		} else {
-			[_x] call SWLC_fnc_adClearOrder;
-			[_x, "Unassigned", [], "wave_over"] call SWLC_fnc_setState;
-		};
+		[_x] call SWLC_fnc_adClearOrder;
+		[_x, "Unassigned", [], "wave_over"] call SWLC_fnc_setState;
 	} forEach _live;
-	if (_result == "seized") then {[_cmd, _w, _live] call SWLC_fnc_smartOnSeized};
+	{
+		private _rec = _y;
+		_rec set ["groups", []];
+		_rec set ["batch", []];
+		_rec set ["firstArrive", -1];
+	} forEach (_cmd get "musters");
+	if (_result == "seized") then {[_cmd, _op, _near] call SWLC_fnc_smartOnSeized};
+	_cmd deleteAt "op";
 };

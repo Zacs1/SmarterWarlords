@@ -1,45 +1,5 @@
-// Staging sector choice, staging positions, and getting groups there.
+// Mustering: groups form up at the owned sector nearest them, several sectors at once, then leave for the rally.
 #include "macros.hpp"
-
-// Returns [sector or objNull, pos].
-SWLC_fnc_chooseStaging = {
-	params ["_cmd", "_target"];
-	private _side = _cmd get "side";
-	private _tpos = [_target] call SWLC_fnc_adPos;
-	private _owned = [_side] call SWLC_fnc_adOwned;
-	if (_owned isEqualTo []) exitWith {[objNull, [_side, _target] call SWLC_fnc_fallbackStagingPos]};
-
-	private _near = _owned select {(([_x] call SWLC_fnc_adPos) distance2D _tpos) <= CFG("stagingMaxDist")};
-	if (_near isEqualTo []) then {_near = _owned};
-
-	private _best = objNull;
-	private _bestScore = -1e9;
-	{
-		private _score = [_cmd, _x, _tpos] call SWLC_fnc_stagingScore;
-		if (_score > _bestScore) then {_bestScore = _score; _best = _x};
-	} forEach _near;
-	["C_STAGING", [["side", _side], ["target", [_target] call SWLC_fnc_adName], ["staging", [_best] call SWLC_fnc_adName], ["score", _bestScore toFixed 2]]] call SWLC_fnc_log;
-	[_best, [_best] call SWLC_fnc_adPos]
-};
-
-// Shorter distance is better; a threatened or enemy-close sector is penalised by the intel board.
-SWLC_fnc_stagingScore = {
-	params ["_cmd", "_s", "_tpos"];
-	private _p = [_s] call SWLC_fnc_adPos;
-	private _near = 0;
-	{
-		if (((_x get "pos") distance2D _p) <= 500) then {_near = _near + (_x get "count")};
-	} forEach (_cmd get "board");
-	-(_p distance2D _tpos) / 1000 - _near * CFG("stagingEnemyPenalty")
-};
-
-SWLC_fnc_fallbackStagingPos = {
-	params ["_side", "_target"];
-	private _tpos = [_target] call SWLC_fnc_adPos;
-	private _base = [[_side] call SWLC_fnc_adBase] call SWLC_fnc_adPos;
-	private _d = CFG("stagingFallbackMin") + random (CFG("stagingFallbackMax") - CFG("stagingFallbackMin"));
-	[_tpos, [_tpos, _base] call SWLC_fnc_bearing, _d] call SWLC_fnc_offset
-};
 
 // Spread-out positions on the far side from the target, biased to buildings and trees.
 SWLC_fnc_buildStagingSpots = {
@@ -67,73 +27,200 @@ SWLC_fnc_buildStagingSpots = {
 	_spots
 };
 
-SWLC_fnc_stagingName = {
-	params ["_cmd"];
-	private _s = _cmd get "stagingSector";
-	if (isNull _s) exitWith {format ["grid %1", mapGridPosition (_cmd get "stagingPos")]};
-	[_s] call SWLC_fnc_adName
+// The sector's muster record, set up for this operation. The crate and drop point stay for later operations.
+SWLC_fnc_musterRec = {
+	params ["_cmd", "_op", "_sector"];
+	private _side = _cmd get "side";
+	private _name = [_sector] call SWLC_fnc_adName;
+	private _musters = _cmd get "musters";
+	private _rec = _musters getOrDefault [_name, createHashMap];
+	if (count _rec == 0) then {
+		_rec = createHashMapFromArray [["sector", _sector], ["name", _name], ["pos", [_sector] call SWLC_fnc_adPos], ["groups", []], ["batch", []],
+			["firstArrive", -1], ["goTime", -1], ["slot", 0], ["crate", objNull], ["helper", objNull], ["op", -1]];
+		_musters set [_name, _rec];
+	};
+	if ((_rec get "op") != (_op get "id")) then {
+		_rec set ["op", _op get "id"];
+		_rec set ["slot", 0];
+		private _radius = (([_sector] call SWLC_fnc_adSize) / 2 + 40) max 120;
+		private _spots = [_side, _rec get "pos", _op get "tpos", _radius] call SWLC_fnc_buildStagingSpots;
+		_rec set ["spots", _spots];
+		if (isNull (_rec get "crate")) then {
+			private _anchor = _spots # 0;
+			private _pos = _anchor findEmptyPosition [3, 30, "B_CargoNet_01_ammo_F"];
+			if (_pos isEqualTo []) then {_pos = +_anchor};
+			_rec set ["crate", createVehicle [["O_CargoNet_01_ammo_F", "B_CargoNet_01_ammo_F"] select (_side == west), _pos, [], 0, "NONE"]];
+			_rec set ["helper", createVehicle ["Land_HelipadEmpty_F", _rec get "pos", [], 0, "CAN_COLLIDE"]];
+		};
+	};
+	_rec
 };
 
-SWLC_fnc_setStaging = {
-	params ["_cmd"];
-	private _target = _cmd get "target";
-	(_cmd get "stagingChoice") params ["_sector", "_pos"];
-	private _tpos = [_target] call SWLC_fnc_adPos;
-	private _radius = if (isNull _sector) then {120} else {(([_sector] call SWLC_fnc_adSize) / 2 + 40) max 120};
-	_cmd set ["stagingSector", _sector];
-	_cmd set ["stagingPos", _pos];
-	_cmd set ["stagingSpots", [_cmd get "side", _pos, _tpos, _radius] call SWLC_fnc_buildStagingSpots];
-	_cmd set ["stagingSlot", 0];
-	[_cmd] call SWLC_fnc_logStagingAssets;
-};
-
-SWLC_fnc_nextStagingSpot = {
-	params ["_cmd"];
-	private _spots = _cmd get "stagingSpots";
-	private _i = _cmd get "stagingSlot";
-	_cmd set ["stagingSlot", _i + 1];
+SWLC_fnc_musterNextSpot = {
+	params ["_rec"];
+	private _spots = _rec get "spots";
+	private _i = _rec get "slot";
+	_rec set ["slot", _i + 1];
 	private _spot = _spots # (_i mod count _spots);
 	if (_i >= count _spots) then {_spot = [_spot, random 360, 12 + random 15] call SWLC_fnc_offset};
 	_spot
 };
 
-// Sends a group to the gather wave's staging position, by fast travel where allowed.
-SWLC_fnc_sendToStaging = {
-	params ["_cmd", "_g", ["_state", "Travelling"]];
-	private _wave = _cmd get "gather";
+// [nearest owned sector, forward sector worth hopping to or objNull]
+SWLC_fnc_musterChoose = {
+	params ["_cmd", "_g", "_tpos"];
 	private _side = _cmd get "side";
-	private _spot = [_cmd] call SWLC_fnc_nextStagingSpot;
-	private _sector = _cmd get "stagingSector";
-	private _tpos = [_cmd get "target"] call SWLC_fnc_adPos;
-
-	_g setVariable ["SWLC_waveId", _wave get "id"];
-	(_wave get "groups") pushBackUnique _g;
-	[_g, _state, _spot] call SWLC_fnc_setState;
-	[_g, [[_spot, "MOVE", 20]]] call SWLC_fnc_adSetOrder;
-
-	if (!isNull _sector && {(leader _g distance2D _spot) > CFG("stagingFarThreshold")}) then {
-		private _landing = [_spot, ([_tpos, _spot] call SWLC_fnc_bearing) + (random 80 - 40), 15 + random 25] call SWLC_fnc_offset;
-		if (surfaceIsWater _landing) then {_landing = _spot};
-		[_g, _sector, _landing] call SWLC_fnc_adFastTravel;
+	private _owned = [_side] call SWLC_fnc_adOwned;
+	if (_owned isEqualTo []) exitWith {[objNull, objNull]};
+	private _here = getPosATL leader _g;
+	private _near = ([_owned, [], {([_x] call SWLC_fnc_adPos) distance2D _here}, "ASCEND"] call BIS_fnc_sortBy) # 0;
+	private _threats = _cmd get "threats";
+	private _safe = _owned select {!(([_x] call SWLC_fnc_adName) in _threats) && {[_side, _x] call SWLC_fnc_adCanFTTo}};
+	private _forward = objNull;
+	if (_safe isNotEqualTo []) then {
+		private _best = ([_safe, [], {([_x] call SWLC_fnc_adPos) distance2D _tpos}, "ASCEND"] call BIS_fnc_sortBy) # 0;
+		private _gain = (([_near] call SWLC_fnc_adPos) distance2D _tpos) - (([_best] call SWLC_fnc_adPos) distance2D _tpos);
+		if (_gain >= CFG("musterHopGain")) then {_forward = _best};
 	};
+	[_near, _forward]
 };
 
-// Groups that have reached their staging spot are marked Staging.
-SWLC_fnc_stagingArrivals = {
-	params ["_cmd"];
+// Fast travels the group to its spot in the sector when that's far. Returns true if it moved.
+SWLC_fnc_musterHop = {
+	params ["_g", "_sector", "_spot", "_tpos"];
+	if ((leader _g distance2D _spot) <= CFG("stagingFarThreshold")) exitWith {false};
+	private _landing = [_spot, ([_tpos, _spot] call SWLC_fnc_bearing) + (random 80 - 40), 15 + random 25] call SWLC_fnc_offset;
+	if (surfaceIsWater _landing) then {_landing = _spot};
+	[_g, _sector, _landing] call SWLC_fnc_adFastTravel
+};
+
+// An unassigned group joins the operation: straight to the rally if it's already close, otherwise it musters.
+SWLC_fnc_musterAssign = {
+	params ["_cmd", "_g"];
+	private _op = _cmd get "op";
+	private _tpos = _op get "tpos";
+	_g setVariable ["SWLC_waveId", _op get "id"];
+	(_op get "groups") pushBackUnique _g;
+	([_cmd, _g, _tpos] call SWLC_fnc_musterChoose) params ["_near", "_forward"];
+	if (isNull _near || {(leader _g distance2D (_op get "rally")) <= CFG("rallyJoinRadius")}) exitWith {
+		[_g] call SWLC_fnc_waveGroupStart;
+		[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
+	};
+
+	private _sector = _near;
+	private _rec = createHashMap;
+	private _spot = [];
+	private _hopped = false;
+	if (!isNull _forward && {_forward isNotEqualTo _near}) then {
+		_rec = [_cmd, _op, _forward] call SWLC_fnc_musterRec;
+		_spot = [_rec] call SWLC_fnc_musterNextSpot;
+		_hopped = [_g, _forward, _spot, _tpos] call SWLC_fnc_musterHop;
+		if (_hopped) then {_sector = _forward};
+	};
+	if (!_hopped) then {
+		_rec = [_cmd, _op, _near] call SWLC_fnc_musterRec;
+		_spot = [_rec] call SWLC_fnc_musterNextSpot;
+		[_g, _near, _spot, _tpos] call SWLC_fnc_musterHop;
+	};
+	(_rec get "groups") pushBackUnique _g;
+	_g setVariable ["SWLC_musterName", _rec get "name"];
+	[_g, "Travelling", _spot, "muster"] call SWLC_fnc_setState;
+	[_g, [[_spot, "MOVE", 20]]] call SWLC_fnc_adSetOrder;
+	["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "muster_assign"], ["group", groupId _g], ["sector", _rec get "name"], ["hopped", _hopped]]] call SWLC_fnc_log;
+};
+
+// Groups that have reached their spot start the sector's short wait.
+SWLC_fnc_musterArrivals = {
+	params ["_cmd", "_op"];
 	private _r = CFG("arriveRadius");
-	private _wave = _cmd get "gather";
-	if (isNil "_wave") exitWith {};
 	{
-		private _st = [_x] call SWLC_fnc_state;
-		if (_st in ["Travelling", "Regrouping"]) then {
-			private _goal = _x getVariable ["SWLC_goal", []];
-			if (_goal isNotEqualTo [] && {(leader _x distance2D _goal) <= _r}) then {
-				[_x, "Staging", _goal, "arrived"] call SWLC_fnc_setState;
-				if ((_wave get "firstArrive") < 0) then {_wave set ["firstArrive", time]};
-				["C_WAVE", [["side", _cmd get "side"], ["wave", _wave get "id"], ["event", "arrival"], ["group", groupId _x]]] call SWLC_fnc_log;
-				[_cmd get "side", "arrived", [], _x] call SWLC_fnc_radio;
+		private _rec = _y;
+		{
+			if (([_x] call SWLC_fnc_state) == "Travelling") then {
+				private _goal = _x getVariable ["SWLC_goal", []];
+				if (_goal isNotEqualTo [] && {(leader _x distance2D _goal) <= _r}) then {
+					[_x, "Mustering", _goal, "arrived"] call SWLC_fnc_setState;
+					if ((_rec get "firstArrive") < 0) then {_rec set ["firstArrive", time]};
+					["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "arrival"], ["group", groupId _x], ["sector", _rec get "name"]]] call SWLC_fnc_log;
+					[_cmd get "side", "arrived", [], _x] call SWLC_fnc_radio;
+				};
 			};
+		} forEach (_rec get "groups");
+	} forEach (_cmd get "musters");
+};
+
+// A sector lost while groups muster there: they find somewhere else, and its assets go.
+SWLC_fnc_musterSweep = {
+	params ["_cmd"];
+	private _side = _cmd get "side";
+	private _musters = _cmd get "musters";
+	{
+		private _rec = _musters get _x;
+		if (([_rec get "sector"] call SWLC_fnc_adOwner) != _side) then {
+			{
+				if (([_x] call SWLC_fnc_state) in ["Travelling", "Mustering", "Mounting"]) then {
+					[_cmd, _x] call SWLC_fnc_waveRemoveGroup;
+					[_x] call SWLC_fnc_adClearOrder;
+					[_x, "Unassigned", [], "muster_lost"] call SWLC_fnc_setState;
+				};
+			} forEach ((_rec get "groups") + (_rec get "batch"));
+			{
+				private _o = _rec get _x;
+				if (!isNull _o) then {deleteVehicle _o};
+			} forEach ["crate", "helper"];
+			_musters deleteAt _x;
 		};
-	} forEach (_wave get "groups");
+	} forEach (keys _musters);
+};
+
+SWLC_fnc_musterTick = {
+	params ["_cmd", "_op", "_rec"];
+	_cmd set ["crate", _rec get "crate"];
+	_cmd set ["dropHelper", _rec get "helper"];
+	private _isLive = {({alive _x} count units _x) > 0};
+	_rec set ["groups", (_rec get "groups") select _isLive];
+	_rec set ["batch", (_rec get "batch") select _isLive];
+	private _arrived = (_rec get "groups") select {([_x] call SWLC_fnc_state) == "Mustering"};
+	if (_arrived isNotEqualTo []) then {
+		[_cmd, _op, _arrived, _rec get "pos"] call SWLC_fnc_shopTick;
+		[_cmd, _op, _arrived] call SWLC_fnc_kitTick;
+	};
+	if ((_rec get "batch") isNotEqualTo []) then {
+		[_cmd, _op, _rec, _rec get "batch"] call SWLC_fnc_musterMountTick;
+	};
+	if ((_rec get "batch") isNotEqualTo [] || {_arrived isEqualTo []}) exitWith {};
+
+	private _first = _rec get "firstArrive";
+	if (_first < 0) exitWith {};
+	private _waited = time - _first;
+	private _forced = _op getOrDefault ["forceGo", false];
+	if (!_forced && {_waited < CFG("musterSeconds")}) exitWith {};
+	// Men just bought are still on the way down: give them a little longer, so nobody is left behind.
+	private _falling = (_arrived findIf {(units _x) findIf {alive _x && {((getPosATL _x) # 2) > 3 || {vehicle _x isKindOf "ParachuteBase"}}} >= 0}) >= 0;
+	if (!_forced && {_falling} && {_waited < CFG("musterMaxSeconds")}) exitWith {};
+
+	_rec set ["groups", (_rec get "groups") - _arrived];
+	_rec set ["batch", _arrived];
+	_rec set ["goTime", time];
+	_rec set ["firstArrive", -1];
+	{
+		[_x] call SWLC_fnc_waveGroupStart;
+		_x setVariable ["SWLC_mountGo", time];
+		[_x, "Mounting", _op get "rally", "go"] call SWLC_fnc_setState;
+	} forEach _arrived;
+	["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "muster_go"], ["sector", _rec get "name"], ["groups", count _arrived], ["wait", round _waited], ["forced", _forced]]] call SWLC_fnc_log;
+	if (({count ([_x] call SWLC_fnc_vehRecOf) > 0} count _arrived) > 0) then {[_cmd get "side", "mount"] call SWLC_fnc_radio};
+	[_cmd, _op, _rec, _arrived] call SWLC_fnc_musterMountTick;
+};
+
+SWLC_fnc_musterMountTick = {
+	params ["_cmd", "_op", "_rec", "_batch"];
+	[_cmd, _op, _batch] call SWLC_fnc_kitTick;
+	{
+		// Kit first, then board, so nobody climbs in on the way to the crate.
+		if !([_x] call SWLC_fnc_kitPending) then {[_cmd, _x] call SWLC_fnc_vehMountGroup};
+	} forEach _batch;
+	if ((time - (_rec get "goTime")) >= CFG("mountCapSeconds") || {(_batch findIf {!([_x] call SWLC_fnc_groupReady)}) < 0}) then {
+		[_cmd, _op, _rec, _batch] call SWLC_fnc_waveDepart;
+	};
 };

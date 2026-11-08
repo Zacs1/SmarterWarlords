@@ -5,8 +5,8 @@
 SWLC_fnc_vehRecOf = { (_this # 0) getVariable ["SWLC_rec", createHashMap] };
 
 SWLC_fnc_vehWorthDriving = {
-	params ["_cmd", "_w"];
-	private _d = (_cmd get "stagingPos") distance2D ([_w get "target"] call SWLC_fnc_adPos);
+	params ["_cmd", "_w", "_from"];
+	private _d = _from distance2D ([_w get "target"] call SWLC_fnc_adPos);
 	// Measured from the far dismount distance: a shorter hop loses more to the mount-up than it saves.
 	(_d - CFG("dismountDistMax")) >= CFG("vehMinDriveDist")
 };
@@ -58,13 +58,12 @@ SWLC_fnc_vehClaimParked = {
 
 // Before the go: combat vehicle first if the threat calls for one, then transport for everyone else.
 SWLC_fnc_vehShop = {
-	params ["_cmd", "_w", "_staged"];
+	params ["_cmd", "_w", "_staged", "_musterPos"];
 	if !(CFG("vehiclesEnabled")) exitWith {};
-	if !([_cmd, _w] call SWLC_fnc_vehWorthDriving) exitWith {};
+	if !([_cmd, _w, _musterPos] call SWLC_fnc_vehWorthDriving) exitWith {};
 	private _side = _cmd get "side";
 	private _plan = _w get "plan";
 	private _buys = 0;
-	private _stagingPos = _cmd get "stagingPos";
 	private _radius = CFG("vehReuseRadius");
 	private _catalog = _cmd get "catalog";
 
@@ -99,7 +98,7 @@ SWLC_fnc_vehShop = {
 		private _g = _x;
 		private _men = [_g] call SWLC_fnc_groupMen;
 		private _parked = (_cmd get "vehicles") select {
-			(_x get "state") == "parked" && {alive (_x get "obj")} && {canMove (_x get "obj")} && {(_x get "seats") >= _men} && {((_x get "obj") distance2D _stagingPos) <= _radius}
+			(_x get "state") == "parked" && {alive (_x get "obj")} && {canMove (_x get "obj")} && {(_x get "seats") >= _men} && {((_x get "obj") distance2D _musterPos) <= _radius}
 		};
 		if (_parked isNotEqualTo []) then {
 			[_cmd, _parked # 0, _g, _w] call SWLC_fnc_vehClaimParked;
@@ -292,19 +291,17 @@ SWLC_fnc_makeDismount = {
 	_best
 };
 
-// Combat vehicles stay 50 to 100 m behind the lead infantry of their approach and never push in alone.
+// Combat vehicles stay 50 to 100 m behind the lead infantry and never push in alone.
 SWLC_fnc_vehFollowTick = {
 	params ["_cmd", "_w", "_live"];
 	private _target = _w get "target";
 	private _tpos = [_target] call SWLC_fnc_adPos;
-	private _foot = _live select {(_x getVariable ["SWLC_leg", ""]) in ["FOOT", "DRIVE"]};
+	private _foot = _live select {(_x getVariable ["SWLC_leg", ""]) == "FOOT" && {([_x] call SWLC_fnc_state) == "Assaulting"}};
 	{
 		private _g = _x;
 		private _r = [_g] call SWLC_fnc_vehRecOf;
-		if ((_g getVariable ["SWLC_leg", ""]) == "FOLLOW" && {count _r > 0}) then {
-			private _a = (_w get "approaches") select {_g in (_x get "groups")};
-			private _mine = if (_a isEqualTo []) then {_foot} else {_foot select {_x in ((_a # 0) get "groups")}};
-			if (_mine isEqualTo []) then {_mine = _foot};
+		if ((_g getVariable ["SWLC_leg", ""]) == "FOLLOW" && {count _r > 0} && {([_g] call SWLC_fnc_state) == "Assaulting"}) then {
+			private _mine = _foot;
 			private _v = _r get "obj";
 			private _here = getPosATL _v;
 			private _dest = +_here;
@@ -323,7 +320,7 @@ SWLC_fnc_vehFollowTick = {
 			private _order = _g getVariable ["SWLC_order", []];
 			private _cur = if (_order isEqualTo []) then {[]} else {((_order # 0) # 0) # 0};
 			if (_cur isEqualTo [] || {(_cur distance2D _dest) > CFG("combatReorderDist")}) then {
-				[_g, "Assaulting", _dest, "follow"] call SWLC_fnc_setState;
+				_g setVariable ["SWLC_goal", _dest];
 				[_g, [[_dest, "MOVE", 25]], "AWARE", "NORMAL", "COLUMN", "RED"] call SWLC_fnc_adSetOrder;
 			};
 			["C_VPOS", [["side", side _g], ["wave", _w get "id"], ["id", _r get "id"], ["role", _r get "role"], ["x", round (_here # 0)], ["y", round (_here # 1)],
