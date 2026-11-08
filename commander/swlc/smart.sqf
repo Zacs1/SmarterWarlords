@@ -192,3 +192,42 @@ SWLC_fnc_smartSmoke = {
 	} forEach (_w get "approaches");
 	if (_thrown > 0) then {[_cmd get "side", "smoke", [], _live # 0] call SWLC_fnc_radio};
 };
+
+// 5. Prep fire: a short barrage from AI-crewed artillery the side already has, then a wait so it lifts.
+// Returns true while the wave should hold for it.
+SWLC_fnc_smartPrepFire = {
+	params ["_cmd", "_w"];
+	if !(CFG("smartPrepFire")) exitWith {false};
+	if (_w getOrDefault ["prepDone", false]) exitWith {time < (_w getOrDefault ["prepUntil", -1])};
+	_w set ["prepDone", true];
+	private _side = _cmd get "side";
+	private _target = _w get "target";
+	private _pos = [_cmd, _target] call SWLC_fnc_smartEnemyCentre;
+	private _pieces = vehicles select {
+		alive _x && {getNumber (configOf _x >> "artilleryScanner") > 0} && {!isNull gunner _x} && {alive gunner _x} && {!isPlayer gunner _x} && {side group gunner _x == _side} && {local gunner _x}
+	};
+	if (_pieces isEqualTo []) exitWith {
+		[_cmd, "prepfire", "no_piece", [["wave", _w get "id"]]] call SWLC_fnc_smartLog;
+		false
+	};
+	if ((allUnits findIf {side group _x == _side && {(_x distance2D _pos) < CFG("prepMinFriendlyDist")}}) >= 0) exitWith {
+		[_cmd, "prepfire", "friendlies_close", [["wave", _w get "id"]]] call SWLC_fnc_smartLog;
+		false
+	};
+	private _fired = 0;
+	{
+		private _piece = _x;
+		private _mags = getArtilleryAmmo [_piece];
+		private _he = _mags select {!("SMOKE" in toUpper _x) && {!("FLARE" in toUpper _x)}};
+		private _mag = if (_he isNotEqualTo []) then {_he # 0} else {if (_mags isEqualTo []) then {""} else {_mags # 0}};
+		if (_mag != "" && {_pos inRangeOfArtillery [[_piece], _mag]}) then {
+			_piece commandArtilleryFire [_pos, _mag, CFG("prepRounds")];
+			_fired = _fired + 1;
+		};
+	} forEach _pieces;
+	[_cmd, "prepfire", ["out_of_range", "fired"] select (_fired > 0), [["wave", _w get "id"], ["pieces", _fired], ["rounds", CFG("prepRounds")], ["x", round (_pos # 0)], ["y", round (_pos # 1)]]] call SWLC_fnc_smartLog;
+	if (_fired == 0) exitWith {false};
+	[_side, "prepfire", [[_target] call SWLC_fnc_adName]] call SWLC_fnc_radio;
+	_w set ["prepUntil", time + CFG("prepFireLeadSeconds")];
+	true
+};

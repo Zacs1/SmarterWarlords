@@ -382,6 +382,7 @@ SWLC_fnc_waveToHold = {
 	private _timeout = (_firstHold >= 0 && {(time - _firstHold) >= CFG("holdWaitMax")})
 		|| {(time - (_w get "launched")) >= CFG("toHoldTimeout")};
 	if (_allIn || _timeout) then {
+		if ([_cmd, _w] call SWLC_fnc_smartPrepFire) exitWith {};
 		[_cmd, _w, _live, _allIn] call SWLC_fnc_waveGoIn;
 	};
 };
