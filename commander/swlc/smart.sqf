@@ -20,6 +20,7 @@ SWLC_fnc_smartTick = {
 	[_cmd] call SWLC_fnc_smartReinforceTick;
 	[_cmd] call SWLC_fnc_smartScoutTick;
 	[_cmd] call SWLC_fnc_smartHuntTick;
+	[_cmd] call SWLC_fnc_smartDigInTick;
 	// SMART_CALLS
 };
 
@@ -27,6 +28,7 @@ SWLC_fnc_smartOnSeized = {
 	params ["_cmd", "_w", "_live"];
 	[_cmd, _w, _live] call SWLC_fnc_smartCheer;
 	[_cmd, _w, _live] call SWLC_fnc_smartMomentum;
+	[_cmd, _w, _live] call SWLC_fnc_smartDigIn;
 	// SMART_SEIZED
 };
 
@@ -391,6 +393,50 @@ SWLC_fnc_smartHuntTick = {
 			[_x] call SWLC_fnc_adClearOrder;
 			[_x, "Unassigned", [], "hunt_done"] call SWLC_fnc_setState;
 			[_cmd, "hunt", "done", [["group", groupId _x]]] call SWLC_fnc_smartLog;
+		};
+	} forEach (_cmd get "groups");
+};
+
+// 9. Dig in after capture: one group takes edge positions facing the likely counterattack.
+SWLC_fnc_smartDigIn = {
+	params ["_cmd", "_w", "_live"];
+	if !(CFG("smartDigIn")) exitWith {};
+	private _side = _cmd get "side";
+	private _s = _w get "target";
+	private _c = [_s] call SWLC_fnc_adPos;
+	([_cmd, _s] call SWLC_fnc_defThreatAt) params ["_inf", "_arm", "_light", "_bearing"];
+	private _from = "board";
+	if ((_inf + _arm + _light) == 0) then {
+		_from = "enemy_sector";
+		private _enemy = SWLC_sectors select {([_x] call SWLC_fnc_adOwner) == ([_side] call SWLC_fnc_adEnemySide)};
+		if (_enemy isNotEqualTo []) then {
+			private _near = ([_enemy, [], {([_x] call SWLC_fnc_adPos) distance2D _c}, "ASCEND"] call BIS_fnc_sortBy) # 0;
+			_bearing = [_c, [_near] call SWLC_fnc_adPos] call SWLC_fnc_bearing;
+		};
+	};
+	private _spots = [_cmd, _s, _bearing] call SWLC_fnc_defSpots;
+	{
+		private _spot = _spots # (_forEachIndex mod count _spots);
+		[_x, "Defending", _spot, "dig_in"] call SWLC_fnc_setState;
+		_x setVariable ["SWLC_digUntil", time + CFG("digInSeconds")];
+		_x setVariable ["SWLC_patrolAt", time];
+		[_x, [[_spot, "MOVE", 15]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
+		[_cmd, "digin", "position", [["group", groupId _x], ["sector", [_s] call SWLC_fnc_adName], ["facing", round _bearing], ["from", _from], ["x", round (_spot # 0)], ["y", round (_spot # 1)]]] call SWLC_fnc_smartLog;
+	} forEach (_live select [0, CFG("digInGroups")]);
+	if (_live isNotEqualTo []) then {[_side, "digin", [[_s] call SWLC_fnc_adName], _live # 0] call SWLC_fnc_radio};
+};
+
+SWLC_fnc_smartDigInTick = {
+	params ["_cmd"];
+	if !(CFG("smartDigIn")) exitWith {};
+	{
+		private _until = _x getVariable ["SWLC_digUntil", -1];
+		if (_until >= 0 && {time >= _until}) then {
+			_x setVariable ["SWLC_digUntil", -1];
+			if (([_x] call SWLC_fnc_state) == "Defending") then {
+				[_x] call SWLC_fnc_adClearOrder;
+				[_x, "Unassigned", [], "dig_in_done"] call SWLC_fnc_setState;
+			};
 		};
 	} forEach (_cmd get "groups");
 };
