@@ -71,6 +71,9 @@ $sqmPath = Join-Path $out 'mission.sqm'
 $sqm = Get-Content -Raw -LiteralPath $sqmPath
 $sqm = Set-ModuleValue $sqm 'ModuleWLInit_F_FTEnabled' 4
 $sqm = Set-ModuleValue $sqm 'ModuleWLInit_F_AIVoting' 1
+# Its own name in the host list, otherwise it shows as a second "Warlords" next to the stock scenario.
+if (-not $sqm.Contains('briefingName="@STR_A3_WL_modName";')) { throw 'Expected briefingName not found in mission.sqm' }
+$sqm = $sqm.Replace('briefingName="@STR_A3_WL_modName";', 'briefingName="Smarter Warlords";')
 Set-Content -LiteralPath $sqmPath -Encoding ascii -NoNewline -Value $sqm
 
 Write-Output "Built $out"
