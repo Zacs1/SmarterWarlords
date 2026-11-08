@@ -1,0 +1,14 @@
+// Test-only description for the automated AI-vs-AI round.
+// Same content as the stock Tanoa Warlords description, plus disabledAI = 0,
+// which keeps every playable slot filled by AI when no player takes it.
+disabledAI = 0;
+
+#include "\A3\Missions_F_Warlords\defaultDescription.inc"
+#include "\A3\Missions_F_Warlords\cfgMissionParams.inc"
+
+class Header
+{
+	gameType = Warlords;
+	minPlayers = 1;
+	maxPlayers = 16;
+};
