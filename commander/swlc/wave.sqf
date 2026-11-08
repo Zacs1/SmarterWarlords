@@ -153,6 +153,9 @@ SWLC_fnc_waveLaunch = {
 		_x setVariable ["SWLC_legAbandon", false];
 		_x setVariable ["SWLC_launchMen", [_x] call SWLC_fnc_groupMen];
 		_x setVariable ["SWLC_broke", false];
+		_x setVariable ["SWLC_reinforced", false];
+		_x setVariable ["SWLC_bestD", 1e9];
+		_x setVariable ["SWLC_bestAt", time];
 		_x setVariable ["SWLC_heavyCalled", false];
 		[_x, "Mounting", _a get "hold", "go"] call SWLC_fnc_setState;
 	} forEach _sorted;
