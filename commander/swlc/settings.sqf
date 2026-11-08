@@ -171,5 +171,56 @@ SWLC_settings = createHashMapFromArray [
 	["requestDefendRange", 600],
 	["requestDefendSeconds", 300],
 	["planPublishSeconds", 20],
-	["planAlwaysPublish", false]      // test switch: publish the plan with no players connected
+	["planAlwaysPublish", false],     // test switch: publish the plan with no players connected
+
+	// Phase 6 behaviours: each one can be switched off here
+	["smartBreak", true],
+	["breakFraction", 0.34],          // a group at or below this share of its launch strength breaks off
+	["breakMinLaunchMen", 3],
+	["mergeRadius", 150],
+	["mergeMaxMen", 3],
+	["smartRadio", true],
+	["radioHeavyFraction", 0.4],      // share of a group lost that draws a "taking heavy fire" call
+	["smartReinforce", true],
+	["reinforceStallSeconds", 100],
+	["reinforceMinMetres", 40],
+	["smartSmoke", true],
+	["smokeThrowDist", 40],
+	["smokeGroupsPerApproach", 1],
+	["smartPrepFire", true],
+	["prepRounds", 6],
+	["prepFireLeadSeconds", 30],      // infantry wait this long after the fire mission, so it lifts before they arrive
+	["prepMinFriendlyDist", 150],
+	["smartMomentum", true],
+	["momentumFastSeconds", 420],
+	["momentumMinStrength", 0.6],
+	["momentumWeakMen", 6],
+	["momentumHoldSeconds", 120],
+	["momentumGoWait", 20],
+	["smartScout", true],
+	["scoutMinGroups", 4],
+	["scoutDist", 300],
+	["scoutMaxSeconds", 150],
+	["scoutVehicleSpareCP", 300],
+	["scoutVehicleWait", 70],         // extra time allowed for a bought vehicle to land before the scout gives up
+	["smartHunt", true],
+	["huntRadius", 1500],
+	["huntOffset", 150],              // metres from the wreck towards the objective; AT teams fire from about this far
+	["huntSeconds", 150],
+	["smartDigIn", true],
+	["digInGroups", 1],
+	["digInSeconds", 90],
+	["smartPersonality", true],
+	["personalityForce", ""],         // "aggressive", "cautious" or "sneaky" forces one
+	["smartMemory", true],
+	["memoryLossFraction", 0.5],
+	["memoryMinMen", 3],
+	["memoryAvoidDegrees", 40],
+	["smartJoinPush", true],
+	["joinPushRange", 900],           // only players this close to the target count as pushing it
+	["joinPushMinMetres", 20],        // closer by this much since the last tick counts as moving towards it
+	["joinPushRadius", 500],
+	["joinPushGroups", 2],
+	["joinPushSeconds", 240],
+	["joinPushCooldown", 240]
 ];

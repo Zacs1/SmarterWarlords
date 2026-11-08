@@ -151,6 +151,8 @@ SWLC_fnc_waveLaunch = {
 		_x setVariable ["SWLC_leg", ""];
 		_x setVariable ["SWLC_legLost", false];
 		_x setVariable ["SWLC_legAbandon", false];
+		_x setVariable ["SWLC_launchMen", [_x] call SWLC_fnc_groupMen];
+		_x setVariable ["SWLC_broke", false];
 		[_x, "Mounting", _a get "hold", "go"] call SWLC_fnc_setState;
 	} forEach _sorted;
 
@@ -454,4 +456,5 @@ SWLC_fnc_waveResolve = {
 			[_x, "Unassigned", [], "wave_over"] call SWLC_fnc_setState;
 		};
 	} forEach _live;
+	if (_result == "seized") then {[_cmd, _w, _live] call SWLC_fnc_smartOnSeized};
 };

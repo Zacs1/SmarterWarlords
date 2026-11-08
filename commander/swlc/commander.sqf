@@ -85,6 +85,7 @@ SWLC_fnc_cmdTick = {
 	[_cmd] call SWLC_fnc_watchdogTick;
 	[_cmd] call SWLC_fnc_waveTick;
 	[_cmd] call SWLC_fnc_defenceTick;
+	[_cmd] call SWLC_fnc_smartTick;
 	[_cmd] call SWLC_fnc_cmdAssign;
 	[_cmd] call SWLC_fnc_planPublish;
 };
