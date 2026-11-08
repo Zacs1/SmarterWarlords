@@ -133,6 +133,7 @@ SWLC_fnc_cmdNewPlan = {
 	// Groups that were gathering for the old target move to the new plan.
 	{
 		if (([_x] call SWLC_fnc_state) in ["Staging", "Travelling", "Regrouping"]) then {
+			[_cmd, _x] call SWLC_fnc_vehRelease;
 			[_cmd, _x, "Travelling"] call SWLC_fnc_sendToStaging;
 		};
 	} forEach (_cmd get "groups");

@@ -478,6 +478,124 @@ def check_player_paths(data: Round) -> tuple[bool, str]:
     return bool(done) and not data.script_errors, f"paths done={bool(done)}, requests logged {kinds}, script errors {len(data.script_errors)}"
 
 
+def smart(data: Round, behaviour: str, event: str | None = None) -> list[dict[str, str]]:
+    return [e for e in data.of("C_SMART") if e.get("behaviour") == behaviour and (event is None or e.get("event") == event)]
+
+
+def g6(data: Round, event: str) -> list[dict[str, str]]:
+    return [e for e in data.of("G6") if e.get("event") == event]
+
+
+def radio_types(data: Round) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for e in data.of("C_RADIO"):
+        counts[e.get("type", "?")] = counts.get(e.get("type", "?"), 0) + 1
+    return counts
+
+
+@check("1 Weakened groups retreat and merge", gate="phase6")
+def check_break(data: Round) -> tuple[bool, str]:
+    retreats = smart(data, "break", "retreat")
+    merges = smart(data, "break", "merge")
+    moved = [int(e.get("moved", 0)) for e in merges]
+    return bool(retreats) and bool(merges), f"{len(g6(data, 'break_forced'))} forced, {len(retreats)} retreats, {len(merges)} merges, men moved {moved}"
+
+
+@check("2 Heavy-losses and breaking calls reach the radio", gate="phase6")
+def check_radio_new(data: Round) -> tuple[bool, str]:
+    types = radio_types(data)
+    new = {k: types.get(k, 0) for k in ("heavy", "breaking", "cheer", "momentum", "scout", "hunt", "digin", "prepfire", "joinpush", "smoke")}
+    return types.get("heavy", 0) > 0 and types.get("breaking", 0) > 0, str(new)
+
+
+@check("3 Stalled groups follow the approach that broke in", gate="phase6")
+def check_reinforce(data: Round) -> tuple[bool, str]:
+    forced = g6(data, "reinforce_forced")
+    moves = smart(data, "reinforce", "redirect")
+    if not forced:
+        return False, "the scenario never got two approaches on foot in an assault"
+    return bool(moves), f"{len(moves)} redirects: {[(e['group'], e['from_bearing'], e['to_bearing']) for e in moves[:4]]}"
+
+
+@check("4 Smoke goes out before the push", gate="phase6")
+def check_smoke(data: Round) -> tuple[bool, str]:
+    thrown = smart(data, "smoke", "thrown")
+    screened = [e for e in thrown if e.get("known_enemy") == "true"]
+    return bool(thrown), f"{len(thrown)} thrown, {len(screened)} aimed at known enemy positions"
+
+
+@check("5 Prep fire lands and lifts before the infantry go in", gate="phase6")
+def check_prep(data: Round) -> tuple[bool, str]:
+    fired = smart(data, "prepfire", "fired")
+    if not fired:
+        return False, f"no fire mission; other outcomes {[e['event'] for e in smart(data, 'prepfire')][:6]}"
+    rows = []
+    ok = True
+    for e in fired:
+        assault = next((w for w in data.of("C_WAVE") if w.get("event") == "assault" and w["side"] == e["side"] and w["wave"] == e["wave"]), None)
+        if assault is None:
+            rows.append((e["wave"], "no assault yet"))
+            continue
+        gap = int(assault["t"]) - int(e["t"])
+        rows.append((e["wave"], f"assault {gap} s after firing"))
+        ok = ok and gap >= 25
+    return ok, str(rows)
+
+
+@check("6 A fast capture pushes on to a weak neighbour", gate="phase6")
+def check_momentum(data: Round) -> tuple[bool, str]:
+    pushes = smart(data, "momentum", "push")
+    scores = g6(data, "momentum_score")
+    raised = bool(scores) and int(scores[0]["after"]) > int(scores[0]["before"])
+    outcomes = sorted({e["event"] for e in smart(data, "momentum")})
+    detail = f"{len(pushes)} pushes, outcomes {outcomes}"
+    if scores:
+        detail += f", vote score {scores[0]['before']} to {scores[0]['after']} for {scores[0]['sector']}"
+    return bool(pushes) and raised, detail
+
+
+@check("7 A scout leaves while the wave gathers, without delaying the go", gate="phase6")
+def check_scout(data: Round) -> tuple[bool, str]:
+    sent = smart(data, "scout", "sent")
+    waits = [int(e["wait"]) for e in data.of("C_WAVE") if e.get("event") == "go" and int(e.get("wait", -1)) >= 0]
+    return bool(sent) and (not waits or max(waits) <= 240), f"{len(sent)} scouts, {sum(1 for e in sent if e.get('vehicle') == 'true')} by vehicle, go waits {waits}"
+
+
+@check("8 A vehicle lost to something unseen draws a sweep", gate="phase6")
+def check_hunt(data: Round) -> tuple[bool, str]:
+    sent = smart(data, "hunt", "sent")
+    return bool(sent), f"{len(g6(data, 'hunt_forced'))} forced, {len(sent)} sweeps, outcomes {sorted({e['event'] for e in smart(data, 'hunt')})}"
+
+
+@check("9 Groups dig in facing the likely counterattack", gate="phase6")
+def check_digin(data: Round) -> tuple[bool, str]:
+    spots = smart(data, "digin", "position")
+    return bool(spots), f"{len(spots)} positions, facing from {sorted({e.get('from', '?') for e in spots})}"
+
+
+@check("10 Each commander picks a personality", gate="phase6")
+def check_persona(data: Round) -> tuple[bool, str]:
+    chosen = {e["side"]: e["name"] for e in smart(data, "personality", "chosen")}
+    return set(chosen) == {"WEST", "EAST"}, str(chosen)
+
+
+@check("11 A costly approach is avoided next time", gate="phase6")
+def check_memory(data: Round) -> tuple[bool, str]:
+    checks = g6(data, "memory_check")
+    if not checks:
+        return False, "scenario did not reach the memory check"
+    costly = int(checks[0]["costly"])
+    bearings = [int(b) for b in checks[0]["bearings"].split("/")]
+    diffs = [abs(((b - costly) + 180) % 360 - 180) for b in bearings]
+    return min(diffs) >= 39, f"costly bearing {costly}, new bearings {bearings}, smallest gap {min(diffs)}"
+
+
+@check("12 Join-push code runs with a stand-in and no players", gate="phase6")
+def check_join(data: Round) -> tuple[bool, str]:
+    attached = smart(data, "joinpush", "attached")
+    return bool(attached) and not data.script_errors, f"{len(attached)} groups attached to the stand-in, script errors {len(data.script_errors)}"
+
+
 def section(title: str) -> None:
     print(f"\n== {title} ==")
 

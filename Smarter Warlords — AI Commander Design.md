@@ -356,6 +356,10 @@ The biggest risk is fighting Warlords' own AI loop for control of the same group
 2. **The commander replaces vehicle buying; infantry top-ups stay vanilla until phase 3.** Vanilla buys armed vehicles at random and never buys unarmed transport.
 3. **Fast travel value 4 is the scenario default.** Only owned sectors, so fast travel never lands in the contested sector.
 4. **A wave cap beats the "one wave in flight" rule.** The prompt's "no extensions" wins over the design doc's one-at-a-time rule: the next wave waits for the previous wave to reach its assault, but the 4-minute staging cap always launches it.
+5. **Attackers must outnumber those inside to start the capture countdown.** Measured in the phase 0 gate round: no countdown at 6 attackers vs 9 inside, countdown at 8 vs 3 and 20 vs 1. Three samples, so a working rule. It is why waves go in together rather than in dribs.
+6. **A wave rides only if the drive is worth it.** Staging must be at least the maximum dismount distance from the target (about 1100 m); closer than that, the wave walks, because boarding and dismounting cost more than the walk saves.
+7. **Men first, then vehicles.** The first waves went at 34 s with lone men after the shop bought a GMG MRAP first. The shop now tops up groups to 3 men, at most 6 men per tick, before it buys vehicles, and a wave gathers for at least 40 s.
+8. **The vanilla purchase list is filled with unaffordable entries, not emptied.** An empty list caused script errors in Warlords' purchase FSM. The entries are re-applied every tick so vanilla never buys anything.
 
 ## Sources
 

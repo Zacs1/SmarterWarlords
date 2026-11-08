@@ -170,8 +170,8 @@ SWLC_fnc_kitTick = {
 	if (_plan get "smoke" || {_plan get "ammo"}) then {
 		{
 			private _g = _x;
-			if !(_g getVariable ["SWLC_kitGeneral", false]) then {
-				_g setVariable ["SWLC_kitGeneral", true];
+			if ((_g getVariable ["SWLC_kitGeneral", -1]) != (_w get "id")) then {
+				_g setVariable ["SWLC_kitGeneral", _w get "id"];
 				private _men = ([_g] call SWLC_fnc_alive) select {!isPlayer _x && {vehicle _x == _x} && {(_x getVariable ["SWLC_kitTask", ""]) == ""}};
 				if (_men isNotEqualTo []) then {[_cmd, _w, selectRandom _men, "GEN"] call SWLC_fnc_kitAssign};
 			};

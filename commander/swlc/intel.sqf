@@ -143,7 +143,7 @@ SWLC_fnc_intelPost = {
 	// Count is the most seen at once, not the running total.
 	{
 		private _id = _x;
-		private _n = count (_y arrayIntersect _y);
+		private _n = if (_source == "player") then {count _y} else {count (_y arrayIntersect _y)};
 		private _i = _board findIf {(_x get "id") == _id};
 		if (_i >= 0) then {
 			private _e = _board # _i;

@@ -131,7 +131,7 @@ SWLC_settings = createHashMapFromArray [
 	// Vehicles
 	["vehiclesEnabled", true],
 	["vehMinDriveDist", 300],         // drives shorter than this aren't worth buying for
-	["vehReuseRadius", 300],
+	["vehReuseRadius", 500],
 	["vehBuyPerTick", 8],
 	["vehSeatForFullGroupCP", 1200],  // with this much spare CP, buy seats for a full group, not just the men present
 	["vehMaxFleet", 12],

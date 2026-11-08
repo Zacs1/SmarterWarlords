@@ -67,14 +67,13 @@ SWLC_fnc_vehShop = {
 	private _stagingPos = _cmd get "stagingPos";
 	private _radius = CFG("vehReuseRadius");
 	private _catalog = _cmd get "catalog";
-	if (([_cmd] call SWLC_fnc_vehFleetCount) >= CFG("vehMaxFleet")) exitWith {};
 
 	private _candidates = _staged select {count ([_x] call SWLC_fnc_vehRecOf) == 0 && {leader _x call SWLC_fnc_adIsWarlordUnit}};
 
 	// Combat
 	private _plentiful = ([_side] call SWLC_fnc_cpFree) >= CFG("cpPlentiful");
 	private _combatInWave = {(_x get "role") == "combat" && {(_x get "wave") == (_w get "id")} && {alive (_x get "obj")}} count (_cmd get "vehicles");
-	if ((_plan get "combatVehicle" || {_plentiful}) && {_combatInWave < CFG("vehMaxCombatPerWave")}) then {
+	if ((_plan get "combatVehicle" || {_plentiful}) && {_combatInWave < CFG("vehMaxCombatPerWave")} && {([_cmd] call SWLC_fnc_vehFleetCount) < CFG("vehMaxFleet")}) then {
 		private _heavyWanted = (_plan get "atWanted") > 0;
 		private _budget = ([_side] call SWLC_fnc_cpFree) * CFG("cpCombatFraction");
 		private _options = _catalog select {(_x # 3) == "combat" && {(_x # 1) <= _budget} && {!_heavyWanted || {_x # 4}}};
@@ -107,7 +106,7 @@ SWLC_fnc_vehShop = {
 		} else {
 			private _need = if (([_side] call SWLC_fnc_cpFree) >= CFG("vehSeatForFullGroupCP")) then {_men max CFG("shopGroupSize")} else {_men};
 			private _entry = [_cmd, _need] call SWLC_fnc_vehCheapestTransport;
-			if (_entry isNotEqualTo [] && {[_cmd, _entry, _g, _w] call SWLC_fnc_vehBuy}) then {_buys = _buys + 1};
+			if (_entry isNotEqualTo [] && {([_cmd] call SWLC_fnc_vehFleetCount) < CFG("vehMaxFleet")} && {[_cmd, _entry, _g, _w] call SWLC_fnc_vehBuy}) then {_buys = _buys + 1};
 		};
 	} forEach _candidates;
 };
@@ -184,7 +183,7 @@ SWLC_fnc_vehMountGroup = {
 	params ["_cmd", "_g"];
 	private _r = [_g] call SWLC_fnc_vehRecOf;
 	if (count _r == 0 || {(_r get "state") == "arriving"}) exitWith {};
-	if (_r get "mounted") exitWith {
+	if ((_r get "mounted") && {!isNull assignedDriver (_r get "obj")}) exitWith {
 		// Men who joined the group after boarding started (bought top-ups) get a seat too.
 		private _v = _r get "obj";
 		private _new = ([_g] call SWLC_fnc_alive) select {(assignedVehicle _x) isNotEqualTo _v};

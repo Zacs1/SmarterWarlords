@@ -4,6 +4,7 @@
 #
 # Stops at round end or after the duration, whichever comes first. The server is held in a Windows
 # job object, so it dies with this script even if the script is killed.
+# Vanilla unless -Mods names the CBA_A3 and LAMBS stable Workshop items, which are read in place.
 # Exit codes: 0 finished, 2 mission never started, 3 server exited early, 4 server install changed.
 
 param(
@@ -17,7 +18,10 @@ param(
     [string]$Scenario = '',
     [string]$Overrides = '',
     # Lobby parameter values, e.g. "BIS_WLFTEnabled=4,BIS_WLStartCP=5000". BIS_WLAIVoting defaults to 1.
-    [string]$Params = 'BIS_WLFTEnabled=4,BIS_WLAIVoting=1'
+    [string]$Params = 'BIS_WLFTEnabled=4,BIS_WLAIVoting=1',
+    # Workshop item IDs to load, comma-separated. Only the mods allowed below can be named; the default is none.
+    [string]$Mods = '',
+    [string]$WorkshopDir = 'D:\SteamLibrary\steamapps\workshop\content\107410'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -134,7 +138,16 @@ $cfgText = (Get-Content -LiteralPath $template -Raw) -replace '@PARAMS@', $param
 Set-Content -LiteralPath $cfg -Value $cfgText -Encoding ascii
 $basic = Join-Path $root 'tests\server\basic.cfg'
 
-# Nothing loads with -mod, so no Workshop mod can load: vanilla only.
+# Only these two may load. LAMBS DEV, ASR AI3, Vcom and Advanced AI Command are never allowed.
+$allowedMods = @{ '450814997' = 'CBA_A3'; '1858075458' = 'LAMBS stable' }
+$modPaths = @()
+foreach ($id in ($Mods -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
+    if (-not $allowedMods.ContainsKey($id)) { throw "Workshop item $id is not on the allowed list." }
+    $path = Join-Path $WorkshopDir $id
+    if (-not (Test-Path -LiteralPath $path)) { throw "Workshop item not found: $path" }
+    $modPaths += $path
+}
+
 $argLine = @(
     "-port=$Port",
     "`"-config=$cfg`"",
@@ -145,6 +158,9 @@ $argLine = @(
     '-noSplash',
     '-world=empty'
 ) -join ' '
+if ($modPaths.Count -gt 0) {
+    $argLine += " `"-mod=$($modPaths -join ';')`""
+}
 
 $before = Get-InstallSnapshot
 $server = $null

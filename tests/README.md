@@ -10,6 +10,21 @@ python tools\plot_round.py <path-to-rpt>
 
 `run-round.ps1` prints the RPT path. Each run gets its own folder in `tests/server/runs/` (gitignored), which is also the server's profile folder, so saved scenario progress cannot leak between runs. The server stops at round end or after the duration. It sits in a Windows job object, so it also dies if the script is killed.
 
+Options for `run-round.ps1`:
+
+| Option | Meaning |
+| --- | --- |
+| `-Name x` | Suffix for the run folder |
+| `-Scenario x` | Copies `mission_overlay/swl/scenarios/x.sqf` into the test mission |
+| `-Overrides "a=1;b=[2]"` | Commander settings for this run only |
+| `-Params "BIS_WLFTEnabled=4,BIS_WLAIVoting=1"` | Lobby parameter values |
+| `-Mods "450814997,1858075458"` | Workshop items to load. Only CBA_A3 and LAMBS stable are allowed |
+| `-NoBuild` | Uses the test mission as last built |
+
+Scenario tests are short and end with `python tools\analyse_round.py <rpt> --gate <name>`. Gates are `gate0`, `phase1`, `gate2`, `phase2soak`, `phase3`, `phase4` and `phase6`. The analyser exits 0 only if every check that ran passed.
+
+`tools/lint-sqf.ps1` parses every commander file with HEMTT. `tools/build-playable.ps1` builds the scenario for hosted play.
+
 ## What's in here
 
 | Path | Tracked | Purpose |
@@ -45,6 +60,8 @@ To parse: find `SWL|` in the line and split from there. `tools/swl_log.py` does 
 | `TICK` | Every 30 s | `wl_ready` (0/1), `west_groups`, `east_groups`, `west_units`, `east_units`, `guer_units`, `players`, `west_target`, `east_target`, `fps` |
 | `GRP` | Every 30 s, one per BLUFOR or OPFOR group with living units | see below |
 | `SEC` | Every 30 s, one per sector | `name`, `owner`, `x`, `y`, `base`, `size` (metres, the sector's diameter) |
+| `C_*` | Commander decisions and costs, written by `commander/swlc` | Varies by type; `C_TICK` has `avg_ms`, `poll_ms`, `guard_ms`, `groups`, `flying`, `fps` |
+| `G<n>` | Written by a scenario in `mission_overlay/swl/scenarios` | `event` plus scenario details |
 | `CAPTURE` | Within 1 s of a sector changing owner | `sector`, `from`, `to`, `x`, `y`, `base` |
 | `TARGET` | Within 1 s of a side's voted target changing | `side`, `sector` (`-` means none) |
 | `ROUNDEND` | The moment a base falls | `winner` (`WEST` or `EAST`) |

@@ -21,7 +21,12 @@ SWLC_fnc_waveRemoveGroup = {
 	if (!isNil {_cmd get "gather"}) then {_waves pushBack (_cmd get "gather")};
 	{
 		private _i = (_x get "groups") find _g;
-		if (_i >= 0) then {(_x get "groups") deleteAt _i};
+		if (_i >= 0) then {
+			(_x get "groups") deleteAt _i;
+			if (!isNil {_x get "launchStrength"}) then {
+				_x set ["launchStrength", ((_x get "launchStrength") - ([_g] call SWLC_fnc_groupMen)) max 0];
+			};
+		};
 	} forEach _waves;
 	_g setVariable ["SWLC_waveId", -1];
 	[_cmd, _g] call SWLC_fnc_vehRelease;
@@ -144,6 +149,8 @@ SWLC_fnc_waveLaunch = {
 		(_a get "groups") pushBack _x;
 		_x setVariable ["SWLC_atHold", false];
 		_x setVariable ["SWLC_leg", ""];
+		_x setVariable ["SWLC_legLost", false];
+		_x setVariable ["SWLC_legAbandon", false];
 		[_x, "Mounting", _a get "hold", "go"] call SWLC_fnc_setState;
 	} forEach _sorted;
 

@@ -106,6 +106,7 @@ SWLC_fnc_defSend = {
 	_g setVariable ["SWLC_patrolAt", time];
 	[_g, [[_spot, "MOVE", 15]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
 	[_g, _s, _spot, (_rec get "bearing") + 180] call SWLC_fnc_defMoveTo;
+	_g setVariable ["SWLC_defRetry", [_s, _spot, (_rec get "bearing") + 180]];
 	(_rec get "groups") pushBackUnique _g;
 	["C_DEF", [["side", _cmd get "side"], ["event", "respond"], ["sector", [_s] call SWLC_fnc_adName], ["group", groupId _g], ["from", _from], ["reason", _reason], ["after", round (time - (_rec get "first"))]]] call SWLC_fnc_log;
 };
@@ -145,6 +146,7 @@ SWLC_fnc_defRespond = {
 		private _staged = ((_cmd get "gather") get "groups") select {([_x] call SWLC_fnc_state) in ["Staging", "Travelling"]};
 		if (_staged isNotEqualTo []) then {
 			{[_cmd, _rec, _x, "staging_abort"] call SWLC_fnc_defSend} forEach _staged;
+			(_cmd get "gather") set ["firstArrive", -1];
 			["C_DEF", [["side", _side], ["event", "staging_abort"], ["sector", [_s] call SWLC_fnc_adName], ["groups", count _staged]]] call SWLC_fnc_log;
 			[_side, "stagingattack"] call SWLC_fnc_radio;
 		};
@@ -201,7 +203,7 @@ SWLC_fnc_defReserveTick = {
 			[_x] call SWLC_fnc_adClearOrder;
 			[_x, "Unassigned", [], "reserve_shrunk"] call SWLC_fnc_setState;
 			_reserve = _reserve - [_x];
-		} forEach (_reserve select [_size]);
+		} forEach (_reserve select [_size, count _reserve]);
 	};
 	{
 		if ((count _reserve) >= _size) exitWith {};
@@ -224,6 +226,22 @@ SWLC_fnc_defReserveTick = {
 			[_g, _post, _spot, random 360] call SWLC_fnc_defMoveTo;
 		};
 	} forEach _reserve;
+
+	// A group that was still seated when it was pulled couldn't fast travel. Try again once it's on foot.
+	{
+		private _g = _x;
+		private _retry = _g getVariable ["SWLC_defRetry", []];
+		if (_retry isNotEqualTo []) then {
+			if (([_g] call SWLC_fnc_state) != "Defending") then {
+				_g setVariable ["SWLC_defRetry", []];
+			} else {
+				if (vehicle leader _g == leader _g) then {
+					_g setVariable ["SWLC_defRetry", []];
+					([_g] + _retry) call SWLC_fnc_defMoveTo;
+				};
+			};
+		};
+	} forEach (_cmd get "groups");
 
 	// Defenders holding a spot shuffle as well.
 	{

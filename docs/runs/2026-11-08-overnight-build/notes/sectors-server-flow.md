@@ -232,3 +232,5 @@ Safe attach, on the server:
 6. `BIS_WL_conqueredSectors_*` doesn't mean owned.
 7. On a host the server-side setup waits for the host to be on WEST or EAST.
 8. The exact SEIZED threshold and the mid-round name change remain unexplained by the code.
+
+Measured in the phase 0 gate round (headcount inside the square, attackers vs garrison): no countdown at 6 vs 9; countdown at 8 vs 3 and at 20 vs 1. Attackers appear to need to outnumber those inside. Three samples, so this is a working rule and not the engine's exact threshold.

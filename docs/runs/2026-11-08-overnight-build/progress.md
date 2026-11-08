@@ -40,3 +40,21 @@ Headline findings to carry into phase 0:
 
 ## Decisions
 Kept in the design doc's "Decision log" section. Headlines: steer not fork; commander buys vehicles, infantry top-ups stay vanilla until phase 3; FT 4 scenario default; next wave can launch by the 4-minute cap even while another wave is in flight.
+
+## 21:40 update
+
+- Phase 0 tagged. Gate 0 passed with the commander disabled, before the adapter review fixes.
+- Phase 1 tagged. The 25-minute round p1b passed all phase 1 checks: longest staging wait 3:51, 5/5 assaults with 3+ groups, idle 24 group-minutes against 84 in baseline over the same 25 minutes, 0 script errors. Tick cost averaged 12 ms, which phase 5 must bring under 5 ms.
+- Phases 3 and 4 written, lint clean, first smoke round found two problems: a one-off startup script error in Warlords' purchase FSM from emptying its list (now an unaffordable sentinel entry), and first waves leaving as lone men because the go fired before top-ups (now men are bought first, and the go waits up to 40 s after first arrival while men are still affordable).
+- Decision: vehicles are only bought when staging is at least 300 m beyond the far dismount distance (1100 m from the target). Shorter hops lose more to the 90 s mount-up than they save.
+- Seize threshold from gate 0 census: no countdown at w=6 vs g=9; countdown at w=8 vs g=3 and e=20 vs g=1. Attackers appear to need to outnumber those inside.
+
+## 21:50 update
+
+- gate23 (12 min, built before the reviewer fixes): gate 2 PASS (armour on board and radio 5 s after being seen, plan at_wanted 0 to 2 plus combat vehicle, 19 board entries all traceable, unseen tank never on board). Phase 3 PASS: launchers 8 of 7 wanted, mount times [0, 90, 91], 13 bought 0 unused, 612 vehicle samples 0 solo, 16 combat samples 0 ahead, 40 purchases 0 below reserve. RPT tests/server/runs/2026-11-08_21-32-53_gate23.
+- Opus reviewer on phases 3 and 4: 10 findings, all checked against the code and fixed (vehicles released on a new plan; fleet cap limits buying only, reuse radius 500 m; re-seat when Warlords' timer unassigns the crew; pulled groups no longer count as casualties; staging abort restarts the gather clock; stale leg flags cleared; reserve shrink select form; pulled riders fast travel once on foot; player reports count each enemy; smoke and ammo trips once per wave).
+- Phase 6 decision: hidden-AT hunting estimates the firing area from the wreck towards the objective. It does not read the killer's real position, to keep the "only what soldiers have seen" rule.
+- gate4 running on the fixed tree.
+
+## 22:05 gate4 first run
+Counterattacks at the scenario's spawns were never detected: nobody on WEST could see them (the check is honest, board = what soldiers saw). A real EAST detection at Leqa (t=478) did show the chain working: response in the same tick, 7 groups staging-aborted, stand-down at +161 s. Scenario fixed with a lone WEST observer outside the commander's groups. 0 script errors with all reviewer fixes.

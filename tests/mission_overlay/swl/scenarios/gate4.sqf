@@ -30,7 +30,19 @@ SWLG_attack = {
 	_g setCombatMode "GREEN";
 	["G4", [format ["event=spawn|label=%1|sector=%2|staging=%3|dist=%4", _label, [_s] call SWLC_fnc_adName,
 		_s isEqualTo ((missionNamespace getVariable "SWLC_cmd_WEST") get "stagingSector"), round (_spot distance2D _c)]]] call SWLG_emit;
-	sleep 75;
+	// The board only holds what soldiers saw, and the attackers can spawn out of anyone's sight. A lone
+	// WEST observer, outside the commander's groups, keeps them in view for the length of the test.
+	private _og = createGroup [west, true];
+	private _obs = _og createUnit ["B_T_Soldier_F", [_spot, _spot getDir _c, 60] call BIS_fnc_relPos, [], 0, "NONE"];
+	_obs allowDamage false;
+	_obs disableAI "PATH";
+	_obs setCaptive true;
+	private _end = time + 75;
+	while {time < _end} do {
+		{_og reveal [_x, 4]} forEach units _g;
+		sleep 3;
+	};
+	deleteVehicle _obs;
 	{_x setDamage 1} forEach units _g;
 	["G4", [format ["event=killed|label=%1", _label]]] call SWLG_emit;
 };
