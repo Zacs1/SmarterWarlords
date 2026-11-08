@@ -58,3 +58,7 @@ Kept in the design doc's "Decision log" section. Headlines: steer not fork; comm
 
 ## 22:05 gate4 first run
 Counterattacks at the scenario's spawns were never detected: nobody on WEST could see them (the check is honest, board = what soldiers saw). A real EAST detection at Leqa (t=478) did show the chain working: response in the same tick, 7 groups staging-aborted, stand-down at +161 s. Scenario fixed with a lone WEST observer outside the commander's groups. 0 script errors with all reviewer fixes.
+
+## 22:2x User request (overrides order of work)
+"could you focus on trying to have something playable in 40 minutes (by around 11pm)? doesn't have to be perfectly tested, I can let you do the rest of the testing after I log off, but I'd really like to try playing even just a mini version of it before bed tonight."
+Applied: playable build first, after one smoke round of phases 5+6 for script errors. Remaining tests (performance, gate6, LAMBS, soak, optional list) continue after the user logs off.

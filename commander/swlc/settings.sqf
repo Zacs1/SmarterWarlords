@@ -181,6 +181,7 @@ SWLC_settings = createHashMapFromArray [
 		["normal", [["intelDecayMultiplier", 1], ["goMinGroups", 3], ["shopGroupSize", 3], ["reactionDelay", 0], ["scanBuying", true]]],
 		["hard", [["intelDecayMultiplier", 1.5], ["goMinGroups", 4], ["shopGroupSize", 4], ["reactionDelay", 0], ["scanBuying", true]]]
 	]],
+	["verboseLog", true],             // per-vehicle and per-guard lines for the test analyser; the playable build turns them off
 	["profileStages", false],         // test switch: log the cost of each stage of the commander tick
 
 	// Phase 6 behaviours: each one can be switched off here

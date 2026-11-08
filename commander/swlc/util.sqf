@@ -4,6 +4,7 @@
 // ["TYPE", [["key", value], ...]] call SWLC_fnc_log
 SWLC_fnc_log = {
 	params ["_kind", "_fields"];
+	if (!(SWLC_settings get "verboseLog") && {_kind in ["C_GUARD", "C_VTRK"]}) exitWith {};
 	private _parts = _fields apply {format ["%1=%2", _x # 0, _x # 1]};
 	diag_log text ((["SWL", _kind, format ["t=%1", round time]] + _parts) joinString "|");
 };

@@ -29,7 +29,7 @@ if (Test-Path $out) { Remove-Item -Recurse -Force -LiteralPath $out -Confirm:$fa
 Copy-Item -Recurse -LiteralPath $stock -Destination $out
 Copy-Item -Recurse -Force -Path (Join-Path $commander '*') -Destination $out
 
-Set-Content -LiteralPath (Join-Path $out 'initServer.sqf') -Encoding ascii -Value '[] execVM "swlc\init.sqf";'
+Set-Content -LiteralPath (Join-Path $out 'initServer.sqf') -Encoding ascii -Value 'SWLC_overrides = [["verboseLog", false]]; [] execVM "swlc\init.sqf";'
 
 function Set-ClassDefault([string]$Text, [string]$Class, [int]$Value) {
     $pattern = "(?s)(class\s+$Class\s*\{.*?default\s*=\s*)-?\d+(\s*;)"
