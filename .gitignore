@@ -1,0 +1,5 @@
+# Machine-specific Claude Code settings
+.claude/settings.local.json
+
+# Machine-specific paths and install inventory
+docs/local-environment.md
