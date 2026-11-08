@@ -110,7 +110,7 @@ SWLC_fnc_makeApproaches = {
 	private _offsets = if (_groupCount >= 4) then {[-_spread, 0, _spread]} else {[-_spread / 2, _spread / 2]};
 	private _out = [];
 	{
-		private _bearing = _centre + _x;
+		private _bearing = [_cmd, _target, _centre + _x] call SWLC_fnc_smartAvoid;
 		private _d = CFG("holdDistMin") + random (CFG("holdDistMax") - CFG("holdDistMin"));
 		private _pos = [_side, _tpos, _bearing, _d] call SWLC_fnc_validHoldPoint;
 		_out pushBack (createHashMapFromArray [["bearing", _bearing], ["hold", _pos], ["groups", []]]);
@@ -149,6 +149,7 @@ SWLC_fnc_waveLaunch = {
 	{
 		private _a = _approaches # (_forEachIndex mod count _approaches);
 		(_a get "groups") pushBack _x;
+		_a set ["men", (_a getOrDefault ["men", 0]) + ([_x] call SWLC_fnc_groupMen)];
 		_x setVariable ["SWLC_atHold", false];
 		_x setVariable ["SWLC_leg", ""];
 		_x setVariable ["SWLC_legLost", false];
@@ -174,7 +175,7 @@ SWLC_fnc_waveLaunch = {
 	_w set ["lastProgress", time];
 	private _wait = if ((_w get "firstArrive") >= 0) then {round (time - (_w get "firstArrive"))} else {-1};
 	["C_WAVE", [["side", _side], ["wave", _w get "id"], ["event", "go"], ["groups", count _goers], ["men", _w get "launchStrength"],
-		["target", [_target] call SWLC_fnc_adName], ["approaches", count _approaches], ["by_timer", _byTimer], ["wait", _wait]]] call SWLC_fnc_log;
+		["target", [_target] call SWLC_fnc_adName], ["approaches", count _approaches], ["by_timer", _byTimer], ["wait", _wait], ["bearings", (_approaches apply {str round (_x get "bearing")}) joinString "/"]]] call SWLC_fnc_log;
 
 	(_cmd get "flying") pushBack _w;
 	if (({count ([_x] call SWLC_fnc_vehRecOf) > 0} count _goers) > 0) then {[_side, "mount"] call SWLC_fnc_radio};
@@ -443,6 +444,7 @@ SWLC_fnc_waveResolve = {
 	private _side = _cmd get "side";
 	private _live = [_w] call SWLC_fnc_waveLive;
 	private _men = [_live] call SWLC_fnc_groupsMen;
+	[_cmd, _w] call SWLC_fnc_smartRemember;
 	["C_WAVE", [["side", _side], ["wave", _w get "id"], ["event", "resolved"], ["result", _result], ["men_left", _men], ["men_launched", _w get "launchStrength"],
 		["duration", round (time - (_w get "launched"))]]] call SWLC_fnc_log;
 	_w set ["phase", "DONE"];

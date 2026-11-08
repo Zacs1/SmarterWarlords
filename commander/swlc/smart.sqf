@@ -454,3 +454,45 @@ SWLC_fnc_smartInit = {
 	_cmd set ["persona", createHashMapFromArray (_p + [["name", _name]])];
 	[_cmd, "personality", "chosen", [["name", _name], ["forced", _force != ""]]] call SWLC_fnc_smartLog;
 };
+
+// 11. Memory within a round: approaches that cost heavy losses aren't reused for that sector.
+SWLC_fnc_smartRemember = {
+	params ["_cmd", "_w"];
+	if !(CFG("smartMemory")) exitWith {};
+	if (isNil {_w get "approaches"}) exitWith {};
+	private _name = [_w get "target"] call SWLC_fnc_adName;
+	{
+		private _a = _x;
+		private _launched = _a getOrDefault ["men", 0];
+		if (_launched >= CFG("memoryMinMen")) then {
+			private _left = 0;
+			{_left = _left + ({alive _x} count units _x)} forEach (_a get "groups");
+			if ((1 - (_left min _launched) / _launched) >= CFG("memoryLossFraction")) then {
+				private _map = _cmd getOrDefault ["costly", createHashMap];
+				private _list = _map getOrDefault [_name, []];
+				_list pushBack (_a get "bearing");
+				_map set [_name, _list];
+				_cmd set ["costly", _map];
+				[_cmd, "memory", "costly", [["sector", _name], ["bearing", round (_a get "bearing")], ["launched", _launched], ["left", _left]]] call SWLC_fnc_smartLog;
+			};
+		};
+	} forEach (_w get "approaches");
+};
+
+SWLC_fnc_smartAvoid = {
+	params ["_cmd", "_target", "_bearing"];
+	if !(CFG("smartMemory")) exitWith {_bearing};
+	private _name = [_target] call SWLC_fnc_adName;
+	private _list = (_cmd getOrDefault ["costly", createHashMap]) getOrDefault [_name, []];
+	private _avoid = CFG("memoryAvoidDegrees");
+	private _b = _bearing;
+	{
+		private _diff = ((((_b - _x) mod 360) + 540) mod 360) - 180;
+		if ((abs _diff) < _avoid) then {
+			private _sign = [1, -1] select (_diff < 0);
+			_b = _x + _sign * (_avoid + 5);
+			[_cmd, "memory", "avoid", [["sector", _name], ["costly", round _x], ["was", round _bearing], ["now", round _b]]] call SWLC_fnc_smartLog;
+		};
+	} forEach _list;
+	_b
+};
