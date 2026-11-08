@@ -86,7 +86,7 @@ SWLC_settings = createHashMapFromArray [
 	["intelHalfLifeInfantry", 180],
 	["intelHalfLifeVehicle", 300],
 	["intelHalfLifeStatic", 900],
-	["intelDecayMultiplier", 1],      // difficulty: above 1, the AI remembers for longer
+	["intelDecayMultiplier", 1],      // set by difficulty: above 1, the AI remembers for longer
 	["intelDropConf", 0.15],
 	["intelSectorRadius", 600],
 	["intelAirRadius", 1500],
@@ -172,6 +172,16 @@ SWLC_settings = createHashMapFromArray [
 	["requestDefendSeconds", 300],
 	["planPublishSeconds", 20],
 	["planAlwaysPublish", false],     // test switch: publish the plan with no players connected
+
+	// Difficulty. The lobby parameter wins over "difficulty" in hosted games. A preset sets the keys listed.
+	["difficulty", "normal"],         // "easy", "normal" or "hard"
+	["reactionDelay", 0],             // seconds before a new sighting affects plans and defence (radio is not delayed)
+	["difficultyPresets", createHashMapFromArray [
+		["easy", [["intelDecayMultiplier", 0.6], ["goMinGroups", 2], ["shopGroupSize", 2], ["reactionDelay", 20], ["scanBuying", false]]],
+		["normal", [["intelDecayMultiplier", 1], ["goMinGroups", 3], ["shopGroupSize", 3], ["reactionDelay", 0], ["scanBuying", true]]],
+		["hard", [["intelDecayMultiplier", 1.5], ["goMinGroups", 4], ["shopGroupSize", 4], ["reactionDelay", 0], ["scanBuying", true]]]
+	]],
+	["profileStages", false],         // test switch: log the cost of each stage of the commander tick
 
 	// Phase 6 behaviours: each one can be switched off here
 	["smartBreak", true],

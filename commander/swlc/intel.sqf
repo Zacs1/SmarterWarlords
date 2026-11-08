@@ -17,7 +17,10 @@ SWLC_fnc_intelLoop = {
 	scriptName format ["SWLC intel %1", _cmd get "side"];
 	while {true} do {
 		sleep CFG("intelPollSeconds");
+		private _t0 = diag_tickTime;
 		isNil {[_cmd] call SWLC_fnc_intelPoll};
+		_cmd set ["pollCost", (_cmd getOrDefault ["pollCost", 0]) + (diag_tickTime - _t0) * 1000];
+		_cmd set ["pollCount", (_cmd getOrDefault ["pollCount", 0]) + 1];
 	};
 };
 
@@ -163,7 +166,7 @@ SWLC_fnc_intelNew = {
 	_cmd set ["boardCounter", _id];
 	private _sector = [_pos] call SWLC_fnc_intelSector;
 	private _e = createHashMapFromArray [
-		["id", _id], ["cat", _cat], ["pos", +_pos], ["count", 1], ["seen", time], ["base", _conf], ["baseAt", time], ["conf", _conf],
+		["id", _id], ["cat", _cat], ["pos", +_pos], ["count", 1], ["born", time], ["seen", time], ["base", _conf], ["baseAt", time], ["conf", _conf],
 		["units", if (isNull _t) then {[]} else {[_t]}],
 		["source", _source], ["sector", _sector], ["reporter", if (isNull _g) then {""} else {groupId _g}]
 	];
@@ -295,7 +298,7 @@ SWLC_fnc_intelSummarise = {
 		private _newest = 1e6;
 		{
 			private _e = _x;
-			if ((_e get "conf") >= _minConf) then {
+			if ((_e get "conf") >= _minConf && {(_now - (_e get "born")) >= CFG("reactionDelay")}) then {
 				private _cat = _e get "cat";
 				private _n = _e get "count";
 				private _d = (_e get "pos") distance2D _c;

@@ -51,7 +51,7 @@ SWLC_fnc_defThreatAt = {
 	{
 		private _e = _x;
 		private _cat = _e get "cat";
-		if (_cat in ["infantry", "tank", "apc", "light"] && {(_e get "conf") >= _minConf} && {(time - (_e get "seen")) <= _maxAge}) then {
+		if (_cat in ["infantry", "tank", "apc", "light"] && {(_e get "conf") >= _minConf} && {(time - (_e get "seen")) <= _maxAge} && {(time - (_e get "born")) >= CFG("reactionDelay")}) then {
 			private _p = _e get "pos";
 			if ((_p distance2D _c) <= _r) then {
 				private _n = _e get "count";

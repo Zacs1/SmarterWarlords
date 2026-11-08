@@ -48,6 +48,7 @@ SWLC_fnc_commanderGuard = {
 	scriptName format ["SWLC guard %1", _cmd get "side"];
 	while {true} do {
 		sleep CFG("guardSeconds");
+		private _t0 = diag_tickTime;
 		isNil {
 			private _side = _cmd get "side";
 			if (isNull ([_side] call SWLC_fnc_adTarget)) then {
@@ -59,6 +60,8 @@ SWLC_fnc_commanderGuard = {
 				};
 			} forEach (_cmd get "groups");
 		};
+		_cmd set ["guardCost", (_cmd getOrDefault ["guardCost", 0]) + (diag_tickTime - _t0) * 1000];
+		_cmd set ["guardCount", (_cmd getOrDefault ["guardCount", 0]) + 1];
 	};
 };
 
@@ -69,25 +72,34 @@ SWLC_fnc_cmdLogCost = {
 	_cmd set ["tickCount", _n];
 	if (_n >= 6) then {
 		["C_TICK", [["side", _cmd get "side"], ["avg_ms", ((_cmd get "tickCost") / _n) toFixed 2], ["groups", count (_cmd get "groups")],
-			["flying", count (_cmd get "flying")], ["fps", round diag_fps]]] call SWLC_fnc_log;
+			["flying", count (_cmd get "flying")], ["fps", round diag_fps],
+			["poll_ms", (((_cmd getOrDefault ["pollCost", 0]) / ((_cmd getOrDefault ["pollCount", 0]) max 1))) toFixed 2],
+			["guard_ms", (((_cmd getOrDefault ["guardCost", 0]) / ((_cmd getOrDefault ["guardCount", 0]) max 1))) toFixed 2]]] call SWLC_fnc_log;
 		_cmd set ["tickCost", 0];
 		_cmd set ["tickCount", 0];
+		{_cmd set [_x, 0]} forEach ["pollCost", "pollCount", "guardCost", "guardCount"];
+		if (CFG("profileStages")) then {
+			private _fields = [["side", _cmd get "side"]];
+			{_fields pushBack [_x, ((_y / _n) toFixed 2)]} forEach (_cmd get "stageCost");
+			["C_PROF", _fields] call SWLC_fnc_log;
+			_cmd set ["stageCost", createHashMap];
+		};
 	};
 };
 
+SWLC_cmdStages = ["refreshGroups", "cmdTarget", "intelSummarise", "logInit", "vehTick", "watchdogTick", "waveTick", "defenceTick", "smartTick", "cmdAssign", "planPublish"];
+
 SWLC_fnc_cmdTick = {
 	params ["_cmd"];
-	[_cmd] call SWLC_fnc_refreshGroups;
-	[_cmd] call SWLC_fnc_cmdTarget;
-	[_cmd] call SWLC_fnc_intelSummarise;
-	[_cmd] call SWLC_fnc_logInit;
-	[_cmd] call SWLC_fnc_vehTick;
-	[_cmd] call SWLC_fnc_watchdogTick;
-	[_cmd] call SWLC_fnc_waveTick;
-	[_cmd] call SWLC_fnc_defenceTick;
-	[_cmd] call SWLC_fnc_smartTick;
-	[_cmd] call SWLC_fnc_cmdAssign;
-	[_cmd] call SWLC_fnc_planPublish;
+	private _profile = CFG("profileStages");
+	private _costs = _cmd getOrDefault ["stageCost", createHashMap];
+	{
+		private _name = _x;
+		private _t0 = diag_tickTime;
+		[_cmd] call (missionNamespace getVariable ("SWLC_fnc_" + _name));
+		if (_profile) then {_costs set [_name, (_costs getOrDefault [_name, 0]) + (diag_tickTime - _t0) * 1000]};
+	} forEach SWLC_cmdStages;
+	if (_profile) then {_cmd set ["stageCost", _costs]};
 };
 
 // Tracks the side's target and reacts when it changes.
