@@ -21,6 +21,7 @@ SWLC_fnc_smartTick = {
 	[_cmd] call SWLC_fnc_smartScoutTick;
 	[_cmd] call SWLC_fnc_smartHuntTick;
 	[_cmd] call SWLC_fnc_smartDigInTick;
+	[_cmd] call SWLC_fnc_smartJoinTick;
 	// SMART_CALLS
 };
 
@@ -495,4 +496,54 @@ SWLC_fnc_smartAvoid = {
 		};
 	} forEach _list;
 	_b
+};
+
+// 12. Join the player's push: free AI groups near a human moving on the target go with them.
+// Orders only groups the commander already owns; never a player's group or AI.
+SWLC_fnc_smartJoinHuman = {
+	params ["_cmd", "_p"];
+	private _target = _cmd get "target";
+	if (isNull _target) exitWith {};
+	private _tpos = [_target] call SWLC_fnc_adPos;
+	private _free = (_cmd get "groups") select {([_x] call SWLC_fnc_state) in ["Unassigned", "Staging"] && {(leader _x distance2D _p) <= CFG("joinPushRadius")}};
+	private _free2 = [_free, [], {leader _x distance2D _p}, "ASCEND"] call BIS_fnc_sortBy;
+	{
+		[_cmd, _x] call SWLC_fnc_waveRemoveGroup;
+		[_x, "Assaulting", _tpos, "join_push"] call SWLC_fnc_setState;
+		_x setVariable ["SWLC_joinUntil", time + CFG("joinPushSeconds")];
+		[_x, [[getPosATL _p, "MOVE", 30], [_tpos, "SAD", 60]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
+		[_cmd, "joinpush", "attached", [["group", groupId _x], ["player", name _p]]] call SWLC_fnc_smartLog;
+		[_cmd get "side", "joinpush", [name _p], _x] call SWLC_fnc_radio;
+	} forEach (_free2 select [0, CFG("joinPushGroups")]);
+};
+
+SWLC_fnc_smartJoinTick = {
+	params ["_cmd"];
+	if !(CFG("smartJoinPush")) exitWith {};
+	{
+		private _until = _x getVariable ["SWLC_joinUntil", -1];
+		if (_until >= 0 && {time >= _until}) then {
+			_x setVariable ["SWLC_joinUntil", -1];
+			[_x] call SWLC_fnc_adClearOrder;
+			[_x, "Unassigned", [], "join_push_done"] call SWLC_fnc_setState;
+		};
+	} forEach (_cmd get "groups");
+
+	private _target = _cmd get "target";
+	if (isNull _target) exitWith {};
+	private _side = _cmd get "side";
+	private _tpos = [_target] call SWLC_fnc_adPos;
+	{
+		private _p = _x;
+		if (alive _p && {side group _p == _side}) then {
+			private _d = _p distance2D _tpos;
+			private _last = _p getVariable ["SWLC_lastD", -1];
+			_p setVariable ["SWLC_lastD", _d];
+			if (_d <= CFG("joinPushRange") && {_last > 0} && {(_last - _d) >= CFG("joinPushMinMetres")}
+				&& {(time - (_p getVariable ["SWLC_joinAt", -1e6])) >= CFG("joinPushCooldown")}) then {
+				_p setVariable ["SWLC_joinAt", time];
+				[_cmd, _p] call SWLC_fnc_smartJoinHuman;
+			};
+		};
+	} forEach allPlayers;
 };
