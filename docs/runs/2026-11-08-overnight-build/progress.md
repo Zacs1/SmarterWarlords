@@ -62,3 +62,9 @@ Counterattacks at the scenario's spawns were never detected: nobody on WEST coul
 ## 22:2x User request (overrides order of work)
 "could you focus on trying to have something playable in 40 minutes (by around 11pm)? doesn't have to be perfectly tested, I can let you do the rest of the testing after I log off, but I'd really like to try playing even just a mini version of it before bed tonight."
 Applied: playable build first, after one smoke round of phases 5+6 for script errors. Remaining tests (performance, gate6, LAMBS, soak, optional list) continue after the user logs off.
+
+## 22:21 Phase 4 gate (gate4b, RPT tests/server/runs/2026-11-08_22-02-39_gate4b/)
+Response 0 s after detection at both spawns (seen after 15 s and 9 s); stand-down 202 s and 186 s after the kill; 1 staging abort; 9 reserve postings; player paths ran. The two failing checks are one script error raised in Bohemia's own fn_WLInit.sqf, not commander code. Tagged phases 2, 3, 4 at a6afd55.
+
+## 22:33 Playable built for the user's evening test
+smoke56 (RPT tests/server/runs/2026-11-08_22-20-47_smoke56/) and smoke56b (tests/server/runs/2026-11-08_22-27-26_smoke56b/): 0 script errors with all phase 5+6 code on. Tick cost still 42-58 ms, guard passes 100-380 ms total but now one group per frame. Performance target NOT met yet. Playable at Documents\Arma 3\mpmissions\SmarterWarlords.Tanoa (commit 13c6a4a). No server rounds while the user is playing.
