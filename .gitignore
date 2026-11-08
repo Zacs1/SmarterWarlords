@@ -3,3 +3,17 @@
 
 # Machine-specific paths and install inventory
 docs/local-environment.md
+
+# Unpacked Bohemia files: never commit
+reference/
+
+# Built test mission is derived from a Bohemia scenario: never commit
+# (our own changes live in tests/mission_overlay/)
+tests/missions/
+
+# Dedicated server runtime output
+tests/server/profiles/
+tests/server/runs/
+
+# Python
+__pycache__/

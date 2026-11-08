@@ -7,7 +7,8 @@ SmarterWarlords is a rule-based AI commander layered on top of Arma 3's Warlords
 
 ## Standing rules
 
-- Never write into the Arma 3 install, the server install or Workshop content.
+- Never write into the Arma 3 install, the server install or Workshop content. One exception: the server install's `MPMissions` folder may be written to, and nothing else in the server install. Server configs, profiles and logs stay inside this project.
+- Never commit Bohemia's code or missions. Unpacked files live in the gitignored `reference/`, and the built test mission is gitignored too.
 - Commit locally at sensible points; never push.
 - Every run saves its prompt and a progress log under `docs/runs/<date>-<name>/` and ends with a brief hand-off doc there: how it went, next steps, and any red flags.
 - Anything needing the user's action or approval goes in the run's final message, not just in a file.
