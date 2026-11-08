@@ -313,7 +313,8 @@ SWLC_fnc_defenceTick = {
 SWLC_fnc_playerMsg = {
 	params ["_kind", "_player", "_data"];
 	if (isNull _player || {!isPlayer _player}) exitWith {};
-	if (isRemoteExecuted && {remoteExecutedOwner != owner _player}) exitWith {};
+	// A request can only speak for its sender. Owner 0 means the host's own local call, which is fine.
+	if (isRemoteExecuted && {remoteExecutedOwner != 0} && {remoteExecutedOwner != owner _player}) exitWith {};
 	private _side = side group _player;
 	private _cmd = missionNamespace getVariable [format ["SWLC_cmd_%1", _side], createHashMap];
 	if (count _cmd == 0) exitWith {};
