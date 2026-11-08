@@ -23,9 +23,9 @@ When this run's hand-off and final message are done, start the overnight build i
 - [x] Mission overlay, build script, observer, install script, `tests/README.md`.
 - [x] `tools/run-round.ps1`.
 - [x] `tools/analyse_round.py`, `tools/plot_round.py` (with terrain from `tools/extract-tanoa-map.ps1`).
-- [ ] Real round, analysed and plotted. Baseline running: `tests/server/runs/2026-11-08_19-26-56_baseline`, up to 75 min.
+- [x] Real round, analysed and plotted: `tests/server/runs/2026-11-08_19-26-56_baseline`. Full round, 70:26, WEST won.
 - [x] Verify nothing outside mpmissions changed in the server install (run-round checks every run).
-- [ ] Hand-off.
+- [x] Hand-off: `handoff.md`.
 
 ## Log
 - Smoke round (`2026-11-08_19-21-43_smoke`, 4 min): first method tried worked. Dedicated server, `-autoInit`, mission in server config, persistent=1, no players. Warlords started, both sides voted at about 0:20, AI fast travelled at about 1:02, first capture at 3:41, no script errors, install unchanged.
