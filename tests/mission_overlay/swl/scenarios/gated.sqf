@@ -228,6 +228,8 @@ private _baseNominal = [_raidS] call SWLC_fnc_capNominal;
 
 // ---- T1: an order that expires ----
 SWLC_settings set ["raidExpirySeconds", 45];
+// The expiry is the longer of this and the capture time plus a travel allowance, so the allowance has to go too.
+SWLC_settings set ["raidExpiryTravelSeconds", -100];
 SWLC_settings set ["raidGraceSeconds", 20];
 SWLC_settings set ["raidCooldownSeconds", 30];
 private _listBefore = [_raidS] call SWLG_conquered;
@@ -297,6 +299,7 @@ waitUntil {sleep 1; count ([_cmd] call SWLC_fnc_raidOf) == 0 || {time > _end}};
 
 // ---- T2: the AI buys a raid and captures ----
 SWLC_settings set ["raidExpirySeconds", 480];
+SWLC_settings set ["raidExpiryTravelSeconds", 360];
 SWLC_settings set ["raidCooldownSeconds", 600];
 [west, 3000] call SWLG_fund;
 _cmd set ["raidCooldownUntil", -1];
