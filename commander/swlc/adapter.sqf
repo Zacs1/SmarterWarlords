@@ -80,8 +80,10 @@ SWLC_fnc_adOwned = {
 };
 
 // [owned, available, linked] from Warlords itself.
+// Bohemia's function assigns these without declaring them, so without this it overwrites any of the same name in our callers.
 SWLC_fnc_adAvailable = {
 	params ["_side"];
+	private ["_sector", "_link", "_knots", "_linked", "_knotsCurrent"];
 	([_side] call BIS_fnc_WLSectorListing) # 1
 };
 
@@ -419,6 +421,8 @@ SWLC_fnc_adBuy = {
 	if (!alive _buyer || {isNull _dropObject}) exitWith {[]};
 	if !([_side, _cost, _buyer] call SWLC_fnc_adDebit) exitWith {[]};
 	_buyer setVariable ["BIS_WL_dropPos", _dropObject];
+	// Bohemia's function assigns these without declaring them, so without this it overwrites any of the same name in our callers.
+	private ["_pos", "_itemPool", "_orderedByAI", "_i", "_itemIndex", "_null", "_purchased", "_unit"];
 	// The AI flag adds a script that kills infantry far from their leader, so only vehicles get it.
 	[_buyer, _classes, (_classes findIf {_x isKindOf "Man"}) < 0] call BIS_fnc_WLAirdrop
 };
