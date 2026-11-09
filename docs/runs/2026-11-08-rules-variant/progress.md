@@ -115,3 +115,13 @@ Failures, all real, fixed in 085d38f:
 - script_error: the hook fired and the group recovered, but C_GROUPERR never fired because the error ended only an inner call. New: the guard also counts errors from the ScriptError event, ours only. Whether that event fires on a dedicated server is still unconfirmed.
 
 The first rules-off smoke was stopped at 6 minutes because it was on the old code. sabotage2 and smokeoff2 now run together on 085d38f (two servers, the limit since the PC crash).
+
+Rules-off smoke `2026-11-09_16-37-44_smokeoff2` on 085d38f: 10 min, 0 script errors, install unchanged, 8 v 8 groups, Leqa captured at 7:54, the commander and resilience ladder ran with the rules variant off. Tick mean 12.87 ms.
+
+## Resilience gate passed (2026-11-09 17:00)
+
+`2026-11-09_16-37-22_sabotage2` on 085d38f, install unchanged: all 11 sabotage cases PASS, recovery between 10 and 70 s. The ScriptError event does fire on a dedicated server (C_GROUPERR 1 for the injected error). The only script error is the injected one. Ladder: EAST reissue 4, reroute 1, dismount 1, respawn 1; WEST reissue 1. C_LEFTOVER 4, C_LEADER 4, C_STRAGGLER 1, C_RESTART 0.
+
+The one respawn rung was the swimmer: its base was 200 m away, inside the fast travel minimum, so fast travel refused. 1fa4e23 lifts that minimum for swimmers. That one-line change is linted but not rerun in the sabotage scenario. Its failure mode is the respawn rung seen here.
+
+Tagged `rules-r-done`. Playable rebuilt from 1fa4e23, PLAYABLE.md updated.

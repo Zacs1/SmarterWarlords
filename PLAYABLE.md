@@ -1,7 +1,7 @@
 # Playable build
 
 **Scenario:** Smarter Warlords on Tanoa, in `Documents\Arma 3\mpmissions\SmarterWarlords.Tanoa`.
-**Built:** 2026-11-09, about 13:15, from commit `7c29c77`. Resilience is not in this build yet.
+**Built:** 2026-11-09, about 17:00, from commit `1fa4e23`. Resilience is in this build.
 
 ## What's in this build
 - An AI commander per side: staging at owned sectors, a single rally point, waves, reinforcements, side-chat radio.
@@ -9,8 +9,9 @@
 - "Commander..." scroll menu for humans. Raids, borrowing groups, holding the wave, pickups.
 - Smarter squads, with extra behaviour when LAMBS is loaded.
 - AI commanders thought panel on the Insert key.
+- Resilience: groups that get lost, stuck or scattered are recovered, up to deleting and respawning them at base as a last resort.
 
-Test state: this code ran with no script errors in its latest scenario rounds. The part gates are still being finished, so treat it as a working preview.
+Test state: every part gate passed in its scenario round and all 11 sabotage cases passed. The rules-off smoke round had no script errors. The full-length final soak has not run on this build yet.
 
 ## How to host
 1. Launch Arma 3 with **CBA_A3** and **LAMBS Danger (stable)**. It also works with no mods. Do not load LAMBS DEV, ASR AI3, Vcom or Advanced AI Command.
