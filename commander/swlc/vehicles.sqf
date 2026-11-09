@@ -176,6 +176,8 @@ SWLC_fnc_vehStuckRescue = {
 	params ["_cmd", "_g", "_r", "_v"];
 	private _flipped = ((vectorUp _v) # 2) < 0.4;
 	private _safe = [_cmd, _g, _v] call SWLC_fnc_vehSafeToLift;
+	// A tank that has lost its tracks in a fight is still a gun.
+	if ((_r get "role") == "combat" && {(behaviour leader _g) == "COMBAT"} && {canFire _v} && {!_flipped}) exitWith {false};
 	// It can't drive: nobody sits in it waiting for a timer, under fire or not.
 	if (!canMove _v || {(fuel _v) <= 0} || {_flipped && {!_safe}}) exitWith {
 		_g setVariable ["SWLC_legAbandon", true];
@@ -243,6 +245,8 @@ SWLC_fnc_vehStuckCheck = {
 	private _leg = _g getVariable ["SWLC_leg", ""];
 	if !(([_g] call SWLC_fnc_vehRecOf) isEqualTo _r) exitWith {};
 	if !(_leg in ["DRIVE", "FOLLOW"]) exitWith {_r deleteAt "sample"};
+	// Stopped to fight on purpose; the clock starts again when it moves off.
+	if (([_g] call SWLC_fnc_state) == "Engaged") exitWith {_r deleteAt "sample"};
 	private _v = _r get "obj";
 	private _p = getPosATL _v;
 	private _s = _r getOrDefault ["sample", []];
@@ -253,7 +257,8 @@ SWLC_fnc_vehStuckCheck = {
 	_r set ["sample", [time, _p]];
 	if (_moved >= CFG("vehUnstickResetMetres")) then {_r set ["lifts", 0]};
 	private _rescued = false;
-	if (_moved < CFG("vehStuckMinMetres")) then {_rescued = [_cmd, _g, _r, _v] call SWLC_fnc_vehStuckRescue};
+	// A combat vehicle following the infantry is meant to crawl and stop, so only a driving leg is ever rescued.
+	if (_leg == "DRIVE" && {_moved < CFG("vehStuckMinMetres")}) then {_rescued = [_cmd, _g, _r, _v] call SWLC_fnc_vehStuckRescue};
 	if (_rescued) exitWith {};
 
 	if (_leg == "FOLLOW") exitWith {
@@ -263,7 +268,7 @@ SWLC_fnc_vehStuckCheck = {
 		};
 	};
 
-	if (_moved >= CFG("vehStuckMinMetres")) exitWith {};
+	if (_moved >= CFG("vehStuckMinMetres") || {(_r get "role") == "combat" && {(behaviour leader _g) == "COMBAT"}}) exitWith {};
 	private _n = (_r get "stuck") + 1;
 	_r set ["stuck", _n];
 	["C_VEH", [["side", _cmd get "side"], ["id", _r get "id"], ["event", "stuck"], ["count", _n], ["group", groupId _g], ["x", round (_p # 0)], ["y", round (_p # 1)]]] call SWLC_fnc_log;
