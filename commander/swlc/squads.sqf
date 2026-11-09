@@ -439,7 +439,7 @@ SWLC_fnc_squadPinned = {
 
 // Side with no water and more to hide behind.
 SWLC_fnc_squadFlankSide = {
-	params ["_lpos", "_epos", "_b"];
+	params ["_lpos", "_epos", "_b", "_grpSide"];
 	private _r = CFG("flankOffset");
 	private _best = [];
 	private _bestScore = -1;
@@ -447,7 +447,7 @@ SWLC_fnc_squadFlankSide = {
 		private _dir = _b + _x;
 		private _step = [_lpos, _dir, _r] call SWLC_fnc_offset;
 		private _wide = [_epos, _dir, _r] call SWLC_fnc_offset;
-		if (!surfaceIsWater _step && {!surfaceIsWater _wide}) then {
+		if (!surfaceIsWater _step && {!surfaceIsWater _wide} && {!([_grpSide, _step] call SWLC_fnc_adRestricted)} && {!([_grpSide, _wide] call SWLC_fnc_adRestricted)}) then {
 			private _score = count (nearestTerrainObjects [_step, ["BUILDING", "HOUSE", "WALL", "ROCK", "ROCKS", "TREE", "BUSH", "FENCE"], 40, false]);
 			if (_score > _bestScore) then {
 				_bestScore = _score;
@@ -466,8 +466,8 @@ SWLC_fnc_squadFlankStart = {
 	private _epos = _l getHideFrom _e;
 	if (_epos isEqualTo [0, 0, 0]) exitWith {};
 	private _lpos = getPosATL _l;
-	private _side = [_lpos, _epos, [_lpos, _epos] call SWLC_fnc_bearing] call SWLC_fnc_squadFlankSide;
-	if (_side isEqualTo []) exitWith {_g setVariable ["SWLC_flankNext", time + CFG("flankCooldownSeconds")]};
+	private _side = [_lpos, _epos, [_lpos, _epos] call SWLC_fnc_bearing, side _g] call SWLC_fnc_squadFlankSide;
+	if (_side isEqualTo [] || {[side _g, _epos] call SWLC_fnc_adRestricted}) exitWith {_g setVariable ["SWLC_flankNext", time + CFG("flankCooldownSeconds")]};
 	_side params ["_step", "_wide"];
 
 	private _men = [_g] call SWLC_fnc_alive;
@@ -568,7 +568,7 @@ SWLC_fnc_squadMags = {
 	private _hit = SWLC_squadMagCache get _key;
 	if (!isNil "_hit") exitWith {_hit};
 	private _list = compatibleMagazines _weapon;
-	if (_rifle) then {_list = _list select {getNumber (configFile >> "CfgMagazines" >> _x >> "count") >= 10}};
+	if (_rifle) then {_list = _list select {getNumber (configFile >> "CfgMagazines" >> _x >> "count") >= CFG("rearmRifleMinRounds")}};
 	_list = _list apply {toLower _x};
 	SWLC_squadMagCache set [_key, _list];
 	_list
@@ -676,13 +676,25 @@ SWLC_fnc_squadRearmCheck = {
 	if ((behaviour _l) == "COMBAT") exitWith {};
 	if ([_g] call SWLC_fnc_lambsBusy) exitWith {};
 	private _men = ([_g] call SWLC_fnc_alive) select {vehicle _x == _x};
-	private _need = [_men] call SWLC_fnc_squadRearmNeed;
-	if (_need isEqualTo []) exitWith {};
-	_need params ["_u", "_kind", "_mags", "_take"];
-	private _source = [_cmd, _u, _mags] call SWLC_fnc_squadRearmSource;
-	if (_source isEqualTo []) exitWith {
-		[_cmd get "side", "rearm", "no_source", [["group", groupId _g], ["kind", _kind]]] call SWLC_fnc_squadLog;
+	// One man with nothing nearby doesn't stop the next one from restocking.
+	private _need = [];
+	private _source = [];
+	private _missed = "";
+	for "_try" from 1 to CFG("rearmTriesPerCheck") do {
+		_need = [_men] call SWLC_fnc_squadRearmNeed;
+		if (_need isEqualTo []) exitWith {};
+		_source = [_cmd, _need # 0, _need # 2] call SWLC_fnc_squadRearmSource;
+		if (_source isNotEqualTo []) exitWith {};
+		_missed = _need # 1;
+		_men = _men - [_need # 0];
 	};
+	if (_source isEqualTo []) exitWith {
+		if (_missed != "") then {
+			_g setVariable ["SWLC_rearmNext", time + CFG("rearmBackoffSeconds")];
+			[_cmd get "side", "rearm", "no_source", [["group", groupId _g], ["kind", _missed]]] call SWLC_fnc_squadLog;
+		};
+	};
+	_need params ["_u", "_kind", "_mags", "_take"];
 	_source params ["_obj", "_srcKind", "_class"];
 	_g setVariable ["SWLC_rearmUnit", _u];
 	_g setVariable ["SWLC_rearmSrc", [_obj, _srcKind, _class, _kind, _take]];
@@ -732,6 +744,7 @@ SWLC_fnc_squadRearmStop = {
 	};
 	_g setVariable ["SWLC_rearmUnit", objNull];
 	_g setVariable ["SWLC_rearmSrc", []];
+	if (_why != "taken") then {_g setVariable ["SWLC_rearmNext", time + CFG("rearmBackoffSeconds")]};
 	private _event = ["fail", "done"] select (_why == "taken");
 	[_cmd get "side", "rearm", _event, [["group", groupId _g], ["why", _why]] + _fields] call SWLC_fnc_squadLog;
 };
@@ -742,9 +755,10 @@ SWLC_fnc_squadRearmLight = {
 	if (!alive _u || {group _u != _g}) exitWith {[_cmd, _g, "unit_lost"] call SWLC_fnc_squadRearmStop};
 	(_g getVariable ["SWLC_rearmSrc", []]) params [["_obj", objNull], ["_srcKind", ""], ["_class", ""], ["_kind", ""], ["_take", 1]];
 	if (isNull _obj) exitWith {[_cmd, _g, "source_gone"] call SWLC_fnc_squadRearmStop};
-	if (time > (_g getVariable ["SWLC_rearmEnd", 0])) exitWith {[_cmd, _g, "timeout"] call SWLC_fnc_squadRearmStop};
+	if (time > (_g getVariable ["SWLC_rearmEnd", 0])) exitWith {[_cmd, _g, "timeout", [["dist", round (_u distance2D _obj)], ["cmd", currentCommand _u], ["ready", unitReady _u], ["speed", round speed _u]]] call SWLC_fnc_squadRearmStop};
 	if (SWLC_lambs) then {_u setVariable ["lambs_danger_forceMove", true]};
-	if ((_u distance2D _obj) > CFG("rearmReach")) exitWith {
+	// Measured to the edge of a vehicle. A soldier can't stand at the middle of a truck.
+	if ((_u distance2D _obj) > (CFG("rearmReach") + ((boundingBoxReal _obj) # 2) * 0.6)) exitWith {
 		if ((time - (_g getVariable ["SWLC_rearmMoveAt", 0])) >= 9) then {
 			_g setVariable ["SWLC_rearmMoveAt", time];
 			_u doMove (getPosATL _obj);
@@ -800,6 +814,10 @@ SWLC_fnc_lambsTick = {
 	params ["_cmd", "_g", "_state", "_foot"];
 	private _task = _g getVariable ["SWLC_lambsTask", ""];
 	if (_task != "") exitWith {
+		if (_task == "defend" && {scriptDone (_g getVariable ["SWLC_lambsHandle", scriptNull])}) exitWith {
+			[_cmd get "side", "lambs", "stop", [["group", groupId _g], ["task", _task], ["why", "ended"]]] call SWLC_fnc_squadLog;
+			[_g, true] call SWLC_fnc_lambsRelease;
+		};
 		private _fits = [_state == "Assaulting", _state == "Defending"] select (_task != "cqb");
 		private _intact = (_g getVariable ["SWLC_order", []]) isEqualTo (_g getVariable ["SWLC_lambsOrder", []]);
 		if (!_fits || {_task != "defend" && {!_intact}}) then {
@@ -884,6 +902,7 @@ SWLC_fnc_lambsHold = {
 		_g setVariable ["SWLC_lambsHandle", [_g, _c, _r, [], false, 0, false, false] spawn lambs_wp_fnc_taskDefend];
 	};
 	_g setVariable ["SWLC_lambsTask", _task];
+	_g setVariable ["SWLC_lambsLeaderAt", time];
 	_g setVariable ["SWLC_lambsSector", _s];
 	[_cmd get "side", "lambs", "hold", [["group", groupId _g], ["sector", [_s] call SWLC_fnc_adName], ["task", _task], ["spots", count _spots], ["men", _men]]] call SWLC_fnc_squadLog;
 	true
@@ -892,6 +911,15 @@ SWLC_fnc_lambsHold = {
 // Guard pass while LAMBS is working the group. Only looks at the buildings every few seconds.
 SWLC_fnc_lambsLight = {
 	params ["_cmd", "_g"];
+	if ((_g getVariable ["SWLC_lambsTask", ""]) in ["garrison", "defend"]) exitWith {
+		if ((time - (_g getVariable ["SWLC_lambsLeaderAt", time])) < CFG("lambsLeaderMoveSeconds")) exitWith {};
+		_g setVariable ["SWLC_lambsLeaderAt", time];
+		private _l = leader _g;
+		if (alive _l && {isNull objectParent _l} && {!isPlayer _l}) then {
+			_l enableAI "PATH";
+			_l doMove ([getPosATL _l, _g] call SWLC_fnc_shuffleSpot);
+		};
+	};
 	if ((_g getVariable ["SWLC_lambsTask", ""]) != "cqb") exitWith {};
 	if ((time - (_g getVariable ["SWLC_lambsCheckAt", 0])) < CFG("lambsCheckSeconds")) exitWith {};
 	_g setVariable ["SWLC_lambsCheckAt", time];
@@ -910,18 +938,35 @@ SWLC_fnc_lambsRelease = {
 	private _task = _g getVariable ["SWLC_lambsTask", ""];
 	if (_task == "") exitWith {};
 	private _handle = _g getVariable ["SWLC_lambsHandle", scriptNull];
-	if (!isNull _handle) then {terminate _handle};
+	if (!isNull _handle && {_task != "defend"}) then {terminate _handle};
 	[_g, true, true] call lambs_wp_fnc_taskReset;
+	// taskDefend's loop, and the frame handler it owns, end only when the group's waypoint count changes.
+	if (_task == "defend" && {!isNull _handle}) then {
+		[_g, _handle] spawn {
+			params ["_g", "_h"];
+			private _end = time + 30;
+			while {!scriptDone _h && {time < _end} && {!isNull _g}} do {
+				private _wp = _g addWaypoint [getPosATL leader _g, 0];
+				_wp setWaypointName "swlc_lambs_end";
+				sleep 4;
+				if (waypointName _wp == "swlc_lambs_end") then {deleteWaypoint _wp};
+				sleep 2;
+			};
+		};
+	};
 	{
 		_x enableAI "AUTOCOMBAT";
 		_x enableAI "WEAPONAIM";
 		_x enableAI "FIREWEAPON";
 		_x enableAI "PATH";
-		if (vehicle _x != _x && {(vehicle _x) isKindOf "StaticWeapon"}) then {
+		// taskGarrison mans statics and any free turret nearby, including a parked vehicle or a player's.
+		private _v = objectParent _x;
+		if (!isNull _v && {(_v isKindOf "StaticWeapon") || {gunner _v == _x && {isNull (driver _v) || {group (driver _v) != _g}}}}) then {
 			unassignVehicle _x;
 			moveOut _x;
 		};
 	} forEach ((units _g) select {alive _x});
+	_g enableAttack true;
 	_g setVariable ["lambs_danger_disableGroupAI", nil];
 	_g setVariable ["lambs_main_groupMemory", nil];
 	// A defender's own order comes back, unless the commander has given it a new one meanwhile.

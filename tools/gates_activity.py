@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from swl_log import Group, fmt_time, idle_stretches
 
 WAITING_JOBS = ("Mustering", "Waiting", "Picket", "Reserve")
-WORKING_JOBS = ("Moving", "Assault", "Attacking", "Reinforcing", "Defending", "Raiding", "Probing", "Borrowed", "Pickup", "Hunting")
+WORKING_JOBS = ("Travelling", "Mounting", "Advancing", "Assaulting", "Regrouping", "Defending", "Raiding", "Probing", "Recon", "Borrowed", "Pickup", "Hunting")
 
 MAX_IDLE_STRETCH = 300        # seconds; one stretch longer than this fails the commander
 MAX_STILL_IN_COMBAT = 480     # standing still with the group in combat mode this long isn't a fight any more
@@ -138,7 +138,7 @@ def measure_round(data) -> list[Activity]:
     rows = []
     for group in data.groups.values():
         if group.is_ai and group.is_warlord:
-            rows.append(measure(group, changes.get(group.id, changes.get(group.name, 0)), commander_round))
+            rows.append(measure(group, changes.get(group.id, changes.get(group.name, changes.get(group.name.split(" ", 1)[-1], 0))), commander_round))
     rows.sort(key=lambda a: (a.group.side, a.group.name))
     return rows
 

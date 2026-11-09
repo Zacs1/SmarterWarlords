@@ -37,3 +37,11 @@ Every soak must measure each AI commander's activity and pass or fail on it. See
 - gatef's 56 errors were the scenario starting before the WEST commander existed. Fixed; rerunning as gatef2.
 
 - Reviews fixed (lint clean, not yet retested live): Part G (cut counting, denial value, native services, momentum uses worth, base lone wait longer, defence pull compares both sides, gates G tightened), Part E (need-limited muster response, cap rounds down, pickets only face the enemy, pickets rotate and answer attacks on their own sector, attack comes first, shuffle really moves the leader, hold lasts until responders are back and can't chain, fast travel must help), Part D (raid sector can't be voted for or merges cleanly, raiders and broken probes walk home, travel checks on probes, sector-size aware expiry and vantage).
+
+## 2026-11-09 review fixes, second batch
+- Part H review: all 8 findings fixed (LAMBS defend ends by waypoint count, leader short walk, enableAttack restored, turrets vacated, flank avoids restricted sectors, rearm tries other men with backoff, Borrowed gets posture, lambsRelease at borrow).
+- Part C and F reviewers are applying their own findings.
+- gatef3: 0 script errors, 7/9 Part F checks PASS. Both FAILs were scenario order, fixed in gatef.sqf (death test before the wave leaves, report with a living reporter in range).
+- gates_activity: job-change matching and working-job names fixed; on gate6r 14 of 16 pass.
+- Reruns queued: gateh2 (running), gateh with LAMBS, gatef4, gateb, gated, gatee, gatec.
+- Part C and Part F review fixes applied by their reviewers, lint clean, not yet run live. New settings: defencePayoutCooldown, defencePayoutMinEnemies, menuPickupMaxDistance. gatef runs need -Overrides "menuTestAllowAI=true;menuPickupMaxDistance=1000000".

@@ -97,11 +97,15 @@ SWLC_menuFrontMarkers = {
 SWLC_menuPick = {
 	params ["_kind"];
 	if (SWLC_menuPicking != "") exitWith {};
-	// Warlords reads map clicks for votes, drops and defences, so a click here would also land there.
-	if ((missionNamespace getVariable ["BIS_WL_currentSelection", ""]) != "") exitWith {hint "Finish what you're selecting on the map first."};
+	// Warlords reads map clicks for votes, drops, scans and defences, so a click here would also land there.
+	// Once this player has voted nothing is waiting on a click, the same test Warlords uses for its buy menu.
+	if !((missionNamespace getVariable ["BIS_WL_currentSelection", ""]) in ["", "voted"]) exitWith {hint "Finish what you're selecting on the map first."};
 	SWLC_menuPicking = _kind;
 	[_kind] spawn {
 		params ["_kind"];
+		// Warlords' vote handler stays attached after voting, so a click on a sector's icon here could change the vote.
+		private _voted = (missionNamespace getVariable ["BIS_WL_currentSelection", ""]) == "voted";
+		private _vote = player getVariable ["BIS_WL_selectedSector", objNull];
 		openMap [true, false];
 		hint (["Click the owned sector to defend. Close the map to cancel.", "Click an enemy front-line sector to raid. Close the map to cancel."] select (_kind == "raid"));
 		private _markers = if (_kind == "raid") then {[] call SWLC_menuFrontMarkers} else {[]};
@@ -114,6 +118,7 @@ SWLC_menuPick = {
 		waitUntil {sleep 0.1; SWLC_menuPicking == "" || {!visibleMap}};
 		removeMissionEventHandler ["MapSingleClick", SWLC_menuPickEH];
 		{deleteMarkerLocal _x} forEach _markers;
+		if (_voted && {(missionNamespace getVariable ["BIS_WL_currentSelection", ""]) == "voted"}) then {player setVariable ["BIS_WL_selectedSector", _vote, true]};
 		if (SWLC_menuPicking == "") then {
 			openMap [false, false];
 		} else {

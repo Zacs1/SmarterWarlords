@@ -117,7 +117,7 @@ def player_gone_releases(data) -> tuple[bool, str]:
 def pickup_stages(data) -> tuple[bool, str]:
     got = steps(data).get("pickup", "")
     if got != "ok":
-        return got in {"funds", "nospare", "off", "busy", "bad_place"}, f"pickup refused with {got!r}"
+        return got in {"funds", "nospare", "off", "busy", "bad_place", "too_far"}, f"pickup refused with {got!r}"
     second = steps(data).get("pickup_second")
     stages = sorted({e.get("stage", "") for e in gf(data, "pickup_stage")} - {"-"})
     ended = [e.get("why") for e in data.of("C_MENU") if e.get("kind") == "pickup_end"]

@@ -120,3 +120,11 @@ All of it lives in `economy.sqf` and `economy_client.sqf`. Each rule has a switc
 | A pickup hands the player a vehicle with no AI driver | An AI chauffeur fights the player's own driving and is one more group to manage. |
 | A player's raid sends no AI groups by itself | Borrowed groups are the force, so the player decides what goes. |
 | Pause and decay write to Warlords' trigger only between countdowns | A running countdown stays untouched, so capture payouts, alerts and side changes are all still Warlords' own. |
+| Pickets rotate | A group left on a front sector for good reads as a commander doing nothing. After `picketRotateSeconds` it goes back to the wave and another takes over, and it can't picket again for `picketRestSeconds`. |
+| Front line means a sector linked to an enemy sector | Neutral ground doesn't need a watch, and counting it spread pickets too thin. |
+| The cap on peeling rounds down | With three groups in the attack, one can go. Rounding up would take half of a small wave for a small raid. |
+| A lone group waits twice as long at the enemy base | One group walking into the base alone is wasted, and the base rule asks for more groups anyway. |
+| A raid merges into the main capture if the vote lands on its sector | Running two captures on one sector would fight over its countdown. |
+| Holding squads under LAMBS send the leader on a short walk every few minutes | Warlords kills AI warlords that don't move for about nine minutes, and LAMBS' garrison disables the leader's pathing. |
+| LAMBS' defend task is ended by changing the waypoint count, not by terminating its script | Terminating it would leave its per-frame handler running and giving orders to a group the commander had taken back. |
+| Borrowed groups go back to the commander when the player dies | A player can be dead for some time, and the groups would stand around in the meantime. The player asks for them again after respawning. For the user to review. |

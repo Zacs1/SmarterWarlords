@@ -345,6 +345,7 @@ SWLC_fnc_rallyTick = {
 	};
 
 	if ((_op get "phase") == "ASSAULT" || {[_side, _target] call SWLC_fnc_playersFighting}) exitWith {
+		_op set ["forceGo", false];
 		_op set ["firstAtRally", -1];
 		if ((_op get "phase") != "ASSAULT") then {[_cmd, _op] call SWLC_fnc_pushStart};
 		{
@@ -451,6 +452,7 @@ SWLC_fnc_pushOver = {
 	_op set ["launchStrength", 0];
 	_op set ["firstAtRally", -1];
 	_op set ["prepDone", false];
+	_op set ["forceGo", false];
 	{
 		[_x, "Regrouping", _op get "rally", "fall_back"] call SWLC_fnc_setState;
 		[_x, [[_op get "rally", "MOVE", 30]], "AWARE", "FULL", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;

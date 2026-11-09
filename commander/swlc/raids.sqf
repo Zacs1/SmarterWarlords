@@ -255,7 +255,7 @@ SWLC_fnc_raidDecide = {
 // How much a raid on this sector is worth. Part G adds what the sector unlocks.
 SWLC_fnc_raidValue = {
 	params ["_cmd", "_s"];
-	([_s] call SWLC_fnc_adValue) + ([_cmd get "side", _s] call SWLC_fnc_stratWorth)
+	([_s] call SWLC_fnc_adWorth) + ([_cmd get "side", _s] call SWLC_fnc_stratWorth)
 };
 
 SWLC_fnc_raidTick = {
@@ -270,7 +270,7 @@ SWLC_fnc_raidTick = {
 	if ((_rec get "stage") == "grace") exitWith {
 		if (time < (_rec get "graceUntil")) exitWith {};
 		// Warlords' kill loops come back with the sector's closing, so anyone still inside gets a little longer.
-		private _inside = (_rec get "groups") findIf {
+		private _inside = ((_rec get "groups") + (_cmd getOrDefault ["menuBorrowed", []])) findIf {
 			((units _x) findIf {alive _x && {[_s, getPosATL _x] call SWLC_fnc_adInSquare}}) >= 0
 		};
 		if (_inside >= 0 && {time < ((_rec get "graceUntil") + CFG("raidGraceExtraSeconds"))}) exitWith {};

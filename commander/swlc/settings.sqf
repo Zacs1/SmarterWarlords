@@ -220,6 +220,8 @@ SWLC_settings = createHashMapFromArray [
 	["incomeCaptureBonus", 0],        // per warlord, on top of Warlords' own capture payout
 	["incomeDefencePayout", 150],     // per warlord
 	["defenceSuccessQuietSeconds", 60], // the enemy countdown has to stay stopped this long
+	["defencePayoutCooldown", 300],   // seconds before the same sector can pay for a defence again
+	["defencePayoutMinEnemies", 3],   // most enemy men seen in the sector during the countdown must reach this
 
 	["ruleCapabilities", true],       // sector types unlock things
 	["sectorTypes", []],              // per map: [[x, y, ["type", ...]], ...]; airfield harbour military industrial town radio
@@ -279,7 +281,7 @@ SWLC_settings = createHashMapFromArray [
 	["squadLambs", true],             // hand garrison and building clearing to LAMBS when it's loaded
 	["squadSlices", 2],               // groups are worked through over this many commander ticks
 
-	["squadPostureStates", ["Travelling", "Advancing", "Assaulting"]],
+	["squadPostureStates", ["Travelling", "Advancing", "Assaulting", "Borrowed"]],
 	["squadPostureHoldSeconds", 30],  // minimum time in a posture before leaving it, except to go careful
 	["squadRoadTarget", 800],         // column on roads only further than this from the target
 	["squadRoadContact", 600],        // and further than this from any recent sighting
@@ -325,6 +327,10 @@ SWLC_settings = createHashMapFromArray [
 	["rearmTakeRifle", 3],
 
 	["lambsIntelMinKnows", 1.5],      // replaces intelMinKnows while LAMBS is loaded, see section 4
+	["lambsLeaderMoveSeconds", 240],  // a holding leader takes a short walk this often, because Warlords kills AI warlords that never move
+	["rearmBackoffSeconds", 120],     // after a failed or impossible rearm, the group leaves it this long
+	["rearmTriesPerCheck", 4],        // men looked at per check before giving up
+	["rearmRifleMinRounds", 4],       // magazines smaller than this are grenades and flares, not rifle ammo
 	["lambsBusyHoldSeconds", 12],     // keep treating a group as busy this long after LAMBS lets go
 	["lambsMaxCqb", 2],               // groups clearing buildings at once, per side
 	["lambsClearRadius", 150],
@@ -358,7 +364,8 @@ SWLC_settings = createHashMapFromArray [
 	["menuPickupBoardSeconds", 90],
 	["menuPickupArriveDist", 60],
 	["menuPickupRefreshMetres", 100],
-	["menuPickupTimeoutSeconds", 420],
+	["menuPickupTimeoutSeconds", 420],   // each of the two stages, getting aboard and the drive, gets this long
+	["menuPickupMaxDistance", 1500],     // spare groups further than this from the player can't bring a vehicle
 
 	// Rules variant, part G: what the commander values
 	["ruleStrategy", true],           // sectors are worth what they unlock and what they connect

@@ -30,6 +30,8 @@ SWLC_fnc_adInit = {
 SWLC_fnc_adPos = { (_this # 0) getVariable "SWLC_pos" };
 SWLC_fnc_adSize = { (_this # 0) getVariable "SWLC_size" };
 SWLC_fnc_adValue = { (_this # 0) getVariable ["BIS_WL_value", (_this # 0) getVariable "SWLC_value"] };
+// What a sector is worth to plan around. BIS_WL_value carries the income curve's discount, which depends on the owner's other sectors.
+SWLC_fnc_adWorth = { (_this # 0) getVariable ["SWLC_econValue", [_this # 0] call SWLC_fnc_adValue] };
 SWLC_fnc_adIsBase = { (_this # 0) getVariable "SWLC_isBase" };
 SWLC_fnc_adLinks = { (_this # 0) getVariable "SWLC_links" };
 

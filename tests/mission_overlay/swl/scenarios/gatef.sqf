@@ -87,6 +87,19 @@ private _taken = _list select {true};
 	format ["unmarked=%1", {isNil {_x getVariable "SWLC_borrowedBy"}} count _taken],
 	format ["not_borrowed=%1", {([_x] call SWLC_fnc_state) != "Borrowed"} count _taken]]] call SWLG_emit;
 
+// The requester dies: everything they borrowed comes back on the next tick.
+sleep 20;
+["borrow_for_death", "borrow"] call SWLG_step;
+private _held = (_cmd getOrDefault ["menuBorrowed", []]) select {true};
+[[format ["event=before_death"], format ["count=%1", count _held]]] call SWLG_emit;
+SWLG_unit setDamage 1;
+sleep 25;
+[[format ["event=after_death"], format ["had=%1", count _held],
+	format ["left=%1", count (_cmd getOrDefault ["menuBorrowed", []])],
+	format ["unmarked=%1", {isNil {_x getVariable "SWLC_borrowedBy"}} count _held]]] call SWLG_emit;
+// Everything after this needs a living requester.
+SWLG_unit = leader (((_cmd get "groups") select {alive leader _x}) # 0);
+
 // Pickup: at least the request and its stages. The drive itself is watched for a few minutes.
 ["pickup", "pickup"] call SWLG_step;
 ["pickup_second", "pickup"] call SWLG_step;
@@ -97,21 +110,12 @@ for "_i" from 1 to 18 do {
 	if (_rows isEqualTo []) exitWith {};
 };
 
-// The requester dies: everything they borrowed comes back on the next tick.
-sleep 30;
-["borrow_for_death", "borrow"] call SWLG_step;
-private _held = (_cmd getOrDefault ["menuBorrowed", []]) select {true};
-[[format ["event=before_death"], format ["count=%1", count _held]]] call SWLG_emit;
-SWLG_unit setDamage 1;
-sleep 25;
-[[format ["event=after_death"], format ["had=%1", count _held],
-	format ["left=%1", count (_cmd getOrDefault ["menuBorrowed", []])],
-	format ["unmarked=%1", {isNil {_x getVariable "SWLC_borrowedBy"}} count _held]]] call SWLG_emit;
-
 ["report_empty", "report", []] call SWLG_step;
 ["report_junk", "report", [["NotAClass_X", [1, 1]], 5, ["O_T_Soldier_F", ["a", "b"]]]] call SWLG_step;
-SWLG_unit = leader ((_cmd get "groups") # 0);
-private _p = getPosATL _enemyBase;
+private _bp = getPosATL _base;
+private _ep = getPosATL _enemyBase;
+private _p = [((_bp # 0) + (_ep # 0)) / 2, ((_bp # 1) + (_ep # 1)) / 2, 0];
+SWLG_unit setPosATL _p;
 ["report_good", "report", [["O_T_Soldier_F", [(_p # 0) + 50, _p # 1]]]] call SWLG_step;
 
 ["defend_null", "defend", []] call SWLG_step;

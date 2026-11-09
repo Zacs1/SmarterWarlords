@@ -5,6 +5,8 @@
 #include "macros.hpp"
 
 SWLC_menuKinds = ["raid", "borrow", "hold", "go", "report", "defend", "pickup", "release", "plan"];
+// Answers that mean the player clicked the wrong thing. These don't start the option's cooldown.
+SWLC_menuNoCharge = ["bad_sector", "not_front", "not_owned"];
 
 // What a client sends. A request can only speak for its sender; owner 0 is the host's own local call.
 SWLC_fnc_playerMsg = {
@@ -36,8 +38,10 @@ SWLC_fnc_menuHandle = {
 		[_cools, _key, _player] call SWLC_fnc_menuTellWait;
 		["cooldown"] call _log
 	};
-	_cools set [_key, time + (CFG("menuCooldowns") getOrDefault [_kind, CFG("menuCooldownSeconds")])];
 	private _result = [_cmd, _player, _data] call (missionNamespace getVariable format ["SWLC_fnc_menuDo_%1", _kind]);
+	if !(_result in SWLC_menuNoCharge) then {
+		_cools set [_key, time + (CFG("menuCooldowns") getOrDefault [_kind, CFG("menuCooldownSeconds")])];
+	};
 	[_result] call _log
 };
 
@@ -94,10 +98,16 @@ SWLC_fnc_menuSpare = {
 
 // True if a spot is inside a sector Warlords would kill the group for entering. An active raid's sector is open.
 SWLC_fnc_menuBlocked = {
-	params ["_cmd", "_pos"];
+	params ["_cmd", "_pos", ["_margin", 50]];
 	private _raid = [_cmd] call SWLC_fnc_raidOf;
-	if (count _raid > 0 && {(_raid get "stage") == "active"} && {[_raid get "sector", _pos, 0] call SWLC_fnc_adInSquare}) exitWith {false};
-	[_cmd get "side", _pos, 50] call SWLC_fnc_adRestricted
+	if (count _raid > 0 && {(_raid get "stage") == "active"} && {[_raid get "sector", _pos, _margin] call SWLC_fnc_adInSquare}) exitWith {false};
+	[_cmd get "side", _pos, _margin] call SWLC_fnc_adRestricted
+};
+
+// Stops whatever the commander had a group doing. Clearing the remembered order alone would leave its waypoints running.
+SWLC_fnc_menuDropOrder = {
+	params ["_g"];
+	[_g, [[getPosATL leader _g, "MOVE", 15]], "AWARE", "FULL", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;
 };
 
 // ---- Order raid on sector ----
@@ -132,11 +142,13 @@ SWLC_fnc_menuDo_borrow = {
 	if ((count _spare) < ((CFG("menuBorrowMinGroups") - _have) max 1)) exitWith {[_side, "borrowno"] call SWLC_fnc_radio; "nospare"};
 	{
 		private _g = _x;
+		[_g, false] call SWLC_fnc_lambsRelease;
 		[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
 		_g setVariable ["SWLC_borrowedBy", _player];
 		_g setVariable ["SWLC_borrowSlot", _have + _forEachIndex];
 		_g setVariable ["SWLC_followAt", -1e6];
 		[_g, "Borrowed", getPosATL _player, "borrowed"] call SWLC_fnc_setState;
+		[_g] call SWLC_fnc_menuDropOrder;
 		_list pushBackUnique _g;
 		[_cmd, _g, _player, true] call SWLC_fnc_menuFollow;
 	} forEach _spare;
@@ -158,10 +170,9 @@ SWLC_fnc_menuFollow = {
 			private _hop = ([_safe, [], {([_x] call SWLC_fnc_adPos) distance2D _p}, "ASCEND"] call BIS_fnc_sortBy) # 0;
 			private _sp = [_hop] call SWLC_fnc_adPos;
 			if (((_sp distance2D _p) + CFG("menuFollowFTGain")) < (_leader distance2D _p)) then {
-				_g setVariable ["SWLC_followFT", time];
 				private _land = [_sp, [_sp, _p] call SWLC_fnc_bearing, 40 + random 30] call SWLC_fnc_offset;
 				if (surfaceIsWater _land) then {_land = _sp};
-				[_g, _hop, _land] call SWLC_fnc_adFastTravel;
+				if ([_g, _hop, _land] call SWLC_fnc_adFastTravel) then {_g setVariable ["SWLC_followFT", time]};
 			};
 		};
 	};
@@ -171,15 +182,47 @@ SWLC_fnc_menuFollow = {
 	private _spot = [_p, (getDir _by) + 180 + (_slot * 35) - 35, 20 + _slot * 10] call SWLC_fnc_offset;
 	// A waiting leader gets moved a little, or Warlords treats it as stuck.
 	if (_stale) then {_spot = [_spot, random 360, 5 + random 15] call SWLC_fnc_offset};
-	if (surfaceIsWater _spot || {[_cmd, _spot] call SWLC_fnc_menuBlocked}) exitWith {false};
+	if (surfaceIsWater _spot || {[_cmd, _spot] call SWLC_fnc_menuBlocked}) exitWith {[_cmd, _g, _stale] call SWLC_fnc_menuBorrowLeave};
 
 	private _order = _g getVariable ["SWLC_order", []];
-	private _moved = _order isEqualTo [] || {(((_order # 0) # 0) # 0 distance2D _spot) > CFG("menuFollowDist")};
+	private _wasOut = _g getVariable ["SWLC_borrowOut", false];
+	private _moved = _wasOut || {_order isEqualTo []} || {(((_order # 0) # 0) # 0 distance2D _spot) > CFG("menuFollowDist")};
 	if !(_force || {_stale} || {_moved}) exitWith {false};
-	if (!_force && {(behaviour leader _g) == "COMBAT"} && {(leader _g distance2D _spot) < CFG("menuFollowCombatDist")}) exitWith {false};
+	if (!_force && {!_wasOut} && {(behaviour leader _g) == "COMBAT"} && {(leader _g distance2D _spot) < CFG("menuFollowCombatDist")}) exitWith {false};
+	_g setVariable ["SWLC_borrowOut", nil];
 	_g setVariable ["SWLC_followAt", time];
 	_g setVariable ["SWLC_goal", _spot];
 	[_g, [[_spot, "MOVE", 15]], "AWARE", "FULL", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;
+	true
+};
+
+// Following is blocked. A group inside a sector Warlords would kill it in, or walking to one, goes to the safe owned
+// sector nearest it and stays Borrowed. Any other group keeps what it's doing. menuFollow takes them back once it's safe.
+SWLC_fnc_menuBorrowLeave = {
+	params ["_cmd", "_g", "_stale"];
+	private _side = _cmd get "side";
+	private _here = getPosATL leader _g;
+	private _order = _g getVariable ["SWLC_order", []];
+	private _goalBad = _order isNotEqualTo [] && {[_cmd, ((_order # 0) # 0) # 0, 25] call SWLC_fnc_menuBlocked};
+	private _out = _g getVariable ["SWLC_borrowOut", false];
+	if (!_out && {!_goalBad} && {!([_cmd, _here, 25] call SWLC_fnc_menuBlocked)}) exitWith {false};
+	// Already leaving: only a destination gone bad changes that, or the regular nudge a waiting leader needs.
+	if (_out && {!_goalBad} && {!_stale}) exitWith {false};
+
+	private _owned = [_side] call SWLC_fnc_adOwned;
+	private _threats = _cmd get "threats";
+	private _safe = _owned select {!(([_x] call SWLC_fnc_adName) in _threats)};
+	if (_safe isEqualTo []) then {_safe = _owned};
+	if (_safe isEqualTo []) exitWith {false};
+	private _home = [([_safe, [], {([_x] call SWLC_fnc_adPos) distance2D _here}, "ASCEND"] call BIS_fnc_sortBy) # 0] call SWLC_fnc_adPos;
+	private _spot = [_home, random 360, 20 + random 30] call SWLC_fnc_offset;
+	if (surfaceIsWater _spot || {[_cmd, _spot, 25] call SWLC_fnc_menuBlocked}) then {_spot = +_home};
+
+	if (!_out) then {["C_MENU", [["side", _side], ["kind", "borrow_leave"], ["group", groupId _g]]] call SWLC_fnc_log};
+	_g setVariable ["SWLC_borrowOut", true];
+	_g setVariable ["SWLC_followAt", time];
+	_g setVariable ["SWLC_goal", _spot];
+	[_g, [[_spot, "MOVE", 20]], "AWARE", "FULL", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;
 	true
 };
 
@@ -189,6 +232,7 @@ SWLC_fnc_menuRelease = {
 	if (isNull _g) exitWith {};
 	_g setVariable ["SWLC_borrowedBy", nil];
 	_g setVariable ["SWLC_borrowSlot", nil];
+	_g setVariable ["SWLC_borrowOut", nil];
 	["C_MENU", [["side", _cmd get "side"], ["kind", "released"], ["group", groupId _g], ["why", _why]]] call SWLC_fnc_log;
 	if ((_g in (_cmd get "groups")) && {([_g] call SWLC_fnc_groupMen) > 0} && {([_g] call SWLC_fnc_state) == "Borrowed"}) then {
 		[_g] call SWLC_fnc_adClearOrder;
@@ -327,6 +371,8 @@ SWLC_fnc_menuDo_pickup = {
 	if (surfaceIsWater _p || {[_cmd, _p] call SWLC_fnc_menuBlocked}) exitWith {[_side, "pickupbad"] call SWLC_fnc_radio; "bad_place"};
 	private _spare = ([_cmd, _player, _p, 8] call SWLC_fnc_menuSpare) select {leader _x call SWLC_fnc_adIsWarlordUnit};
 	if (_spare isEqualTo []) exitWith {[_side, "pickupno"] call SWLC_fnc_radio; "nospare"};
+	_spare = _spare select {(leader _x distance2D _p) <= CFG("menuPickupMaxDistance")};
+	if (_spare isEqualTo []) exitWith {[_side, "pickupbad"] call SWLC_fnc_radio; "too_far"};
 	private _g = _spare # 0;
 	private _men = [_g] call SWLC_fnc_groupMen;
 
@@ -334,7 +380,7 @@ SWLC_fnc_menuDo_pickup = {
 		(_x get "state") == "parked" && {alive (_x get "obj")} && {canMove (_x get "obj")} && {(_x get "seats") >= _men} && {((_x get "obj") distance2D leader _g) <= CFG("vehReuseRadius")}
 	};
 	private _entry = [];
-	if (_parked isEqualTo []) then {_entry = [_cmd, _men] call SWLC_fnc_vehCheapestTransport};
+	if (_parked isEqualTo []) then {_entry = [_cmd, _men, getPosATL leader _g] call SWLC_fnc_vehCheapestTransport};
 	if (_parked isEqualTo [] && {_entry isEqualTo [] || {([_cmd] call SWLC_fnc_vehFleetCount) >= CFG("vehMaxFleet")} || {([_side] call SWLC_fnc_cpFree) < (_entry # 1)}}) exitWith {
 		[_side, "pickupno"] call SWLC_fnc_radio;
 		"funds"
@@ -349,7 +395,8 @@ SWLC_fnc_menuDo_pickup = {
 		[_side, "pickupno"] call SWLC_fnc_radio;
 		"funds"
 	};
-	_list pushBack (createHashMapFromArray [["player", _player], ["group", _g], ["veh", [_g] call SWLC_fnc_vehRecOf], ["stage", "arriving"], ["since", time], ["boardAt", -1], ["driveAt", -1e6]]);
+	[_g] call SWLC_fnc_menuDropOrder;
+	_list pushBack (createHashMapFromArray [["player", _player], ["group", _g], ["veh", [_g] call SWLC_fnc_vehRecOf], ["stage", "arriving"], ["since", time], ["clock", time], ["boardAt", -1], ["driveAt", -1e6]]);
 	[_side, "pickupok", [groupId _g]] call SWLC_fnc_radio;
 	"ok"
 };
@@ -404,7 +451,7 @@ SWLC_fnc_menuPickupStep = {
 	if (isNull _g || {!(_g in (_cmd get "groups"))} || {([_g] call SWLC_fnc_groupMen) == 0}) then {_fail = "group_lost"};
 	if (_fail == "" && {isNull _v || {!alive _v} || {!canMove _v}}) then {_fail = "vehicle_lost"};
 	if (_fail == "" && {!([_by] call SWLC_fnc_menuValidBy)}) then {_fail = "player_gone"};
-	if (_fail == "" && {(time - (_rec get "since")) >= CFG("menuPickupTimeoutSeconds")}) then {_fail = "timeout"};
+	if (_fail == "" && {(time - (_rec get "clock")) >= CFG("menuPickupTimeoutSeconds")}) then {_fail = "timeout"};
 	if (_fail != "") exitWith {[_cmd, _rec, _fail] call SWLC_fnc_menuPickupEnd; false};
 
 	private _stage = _rec get "stage";
@@ -418,6 +465,7 @@ SWLC_fnc_menuPickupStep = {
 		if ((time - (_rec get "boardAt")) >= CFG("menuPickupBoardSeconds")) then {[_g] call SWLC_fnc_vehForceBoard};
 		if ([_g] call SWLC_fnc_vehAboard) then {
 			[_cmd, _rec, _g, _by] call SWLC_fnc_menuPickupDrive;
+			_rec set ["clock", time];
 			_rec set ["stage", "driving"];
 			_stage = "driving";
 		};

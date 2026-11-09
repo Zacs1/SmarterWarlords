@@ -64,25 +64,48 @@ if (!SWLC_lambs) then {
 		// A bound in progress would keep the test waiting, so the squad starts this one standing still.
 		private _l = leader _g;
 		private _target = [west] call SWLC_fnc_adTarget;
-		private _spot = [getPosATL _l, [getPosATL _l, [_target] call SWLC_fnc_adPos] call SWLC_fnc_bearing, 120] call SWLC_fnc_offset;
-		if (surfaceIsWater _spot) then {_spot = getPosATL _l};
+		// The gun needs a clear line to the squad, or nothing ever suppresses it.
+		private _toTarget = [getPosATL _l, [_target] call SWLC_fnc_adPos] call SWLC_fnc_bearing;
+		private _spot = [];
+		private _eye = eyePos _l;
+		{
+			private _try = [getPosATL _l, _toTarget + _x, 120] call SWLC_fnc_offset;
+			if (_spot isEqualTo [] && {!surfaceIsWater _try} && {([objNull, "VIEW"] checkVisibility [ATLToASL [_try # 0, _try # 1, 2.5], _eye]) > 0.5}) then {_spot = _try};
+		} forEach [0, 30, -30, 60, -60, 90, -90, 120, -120, 150, -150, 180];
+		private _clear = _spot isNotEqualTo [];
+		if (!_clear) then {
+			_spot = [getPosATL _l, _toTarget, 120] call SWLC_fnc_offset;
+			if (surfaceIsWater _spot) then {_spot = getPosATL _l};
+		};
 		private _mg = createVehicle ["O_HMG_01_high_F", _spot, [], 0, "NONE"];
 		createVehicleCrew _mg;
 		_mg allowDamage false;
 		{_x allowDamage false} forEach crew _mg;
 		(group gunner _mg) setCombatMode "RED";
 		(group gunner _mg) reveal [_l, 4];
-		{_x disableAI "PATH"} forEach units _g;
+		{_x disableAI "PATH"; _x allowDamage false} forEach units _g;
 		{_g reveal [_x, 4]} forEach crew _mg;
-		["GH", [format ["event=pin|group=%1|men=%2|d_mg=%3", groupId _g, {alive _x} count units _g, round (_l distance2D _spot)]]] call SWLG_emit;
+		["GH", [format ["event=pin|group=%1|men=%2|d_mg=%3|clear=%4", groupId _g, {alive _x} count units _g, round (_l distance2D _spot), _clear]]] call SWLG_emit;
 
 		private _end = time + 240;
+		private _traceAt = 0;
 		waitUntil {
-			sleep 3;
+			// Real bullets over their heads. The gunner on its own often has no firing solution for prone men.
+			for "_k" from 1 to 6 do {
+				private _men = (units _g) select {alive _x};
+				if (_men isNotEqualTo []) then {_mg fireAtTarget [selectRandom _men]};
+				sleep 0.5;
+			};
+			_mg setVehicleAmmo 1;
 			{(group gunner _mg) reveal [_x, 4]} forEach units _g;
+			if (time > _traceAt) then {
+				_traceAt = time + 9;
+				private _sup = (units _g) select {alive _x} apply {getSuppression _x};
+				["GH", [format ["event=pin_trace|avg=%1|max=%2|still=%3|beh=%4|state=%5", ((_sup call BIS_fnc_arithmeticMean) toFixed 2), ((selectMax _sup) toFixed 2), round (time - (_g getVariable ["SWLC_pinBestAt", time])), behaviour leader _g, [_g] call SWLC_fnc_state]]] call SWLG_emit;
+			};
 			(_g getVariable ["SWLC_squadTask", ""]) == "flank" || {time > _end}
 		};
-		{_x enableAI "PATH"} forEach units _g;
+		{_x enableAI "PATH"; _x allowDamage true} forEach units _g;
 		if ((_g getVariable ["SWLC_squadTask", ""]) == "flank") then {
 			["GH", [format ["event=pin_flanking|group=%1", groupId _g]]] call SWLG_emit;
 			sleep 90;
@@ -130,6 +153,13 @@ if (!SWLC_lambs) then {
 	["GH", [format ["event=at_setup|group=%1|weapon=%2|mag=%3|d_crate=%4|loaded=%5", groupId _g, _w, _mags # 0, round (_u distance2D _crate), count secondaryWeaponMagazine _u]]] call SWLG_emit;
 
 	private _end = time + 150;
+	[_u, _crate, _end] spawn {
+		params ["_u", "_crate", "_end"];
+		while {time < _end && {alive _u}} do {
+			["GH", [format ["event=at_trace|d=%1|cmd=%2|ready=%3|speed=%4|pos=%5|beh=%6", round (_u distance2D _crate), currentCommand _u, unitReady _u, round speed _u, unitPos _u, behaviour _u]]] call SWLG_emit;
+			sleep 6;
+		};
+	};
 	_mags = _mags apply {toLower _x};
 	private _mine = {
 		params ["_u", "_mags"];

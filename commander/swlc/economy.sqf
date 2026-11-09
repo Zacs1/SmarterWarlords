@@ -108,6 +108,13 @@ SWLC_fnc_econInit = {
 	SWLC_econSuddenDeaths = 0;
 	SWLC_econValueRev = 0;
 
+	// A map with no sector-type table has no military sector to unlock armour with, so the rule is off there.
+	// Done before anything below reads it, so the clients get the same answer.
+	if (ECON_ON("ruleCapabilities") && {CFG("sectorTypes") isEqualTo []}) then {
+		SWLC_settings set ["ruleCapabilities", false];
+		["capsoff", "-", [["reason", "no_sector_types"], ["world", worldName]]] call SWLC_fnc_econLog;
+	};
+
 	private _range = CFG("sectorTypeMatchMetres");
 	private _table = CFG("sectorTypes");
 	private _default = CFG("sectorTypeDefault");
@@ -348,7 +355,8 @@ SWLC_fnc_econApplyIncome = {
 	if !(ECON_ON("ruleIncome")) exitWith {};
 	private _base = [_side] call SWLC_fnc_adBase;
 	private _curve = CFG("incomeSectorCurve");
-	private _rest = ([_side] call SWLC_fnc_adOwned) - [_base];
+	// A sector taken since the last econSectors keeps its value until then: the capture top-up needs what Warlords paid on.
+	private _rest = (([_side] call SWLC_fnc_adOwned) - [_base]) select {(_x getVariable ["SWLC_econOwner", sideUnknown]) == _side};
 	_rest = [_rest, [], {_x getVariable "SWLC_econValue"}, "DESCEND"] call BIS_fnc_sortBy;
 
 	private _writes = 0;
@@ -436,7 +444,15 @@ SWLC_fnc_econSectors = {
 			_s setVariable ["SWLC_econOwner", _owner];
 			_s setVariable ["SWLC_econHeldSince", time];
 			_s setVariable ["SWLC_econSeizedAt", -1];
+			_s setVariable ["SWLC_econSeizedMen", 0];
 			[_s] call SWLC_fnc_econDropFort;
+			// Warlords pays 10 x value x income multiplier, once per side per sector, on the discounted value. Top up the difference.
+			private _paidBy = _s getVariable ["SWLC_econPaidBy", []];
+			if (_owner in _sides && {ECON_ON("ruleIncome")} && {!(_owner in _paidBy)}) then {
+				_s setVariable ["SWLC_econPaidBy", _paidBy + [_owner]];
+				private _short = (_s getVariable ["SWLC_econValue", 0]) - ([_s] call SWLC_fnc_adValue);
+				[_owner, round (10 * _short * (missionNamespace getVariable ["BIS_WL_CPIncomeMult", 1])), "capturetopup", objNull, [["sector", _name]]] call SWLC_fnc_econPay;
+			};
 			if (_owner in _sides && {ECON_ON("ruleCombatIncome")}) then {
 				[_owner, CFG("incomeCaptureBonus"), "capture", objNull, [["sector", _name]]] call SWLC_fnc_econPay;
 			};
@@ -452,12 +468,22 @@ SWLC_fnc_econSectors = {
 		if (_owner in _sides && {ECON_ON("ruleCombatIncome")}) then {
 			if ([_owner, _s] call SWLC_fnc_adEnemySeizing) then {
 				_s setVariable ["SWLC_econSeizedAt", time];
+				private _enemy = [_owner] call SWLC_fnc_adEnemySide;
+				private _men = {side group _x == _enemy && {[_s, getPosATL _x] call SWLC_fnc_adInSquare}} count allUnits;
+				_s setVariable ["SWLC_econSeizedMen", (_s getVariable ["SWLC_econSeizedMen", 0]) max _men];
 			} else {
 				private _at = _s getVariable ["SWLC_econSeizedAt", -1];
 				if (_at >= 0 && {(time - _at) >= CFG("defenceSuccessQuietSeconds")}) then {
 					_s setVariable ["SWLC_econSeizedAt", -1];
-					[_owner, CFG("incomeDefencePayout"), "defended", objNull, [["sector", _name]]] call SWLC_fnc_econPay;
-					[_owner, "econdefended", [_name, CFG("incomeDefencePayout")]] call SWLC_fnc_radio;
+					private _peak = _s getVariable ["SWLC_econSeizedMen", 0];
+					_s setVariable ["SWLC_econSeizedMen", 0];
+					if (_peak >= CFG("defencePayoutMinEnemies") && {time >= (_s getVariable ["SWLC_econDefendPayAt", -1])}) then {
+						_s setVariable ["SWLC_econDefendPayAt", time + CFG("defencePayoutCooldown")];
+						[_owner, CFG("incomeDefencePayout"), "defended", objNull, [["sector", _name], ["enemies", _peak]]] call SWLC_fnc_econPay;
+						[_owner, "econdefended", [_name, CFG("incomeDefencePayout")]] call SWLC_fnc_radio;
+					} else {
+						["defendnopay", _owner, [["sector", _name], ["enemies", _peak]]] call SWLC_fnc_econLog;
+					};
 				};
 			};
 		};
@@ -495,7 +521,22 @@ SWLC_fnc_econSpawnStatic = {
 	_v setDir _dir;
 	_v setPosATL [_pos # 0, _pos # 1, 0];
 	createVehicleCrew _v;
+	_v setVariable ["SWLC_econCrew", crew _v];
 	_v
+};
+
+// Removes a gun we built and only the crew we made for it. If anyone else is manning it, the gun stays.
+SWLC_fnc_econRemoveStatic = {
+	params ["_o"];
+	if (isNull _o) exitWith {};
+	private _own = _o getVariable ["SWLC_econCrew", []];
+	private _others = ((crew _o) select {alive _x}) - _own;
+	{
+		if (!isNull _x) then {
+			if (_x in (crew _o)) then {_o deleteVehicleCrew _x} else {deleteVehicle _x};
+		};
+	} forEach _own;
+	if (_others isEqualTo []) then {deleteVehicle _o};
 };
 
 SWLC_fnc_econFortressBuild = {
@@ -535,8 +576,7 @@ SWLC_fnc_econFortressTick = {
 				_x set [4, time];
 			} else {
 				if (!_cornered && {(time - _deadAt) >= CFG("fortressRebuildSeconds")}) then {
-					{_veh deleteVehicleCrew _x} forEach crew _veh;
-					deleteVehicle _veh;
+					[_veh] call SWLC_fnc_econRemoveStatic;
 					_x set [3, [_class, _pos, _dir] call SWLC_fnc_econSpawnStatic];
 					_x set [4, -1];
 					["fortrebuilt", _side, [["class", _class]]] call SWLC_fnc_econLog;
@@ -552,11 +592,7 @@ SWLC_fnc_econFortressTick = {
 
 SWLC_fnc_econDropFort = {
 	params ["_s"];
-	{
-		private _o = _x;
-		{_o deleteVehicleCrew _x} forEach crew _o;
-		deleteVehicle _o;
-	} forEach (_s getVariable ["SWLC_econFort", []]);
+	{[_x] call SWLC_fnc_econRemoveStatic} forEach (_s getVariable ["SWLC_econFort", []]);
 	_s setVariable ["SWLC_econFort", []];
 };
 
@@ -617,16 +653,27 @@ SWLC_fnc_econSupplyTick = {
 	if !(ECON_ON("ruleStretchedSupply")) exitWith {};
 	if !([format ["supply_%1", _side], CFG("supplyCheckSeconds")] call SWLC_fnc_econDue) exitWith {};
 	{
-		private _class = typeOf _x;
-		if (alive _x && {[_class] call SWLC_fnc_econIsResupply} && {([_class] call SWLC_fnc_econCfgSide) == _side}) then {
-			private _allowed = [_side, getPosATL _x] call SWLC_fnc_econResupplyAllowed;
-			if ((_x getVariable ["SWLC_econSupplyOn", true]) isNotEqualTo _allowed) then {
-				_x setVariable ["SWLC_econSupplyOn", _allowed];
-				private _v = [0, 1] select _allowed;
+		private _veh = _x;
+		private _class = typeOf _veh;
+		if (alive _veh && {[_class] call SWLC_fnc_econIsResupply} && {([_class] call SWLC_fnc_econCfgSide) == _side}) then {
+			private _allowed = [_side, getPosATL _veh] call SWLC_fnc_econResupplyAllowed;
+			if ((_veh getVariable ["SWLC_econSupplyOn", true]) isNotEqualTo _allowed) then {
+				_veh setVariable ["SWLC_econSupplyOn", _allowed];
 				private _c = configFile >> "CfgVehicles" >> _class;
-				if (getNumber (_c >> "transportAmmo") > 0) then {[_x, _v] remoteExecCall ["setAmmoCargo", _x]};
-				if (getNumber (_c >> "transportRepair") > 0) then {[_x, _v] remoteExecCall ["setRepairCargo", _x]};
-				if (getNumber (_c >> "transportFuel") > 0) then {[_x, _v] remoteExecCall ["setFuelCargo", _x]};
+				// Leaving range stores what the truck has left. Coming back restores that amount, not a full load.
+				private _held = _veh getVariable ["SWLC_econSupplyHeld", createHashMap];
+				_veh setVariable ["SWLC_econSupplyHeld", _held];
+				{
+					_x params ["_cfg", "_get", "_set"];
+					if (getNumber (_c >> _cfg) > 0) then {
+						if (_allowed) then {
+							[_veh, _held getOrDefault [_cfg, 1]] remoteExecCall [_set, _veh];
+						} else {
+							_held set [_cfg, _veh call _get];
+							[_veh, 0] remoteExecCall [_set, _veh];
+						};
+					};
+				} forEach [["transportAmmo", {getAmmoCargo _this}, "setAmmoCargo"], ["transportRepair", {getRepairCargo _this}, "setRepairCargo"], ["transportFuel", {getFuelCargo _this}, "setFuelCargo"]];
 				["supply", _side, [["class", _class], ["allowed", _allowed]]] call SWLC_fnc_econLog;
 			};
 		};

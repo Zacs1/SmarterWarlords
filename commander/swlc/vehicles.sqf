@@ -12,10 +12,13 @@ SWLC_fnc_vehWorthDriving = {
 };
 
 SWLC_fnc_vehCheapestTransport = {
-	params ["_cmd", "_men"];
+	params ["_cmd", "_men", ["_assetPos", []]];
+	private _side = _cmd get "side";
 	private _best = [];
 	{
-		if ((_x # 3) == "transport" && {(_x # 2) >= _men} && {_best isEqualTo [] || {(_x # 1) < (_best # 1)}}) then {_best = _x};
+		// With a position, only what the side's asset rules allow there counts.
+		if ((_x # 3) == "transport" && {(_x # 2) >= _men} && {_best isEqualTo [] || {(_x # 1) < (_best # 1)}}
+			&& {_assetPos isEqualTo [] || {[_side, _x # 0, _assetPos] call SWLC_fnc_econAssetAllowed}}) then {_best = _x};
 	} forEach (_cmd get "catalog");
 	_best
 };

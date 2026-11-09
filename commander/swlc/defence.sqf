@@ -138,7 +138,7 @@ SWLC_fnc_defSend = {
 // The value of holding a sector: income, plus being the staging sector or the base.
 SWLC_fnc_defSectorValue = {
 	params ["_cmd", "_s"];
-	private _v = [_s] call SWLC_fnc_adValue;
+	private _v = [_s] call SWLC_fnc_adWorth;
 	private _rec = (_cmd get "musters") getOrDefault [[_s] call SWLC_fnc_adName, createHashMap];
 	if (count _rec > 0 && {(_rec get "groups") isNotEqualTo [] || {(_rec get "batch") isNotEqualTo []}}) then {_v = _v + CFG("defenceValueStaging")};
 	if ([_s] call SWLC_fnc_adIsBase) then {_v = _v + CFG("defenceValueBase")};
@@ -169,7 +169,7 @@ SWLC_fnc_defRespond = {
 
 	private _big = (_rec get "strength") >= CFG("responseCounterattackMen");
 	private _attack = _cmd get "target";
-	private _worth = isNull _attack || {([_cmd, _s] call SWLC_fnc_defSectorValue) > (([_attack] call SWLC_fnc_adValue) + ([_side, _attack] call SWLC_fnc_stratWorth))};
+	private _worth = isNull _attack || {([_cmd, _s] call SWLC_fnc_defSectorValue) > (([_attack] call SWLC_fnc_adWorth) + ([_side, _attack] call SWLC_fnc_stratWorth))};
 	private _opNow = _cmd get "op";
 
 	// A picket on this sector is already there.

@@ -228,7 +228,7 @@ SWLC_fnc_voteScore = {
 	private _d = 1e9;
 	{_d = _d min (([_x] call SWLC_fnc_adPos) distance2D _p)} forEach _owned;
 	private _unlocks = {([_x] call SWLC_fnc_adOwner) != (_cmd get "side")} count ([_s] call SWLC_fnc_adLinks);
-	private _score = ([_s] call SWLC_fnc_adValue) * CFG("voteValueWeight")
+	private _score = ([_s] call SWLC_fnc_adWorth) * CFG("voteValueWeight")
 		+ _unlocks * CFG("voteUnlockWeight")
 		- (_d / 100) * CFG("voteDistancePer100m");
 	if (_s == _enemyBase) then {_score = _score + CFG("voteEnemyBaseBonus")};

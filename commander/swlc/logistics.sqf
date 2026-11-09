@@ -129,25 +129,24 @@ SWLC_fnc_kitTick = {
 	if (_units isEqualTo []) exitWith {};
 
 	private _table = _cmd get "kitTable";
-	private _kitOk = [_cmd get "side", getPosATL (_units # 0)] call SWLC_fnc_econKitAllowed;
 	private _haveAT = {([secondaryWeapon _x] call SWLC_fnc_adLauncherKind) == "AT"} count _units;
 	private _haveAA = {([secondaryWeapon _x] call SWLC_fnc_adLauncherKind) == "AA"} count _units;
 	private _wantAT = _plan get "atWanted";
 	private _wantAA = [0, 1] select (_plan get "aa");
 	private _pendingAT = {(_x getVariable ["SWLC_kitTask", ""]) == "AT"} count _units;
 	private _pendingAA = {(_x getVariable ["SWLC_kitTask", ""]) == "AA"} count _units;
-	private _free = _units select {(_x getVariable ["SWLC_kitTask", ""]) == "" && {secondaryWeapon _x == ""}};
+	private _free = _units select {(_x getVariable ["SWLC_kitTask", ""]) == "" && {secondaryWeapon _x == ""} && {[_cmd get "side", getPosATL _x] call SWLC_fnc_econKitAllowed}};
 	_free = [_free, [], {[1, 0] select (_x == leader group _x)}, "DESCEND"] call BIS_fnc_sortBy;
 
 	private _needAT = (_wantAT - _haveAT - _pendingAT) min ((count _free) max 0);
-	if (_needAT > 0 && {_kitOk} && {"AT" in _table}) then {
+	if (_needAT > 0 && {"AT" in _table}) then {
 		for "_i" from 1 to _needAT do {
 			private _u = _free deleteAt 0;
 			[_cmd, _w, _u, "AT"] call SWLC_fnc_kitAssign;
 		};
 		[_cmd get "side", "kit"] call SWLC_fnc_radio;
 	};
-	if ((_wantAA - _haveAA - _pendingAA) > 0 && {_kitOk} && {"AA" in _table} && {_free isNotEqualTo []}) then {
+	if ((_wantAA - _haveAA - _pendingAA) > 0 && {"AA" in _table} && {_free isNotEqualTo []}) then {
 		[_cmd, _w, _free deleteAt 0, "AA"] call SWLC_fnc_kitAssign;
 	};
 

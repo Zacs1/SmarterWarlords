@@ -111,7 +111,8 @@ SWLC_clEconApply = {
 				if ((_x # 2) isNotEqualTo _req) then {_x set [2, _req]};
 				private _text = if (_note == "") then {_n # 5} else {format ["%1<br/><br/><t color='#ffb000'>%2</t>", _n # 5, _note]};
 				if ((_x # 5) isNotEqualTo _text) then {_x set [5, _text]};
-				private _cost = if ((_n # 1) > 0) then {(round ((_n # 1) * _mult)) max 1} else {_n # 1};
+				// Warlords charges these two from its own globals, whatever the list says.
+				private _cost = if ((_n # 1) > 0 && {!(_class in ["Arsenal", "LastLoadout"])}) then {(round ((_n # 1) * _mult)) max 1} else {_n # 1};
 				if ((_x # 1) != _cost) then {_x set [1, _cost]};
 			} forEach _x;
 		} else {
