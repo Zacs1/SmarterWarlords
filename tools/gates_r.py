@@ -53,7 +53,7 @@ SAMPLE_GAP_SECONDS = 65       # more than two samples missing: the group was dea
 SAMPLE_SLACK_SECONDS = 30     # one sample of slack on the holding limits
 NOT_PROGRESS_JOBS = ("Unassigned", "-", "released")
 
-WORKING_JOBS = ("Travelling", "Mounting", "Advancing", "Assaulting", "Regrouping", "Defending", "Raiding", "Probing", "Recon", "Pickup", "Hunting")
+WORKING_JOBS = ("Travelling", "Mounting", "Advancing", "Assaulting", "Regrouping", "Defending", "Raiding", "Probing", "Recon", "Pickup", "Hunting", "Engaged")
 HOLDING_JOBS = ("Mustering", "Waiting", "Picket", "Reserve")
 EXEMPT_JOBS = ("Borrowed",)
 
@@ -392,6 +392,8 @@ def stretches_for(data: Round, group: Group) -> list[Stretch]:
         else:
             combat_from = None
             fighting = False
+        # Fired or fired on inside the commander's window. That window is its own cap, holdouts included.
+        fighting = fighting or s.fighting
 
         current.end = s.t
         if credited or fighting or _distance(s, anchor) >= PROGRESS_METRES:

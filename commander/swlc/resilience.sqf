@@ -367,6 +367,8 @@ SWLC_fnc_ladderTick = {
 SWLC_fnc_ladderStep = {
 	params ["_cmd", "_g", ["_reason", "stuck"], ["_force", ""]];
 	if !([_g] call SWLC_fnc_resMayTouch) exitWith {""};
+	// A firefight is progress. Only a script error, which says nothing about the fight, still climbs.
+	if (_force == "" && {_reason != "script_error"} && {[_g] call SWLC_fnc_groupFighting}) exitWith {""};
 	private _next = if (_force == "") then {_g getVariable ["SWLC_ladderRung", 0]} else {(SWLC_ladderRungs find _force) max 0};
 	private _state = [_g] call SWLC_fnc_state;
 	private _goal = _g getVariable ["SWLC_goal", []];
@@ -612,6 +614,7 @@ SWLC_fnc_resFaultOf = {
 	};
 
 	if (_age < CFG("resSweepGraceSeconds")) exitWith {""};
+	if ([_g] call SWLC_fnc_groupFighting) exitWith {""};
 
 	private _fault = "";
 	if (_state in SWLC_resNeedOrder
@@ -736,7 +739,7 @@ SWLC_fnc_resIsIdle = {
 		!_held && {_age >= _loneWait + CFG("idleWaitingMargin")}
 	};
 	// LAMBS clears the order while it has the group: that's a group with a job.
-	(_state in SWLC_resNeedOrder) && {_age >= CFG("resSweepGraceSeconds")} && {(_g getVariable ["SWLC_order", []]) isEqualTo []} && {!([_g] call SWLC_fnc_lambsBusy)}
+	(_state in SWLC_resNeedOrder) && {_age >= CFG("resSweepGraceSeconds")} && {(_g getVariable ["SWLC_order", []]) isEqualTo []} && {!([_g] call SWLC_fnc_lambsBusy)} && {!([_g] call SWLC_fnc_groupFighting)}
 };
 
 // Too much of the side standing about means the plan has stopped working, whatever the reason. Drop it and start over.

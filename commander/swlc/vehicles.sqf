@@ -157,7 +157,7 @@ SWLC_fnc_vehSafeToLift = {
 	private _side = _cmd get "side";
 	private _p = getPosATL _v;
 	if ((behaviour leader _g) == "COMBAT") exitWith {false};
-	if (!isNil "SWLC_fnc_groupFighting" && {[_g] call SWLC_fnc_groupFighting}) exitWith {false};
+	if ([_g] call SWLC_fnc_groupFighting) exitWith {false};
 	if (((crew _v) findIf {isPlayer _x}) >= 0) exitWith {false};
 	if ((allPlayers findIf {alive _x && {(_x distance2D _p) < CFG("vehUnstickPlayerRadius")}}) >= 0) exitWith {false};
 	private _enemy = (_p nearEntities [["Man", "Car", "Tank", "Air", "Ship", "StaticWeapon"], CFG("vehUnstickEnemyRadius")]) findIf {
@@ -268,7 +268,7 @@ SWLC_fnc_vehStuckCheck = {
 		};
 	};
 
-	if (_moved >= CFG("vehStuckMinMetres") || {(_r get "role") == "combat" && {(behaviour leader _g) == "COMBAT"}}) exitWith {};
+	if (_moved >= CFG("vehStuckMinMetres") || {(_r get "role") == "combat" && {(behaviour leader _g) == "COMBAT" || {[_g] call SWLC_fnc_groupFighting}}}) exitWith {};
 	private _n = (_r get "stuck") + 1;
 	_r set ["stuck", _n];
 	["C_VEH", [["side", _cmd get "side"], ["id", _r get "id"], ["event", "stuck"], ["count", _n], ["group", groupId _g], ["x", round (_p # 0)], ["y", round (_p # 1)]]] call SWLC_fnc_log;

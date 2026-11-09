@@ -132,6 +132,29 @@ SWLC_settings = createHashMapFromArray [
 	["resFixWindowSeconds", 120],
 	["resFixesToLadder", 3],          // this many fixes inside the window and the group goes to the ladder
 	["resWaterRescue", true],         // a group swimming in deep water is fast travelled out instead of swimming for minutes
+	// Fights on the way (engaged.sqf). AI behaviour, so it stays on with the rules variant off, like resilience.
+	["behEngaged", true],             // a group in transit that meets the enemy stops and fights
+	["fightingWindow", 90],           // seconds since a man last fired or was fired on before his group stops counting as fighting
+	["contactAttachSeconds", 5],      // how often new units get the fire-tracking handlers
+	["engagedStates", ["Travelling", "Advancing"]],  // the jobs that count as in transit
+	["engagedRange", 300],            // a group that is fighting stops for enemy known this close
+	["engagedCloseRange", 120],       // any group in transit stops for enemy known this close, shot at or not
+	["engagedContactAge", 60],        // a sighting older than this doesn't count
+	["engagedMergeMetres", 250],      // contacts this close together are one fight
+	["engagedReorderMetres", 80],     // the fight order moves when the contact has moved this far
+	["engagedClearSeconds", 40],      // no enemy known near and this long without a shot: the fight is over
+	["engagedRetriggerSeconds", 30],  // after a fight, how long before the group can stop for another
+	["engagedJoin", true],            // nearby free groups can join
+	["engagedJoinRadius", 600],
+	["engagedJoinStates", ["Reserve", "Unassigned", "Waiting", "Advancing", "Travelling"]],
+	["engagedFallback", true],        // a much bigger enemy sends the fight back to the nearest owned sector
+	["engagedFallbackRatio", 2.5],    // enemy strength this many times the men on hand (a combat vehicle counts as 5 more)
+	["engagedFallbackMinMen", 10],    // never fall back from a force smaller than this
+	["engagedFallbackHoldSeconds", 150], // how long that sector stays on the threat list with nothing sighted near it
+	["engagedVehicles", true],        // transports dismount short of the contact and pull back
+	["engagedTransportBack", 200],    // how far the transport drives back
+	["engagedPullBackSeconds", 45],   // longest the driver takes before he gets out and walks in
+	// The water rescue, continued
 	["waterRescueSeconds", 20],       // in deep water this long before the rescue
 	["waterRescueDepth", 1.5],        // metres of water under the leader that count as deep
 

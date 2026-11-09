@@ -84,6 +84,7 @@ SWL_fnc_logGroup = {
 		format ["desty=%1", round (_destPos # 1)],
 		format ["plan=%1", _dest # 1],
 		format ["combat=%1", [0, 1] select (behaviour _leader == "COMBAT")],
+		format ["fighting=%1", [0, 1] select (!isNil "SWLC_fnc_groupFighting" && {[_group] call SWLC_fnc_groupFighting})],
 		format ["beh=%1", behaviour _leader],
 		format ["veh=%1", ["-", typeOf _vehicle] select (_vehicle != _leader)],
 		format ["warlord=%1", [0, 1] select _isWarlord],

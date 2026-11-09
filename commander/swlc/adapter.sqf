@@ -257,7 +257,7 @@ SWLC_fnc_adGuardOrder = {
 	};
 	if (_intact) exitWith {
 		// A blocked order keeps trying: the fast travel it needs may have become possible.
-		if ((_g getVariable ["SWLC_orderBlocked", false]) && {time >= (_g getVariable ["SWLC_orderRetryAt", 0])}) then {
+		if ((_g getVariable ["SWLC_orderBlocked", false]) && {time >= (_g getVariable ["SWLC_orderRetryAt", 0])} && {!([_g] call SWLC_fnc_groupFighting)}) then {
 			[_g, 0] call SWLC_fnc_adApplyOrder;
 		} else {
 			if (_g getVariable ["SWLC_stanceDirty", false]) then {[_g] call SWLC_fnc_adApplyStance};
@@ -265,6 +265,8 @@ SWLC_fnc_adGuardOrder = {
 		};
 		false
 	};
+	// A group in a firefight isn't put back on its route. Its own fight order is still kept, and the window ends this.
+	if (([_g] call SWLC_fnc_state) != "Engaged" && {[_g] call SWLC_fnc_groupFighting}) exitWith {false};
 	private _from = (_g getVariable ["SWLC_wpProgress", 0]) min ((count _wps - 1) max 0);
 	_g setVariable ["SWLC_guardWhy", format ["%1|have=%2|want=%3|off=%4", _why, _count, _base + count _wps, _off]];
 	[_g, _from] call SWLC_fnc_adApplyOrder;

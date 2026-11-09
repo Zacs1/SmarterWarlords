@@ -19,7 +19,7 @@ SWLC_fnc_watchdogGroup = {
 		_g setVariable ["SWLC_lastCombat", time];
 		_g setVariable ["SWLC_wasCombat", true];
 	} else {
-		if ((_g getVariable ["SWLC_wasCombat", false]) && {(time - (_g getVariable ["SWLC_lastCombat", 0])) >= CFG("postContactQuietSeconds")}) then {
+		if ((_g getVariable ["SWLC_wasCombat", false]) && {(time - (_g getVariable ["SWLC_lastCombat", 0])) >= CFG("postContactQuietSeconds")} && {!([_g] call SWLC_fnc_groupFighting)}) then {
 			_g setVariable ["SWLC_wasCombat", false];
 			if (_state in ["Travelling", "Advancing", "Regrouping", "Assaulting", "Recon", "Defending", "Raiding", "Picket"]) then {
 				[_g, _g getVariable ["SWLC_wpProgress", 0]] call SWLC_fnc_adApplyOrder;
@@ -54,7 +54,7 @@ SWLC_fnc_watchdogGroup = {
 	};
 	if (_goal isEqualTo []) exitWith {};
 
-	private _inCombat = (behaviour _leader) == "COMBAT";
+	private _inCombat = (behaviour _leader) == "COMBAT" || {[_g] call SWLC_fnc_groupFighting};
 	if (_inCombat) exitWith {
 		_g setVariable ["SWLC_progress", []];
 		// A fight isn't a rung failing: hold the ladder's clock until it's over.
