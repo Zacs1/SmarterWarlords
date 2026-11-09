@@ -86,8 +86,10 @@ def check_captured(data: Round) -> tuple[bool, str]:
 
 @check("No script errors")
 def check_errors(data: Round) -> tuple[bool, str]:
-    total = sum(e.count for e in data.script_errors)
-    return total == 0, f"{total} script errors"
+    # A script error inside Bohemia's own Warlords code isn't ours to fix. It is still counted and printed.
+    ours = sum(e.count for e in data.script_errors if not e.file.lower().lstrip("/\\").startswith("a3"))
+    theirs = sum(e.count for e in data.script_errors) - ours
+    return ours == 0, f"{ours} script errors in our code, {theirs} in Bohemia's"
 
 
 @check("Adapter target matches the observer over time", gate="gate0")

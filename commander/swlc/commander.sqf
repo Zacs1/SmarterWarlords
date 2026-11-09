@@ -59,7 +59,7 @@ SWLC_fnc_commanderGuard = {
 			_t0 = diag_tickTime;
 			isNil {
 				if (!isNull _g && {[_g] call SWLC_fnc_adGuardOrder}) then {
-					["C_GUARD", [["side", _side], ["group", groupId _g]]] call SWLC_fnc_log;
+					["C_GUARD", [["side", _side], ["group", groupId _g], ["why", _g getVariable ["SWLC_guardWhy", "?"]]]] call SWLC_fnc_log;
 				};
 				if (!isNull _g) then {[_cmd, _g] call SWLC_fnc_squadLight};
 			};

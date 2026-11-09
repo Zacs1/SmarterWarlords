@@ -162,12 +162,16 @@ SWLC_fnc_adApplyOrder = {
 	_order params ["_wps", "_behaviour", "_speed", "_formation", "_combat"];
 	isNil {
 		for "_i" from (count waypoints _g - 1) to 0 step -1 do {deleteWaypoint [_g, _i]};
+		// The engine can move a waypoint from where it was asked for, so the guard compares with where it really went.
+		private _actual = [];
 		{
 			_x params ["_p", "_type", ["_radius", 0]];
 			private _wp = _g addWaypoint [_p, 0];
 			_wp setWaypointType _type;
 			if (_radius > 0) then {_wp setWaypointCompletionRadius _radius};
+			_actual pushBack (waypointPosition _wp);
 		} forEach _wps;
+		_g setVariable ["SWLC_wpActual", _actual];
 		private _first = (count waypoints _g) - count _wps;
 		_g setVariable ["SWLC_wpBase", _first];
 		_g setCurrentWaypoint [_g, (_first + _from) min (count waypoints _g - 1)];
@@ -179,6 +183,7 @@ SWLC_fnc_adApplyOrder = {
 SWLC_fnc_adClearOrder = {
 	params ["_g"];
 	_g setVariable ["SWLC_order", []];
+	_g setVariable ["SWLC_wpActual", []];
 };
 
 // Number of the commander's waypoints the group has finished.
@@ -208,10 +213,19 @@ SWLC_fnc_adGuardOrder = {
 	private _base = _g getVariable ["SWLC_wpBase", 0];
 	private _count = count waypoints _g;
 	private _intact = _count == _base + count _wps;
+	private _why = "count";
+	private _off = -1;
 	if (_intact) then {
+		private _actual = _g getVariable ["SWLC_wpActual", []];
+		private _useActual = (count _actual) == (count _wps);
 		{
-			if (waypointType [_g, _base + _forEachIndex] != (_x # 1)
-				|| {((waypointPosition [_g, _base + _forEachIndex]) distance2D (_x # 0)) > 1}) exitWith {_intact = false};
+			private _want = if (_useActual) then {_actual # _forEachIndex} else {_x # 0};
+			private _dist = (waypointPosition [_g, _base + _forEachIndex]) distance2D _want;
+			if (waypointType [_g, _base + _forEachIndex] != (_x # 1) || {_dist > 1}) exitWith {
+				_intact = false;
+				_why = ["pos", "type"] select (waypointType [_g, _base + _forEachIndex] != (_x # 1));
+				_off = round _dist;
+			};
 		} forEach _wps;
 	};
 	if (_intact) exitWith {
@@ -220,6 +234,7 @@ SWLC_fnc_adGuardOrder = {
 		false
 	};
 	private _from = (_g getVariable ["SWLC_wpProgress", 0]) min ((count _wps - 1) max 0);
+	_g setVariable ["SWLC_guardWhy", format ["%1|have=%2|want=%3|off=%4", _why, _count, _base + count _wps, _off]];
 	[_g, _from] call SWLC_fnc_adApplyOrder;
 	true
 };

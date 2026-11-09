@@ -228,13 +228,14 @@ def parse_log(path: str | Path) -> Round:
                 if source:
                     pending["file"] = f"{source.group(1)}:{source.group(2)}"
                 pending_left -= 1
-                if pending_left <= 0:
+                # The file line ends an error report. A long quoted expression can put it dozens of lines down.
+                if source or pending_left <= 0:
                     close_pending()
 
             if _ERROR_START.search(line):
                 close_pending()
                 pending = {"detail": "?", "file": "?"}
-                pending_left = 6
+                pending_left = 60
                 continue
 
             warning = _WARNING_MESSAGE.search(line)
