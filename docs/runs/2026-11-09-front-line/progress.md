@@ -42,3 +42,7 @@ Four worktree helpers from e7d218d: stance (item 1), alert (items 2 and 4), fort
 - frontb1 (`2026-11-09_19-08-14_frontb1`, build e7d218d): all Part B checks PASS. Tagged `front-b-done` on that build.
 
 - frontd1 (`2026-11-09_19-19-34_frontd1`): collision, radio and board, survivors resuming all PASS. Three FAILs, none a commander bug: joins (sighted strength never needed more groups, rerun with a raised `responseMargin` to exercise it), the fallback case (the scenario's spot was inside `engagedObjectiveMargin`, added by the review after the scenario was written), and one `post_contact_reset` counted as interference (that action only fires when the group isn't fighting). Scenario and gate fixed, rerun as frontd2.
+
+## Defence code review applied
+
+The C-E reviewer read the merged defence code (c1e733e). Fixed: a holdout goal outside attack stance emptied the reserve with no wave to go to (side idle); pickets and raids could take the counter group; fortify bought guns nobody could reach yet; defence shuffle overwrote screen and counterattack orders (new `alertCounterHitSeconds`); face-the-approach turned the AT men on the road; resting groups idled once a side left attack.

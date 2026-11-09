@@ -411,6 +411,7 @@ SWLC_fnc_alertCounterHit = {
 				[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
 				[_g, "Defending", _c, "alert_counter_hit"] call SWLC_fnc_setState;
 				_g setVariable ["SWLC_patrolAt", time];
+				_g setVariable ["SWLC_alertHitUntil", time + CFG("alertCounterHitSeconds")];
 				[_g, [[_c, "SAD", 60]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
 				[_g, _s, _c, _bearing + 180] call SWLC_fnc_defMoveTo;
 				_g setVariable ["SWLC_defRetry", [_s, _c, _bearing + 180]];
@@ -436,7 +437,8 @@ SWLC_fnc_alertFace = {
 	if (_goal isEqualTo [] || {(leader _g distance2D _goal) > CFG("lambsHoldReach")}) exitWith {};
 	_g setVariable ["SWLC_alertFaceAt", time + CFG("alertFaceSeconds")];
 	_g setFormDir _bearing;
-	{_x doWatch _point} forEach ((units _g) select {alive _x && {isNull objectParent _x}});
+	// AT men on the road are watching the road.
+	{_x doWatch _point} forEach ((units _g) select {alive _x && {isNull objectParent _x} && {(_x getVariable ["SWLC_fortAT", []]) isEqualTo []}});
 };
 
 // After defenceTick, so the main position has had first pick of the groups.

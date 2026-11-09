@@ -50,7 +50,8 @@ SWLC_fnc_stanceNoWave = {
 SWLC_fnc_stanceHoldPriority = {
 	params ["_cmd"];
 	if !([_cmd] call SWLC_fnc_holdPriority) exitWith {false};
-	(([_cmd] call SWLC_fnc_stanceOf) == "attack") || {[_cmd] call SWLC_fnc_stanceHoldoutGoal}
+	// Out of attack the reserve only empties for a job that's really running, or the whole side stands idle waiting for a vote.
+	(([_cmd] call SWLC_fnc_stanceOf) == "attack") || {[_cmd] call SWLC_fnc_stanceHoldoutJob}
 };
 
 // [men, armour, AT launchers, CP] of the side's own forces. These are its own, so they are true numbers.

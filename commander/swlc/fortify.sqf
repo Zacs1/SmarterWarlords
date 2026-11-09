@@ -389,12 +389,14 @@ SWLC_fnc_fortBuyOne = {
 		false
 	};
 	if (time < (([_cmd, "fortNextScan"] call SWLC_fnc_fortMap) getOrDefault [_sName, -1])) exitWith {false};
-	if (([_cmd, _groups] call SWLC_fnc_fortCrewPool) isEqualTo []) exitWith {
+	private _c = [_s] call SWLC_fnc_adPos;
+	private _front = _c getPos [([_s] call SWLC_fnc_adSize) * CFG("fortifyEdgeFraction"), _bearing];
+	// Someone has to be near enough to get on it, or the gun stands empty for the enemy to take.
+	private _reach = CFG("fortifyCrewReach");
+	if ((([_cmd, _groups] call SWLC_fnc_fortCrewPool) findIf {(_x distance2D _front) <= _reach}) < 0) exitWith {
 		[_cmd, _sName, "no_men"] call SWLC_fnc_fortRefuse;
 		false
 	};
-	private _c = [_s] call SWLC_fnc_adPos;
-	private _front = _c getPos [([_s] call SWLC_fnc_adSize) * CFG("fortifyEdgeFraction"), _bearing];
 	// The same rule Warlords holds a player to when placing a defence, and the same check as its fast travel.
 	if (CFG("fortifyRespectEnemyNear") && {[_side, _front] call SWLC_fnc_adEnemyNear}) exitWith {
 		[_cmd, _sName, "enemy_near"] call SWLC_fnc_fortRefuse;

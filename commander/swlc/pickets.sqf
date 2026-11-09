@@ -122,7 +122,7 @@ SWLC_fnc_picketTick = {
 		if (_room <= 0) exitWith {};
 		private _s = _x;
 		if ((_pickets findIf {(_x getVariable ["SWLC_picketSector", objNull]) isEqualTo _s}) < 0) then {
-			private _pool = _groups select {([_x] call SWLC_fnc_state) in (["Unassigned", "Mustering", "Travelling"] + ([[], ["Reserve"]] select _held)) && {vehicle leader _x == leader _x} && {(behaviour leader _x) != "COMBAT"} && {time >= (_x getVariable ["SWLC_picketRestUntil", -1])}};
+			private _pool = _groups select {([_x] call SWLC_fnc_state) in (["Unassigned", "Mustering", "Travelling"] + ([[], ["Reserve"]] select _held)) && {isNull (_x getVariable ["SWLC_counterFor", objNull])} && {vehicle leader _x == leader _x} && {(behaviour leader _x) != "COMBAT"} && {time >= (_x getVariable ["SWLC_picketRestUntil", -1])}};
 			if (_pool isNotEqualTo []) then {
 				private _c = [_s] call SWLC_fnc_adPos;
 				private _picked = ([_pool, [], {([_x] call SWLC_fnc_groupMen) * 150 + (leader _x distance2D _c)}, "ASCEND"] call BIS_fnc_sortBy) # 0;

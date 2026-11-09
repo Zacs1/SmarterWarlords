@@ -359,7 +359,7 @@ SWLC_fnc_defReserveTick = {
 			[_g, "Reserve", [_post] call SWLC_fnc_adPos, "reserve"] call SWLC_fnc_setState;
 			["C_DEF", [["side", _side], ["event", "reserve_join"], ["group", groupId _g], ["post", [_post] call SWLC_fnc_adName], ["size", _size]]] call SWLC_fnc_log;
 		}] call SWLC_fnc_resGuarded;
-	} forEach ((_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Unassigned" && {_rebuilding || {time >= (_x getVariable ["SWLC_reserveRestUntil", -1])}}});
+	} forEach ((_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Unassigned" && {_rebuilding || {([_cmd] call SWLC_fnc_stanceOf) != "attack"} || {time >= (_x getVariable ["SWLC_reserveRestUntil", -1])}}});
 
 	private _c = [_post] call SWLC_fnc_adPos;
 	{
@@ -398,7 +398,8 @@ SWLC_fnc_defReserveTick = {
 	{
 		private _g = _x;
 		[_cmd, _g, "defShuffle", {
-			if (([_g] call SWLC_fnc_state) == "Defending" && {(_g getVariable ["SWLC_lambsTask", ""]) == ""} && {(time - (_g getVariable ["SWLC_patrolAt", -1e6])) >= CFG("reservePatrolSeconds")}) then {
+			// A screen stays quiet and a counterattack keeps hunting, so neither gets a shuffle order.
+			if (([_g] call SWLC_fnc_state) == "Defending" && {(_g getVariable ["SWLC_lambsTask", ""]) == ""} && {(_g getVariable ["SWLC_alertRole", ""]) == ""} && {time >= (_g getVariable ["SWLC_alertHitUntil", -1])} && {(time - (_g getVariable ["SWLC_patrolAt", -1e6])) >= CFG("reservePatrolSeconds")}) then {
 				_g setVariable ["SWLC_patrolAt", time];
 				private _goal = _g getVariable ["SWLC_goal", []];
 				if (_goal isNotEqualTo []) then {

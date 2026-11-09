@@ -27,6 +27,7 @@ SWLC_settings = createHashMapFromArray [
 	["alertCoverOutside", 50],        // and no more than this far outside the sector square
 	["alertScreenBeyond", 250],       // screen: metres beyond the sector edge
 	["alertScreenCover", 60],         // cover searched this close to the screen's spot
+	["alertCounterHitSeconds", 300],  // a counterattack keeps hunting this long before ordinary defence orders apply to it again
 	["alertCounterBack", 150],        // counter reserve: metres behind the sector edge, away from the approach
 	["alertBreakInMen", 2],           // enemy men known inside the square before the reserve goes in
 	["alertInsideMargin", 0],         // metres outside the square that count as inside

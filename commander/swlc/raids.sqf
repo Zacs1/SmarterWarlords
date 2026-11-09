@@ -49,7 +49,7 @@ SWLC_fnc_raidSpare = {
 	private _attack = {([_x] call SWLC_fnc_state) in (["Unassigned", "Mustering", "Travelling", "Advancing", "Waiting", "Assaulting", "Regrouping"] + _extra)} count _groups;
 	private _can = _attack - ([CFG("raidKeepGroups"), CFG("stanceHoldRaidKeep")] select _hold);
 	if (_can <= 0) exitWith {[]};
-	private _free = _groups select {([_x] call SWLC_fnc_state) in (["Unassigned", "Mustering", "Travelling"] + _extra) && {vehicle leader _x == leader _x}};
+	private _free = _groups select {([_x] call SWLC_fnc_state) in (["Unassigned", "Mustering", "Travelling"] + _extra) && {vehicle leader _x == leader _x} && {isNull (_x getVariable ["SWLC_counterFor", objNull])}};
 	_free = [_free, [], {leader _x distance2D _near}, "ASCEND"] call BIS_fnc_sortBy;
 	_free select [0, _can]
 };
