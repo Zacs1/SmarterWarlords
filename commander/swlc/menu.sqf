@@ -4,9 +4,10 @@
 // All of this is called only when a human uses the menu, or by the gatef scenario with an AI stand-in.
 #include "macros.hpp"
 
-SWLC_menuKinds = ["raid", "borrow", "hold", "go", "report", "defend", "pickup", "release", "plan"];
+SWLC_menuKinds = ["raid", "borrow", "hold", "go", "report", "defend", "pickup", "release", "plan", "cancel"];
 // Answers that mean the player clicked the wrong thing. These don't start the option's cooldown.
-SWLC_menuNoCharge = ["bad_sector", "not_front", "not_owned"];
+SWLC_menuNoCharge = ["bad_sector", "not_front", "not_owned", "confirm"];
+{CFG("radioCooldowns") set _x} forEach [["cancelask", 2], ["cancelok", 2]];
 
 // What a client sends. A request can only speak for its sender; owner 0 is the host's own local call.
 SWLC_fnc_playerMsg = {
@@ -268,6 +269,33 @@ SWLC_fnc_menuBorrowedTick = {
 			};
 		};
 	} forEach (_list select {true});
+};
+
+// ---- Cancel objective ----
+
+// The player's way off a target: the same pull-out, sector ban and new vote the commitment timer uses, but when they ask.
+// The first press only asks, because the ban is costly and a number key is easy to hit.
+SWLC_fnc_menuDo_cancel = {
+	params ["_cmd", "_player", "_data"];
+	private _side = _cmd get "side";
+	if !([] call SWLC_fnc_commitOn) exitWith {[_side, "cancelno_off"] call SWLC_fnc_radio; "commit_off"};
+	private _t = _cmd get "target";
+	if (isNull _t) exitWith {[_side, "cancelno_none"] call SWLC_fnc_radio; "no_target"};
+	if ((_cmd getOrDefault ["switchPending", []]) isNotEqualTo []) exitWith {[_side, "cancelno_pulling"] call SWLC_fnc_radio; "pulling_out"};
+	if (time < (_cmd getOrDefault ["menuCancelNext", -1])) exitWith {[_side, "cancelno_used"] call SWLC_fnc_radio; "used"};
+	private _name = [_t] call SWLC_fnc_adName;
+	(_cmd getOrDefault ["menuCancelArmed", []]) params [["_until", -1], ["_for", objNull]];
+	if (time >= _until || {_for isNotEqualTo _t}) exitWith {
+		_cmd set ["menuCancelArmed", [time + CFG("menuCancelConfirmSeconds"), _t]];
+		[_side, "cancelask", [_name, CFG("menuCancelConfirmSeconds")]] call SWLC_fnc_radio;
+		"confirm"
+	};
+	_cmd set ["menuCancelArmed", []];
+	_cmd set ["menuCancelNext", time + CFG("menuCancelSideCooldown")];
+	[_cmd, "manual_cancel", _t, []] call SWLC_fnc_commitLog;
+	[_side, "cancelok", [_name, round (CFG("abandonBanSeconds") / 60)]] call SWLC_fnc_radio;
+	[_cmd, _t, ""] call SWLC_fnc_commitLeave;
+	"ok"
 };
 
 // ---- Hold the wave for us / Go now ----

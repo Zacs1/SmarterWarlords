@@ -172,7 +172,8 @@ SWLC_settings = createHashMapFromArray [
 	["holdClearSeconds", 120],        // that sector counts as clear after this long with no fighting and no enemy known inside
 	["holdNearXMetres", 350],         // a group fighting this close to the lost sector is not pulled away
 	["holdDefendNearMetres", 150],    // a group this far outside the threatened sector's square turns to defend it
-	["commitSeconds", 1800],          // 30 minutes on one target: a safety net against a stuck objective, not a deadline
+	["commitSeconds", 3600],          // an hour on one target for an all-AI side. Only a last resort: nobody on that side can cancel by hand
+	["commitSecondsHuman", 5400],     // 90 minutes for a side with humans, who have Cancel objective on the menu
 	["commitExtendSeconds", 180],     // staying buys this much more time
 	["commitMaxExtensions", 2],
 	["commitStayProgress", 0.5],      // capture progress that always counts as close to winning
@@ -619,6 +620,8 @@ SWLC_settings = createHashMapFromArray [
 	// Part F: the commander menu
 	["ruleCommanderMenu", true],
 	["menuTestAllowAI", false],          // lets the gatef scenario's AI stand-in count as a requester; never on in play
+	["menuCancelConfirmSeconds", 15],    // Cancel objective needs a second press this soon
+	["menuCancelSideCooldown", 120],     // per side, after one has gone through
 	["menuCooldownSeconds", 15],         // per player, per option
 	["menuCooldowns", createHashMapFromArray [["plan", 10], ["release", 5], ["report", 10], ["raid", 10]]],
 	["menuKeepGroups", 2],               // attack groups the commander never lends out

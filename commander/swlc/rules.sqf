@@ -261,7 +261,8 @@ SWLC_fnc_commitOn = { CFG("rulesVariant") && {CFG("ruleCommitTimer")} };
 
 SWLC_fnc_commitNew = {
 	params ["_cmd"];
-	_cmd set ["commitUntil", time + CFG("commitSeconds")];
+	private _timerKey = ["commitSeconds", "commitSecondsHuman"] select ([_cmd get "side"] call SWLC_fnc_adSideHasPlayers);
+	_cmd set ["commitUntil", time + CFG(_timerKey)];
 	_cmd set ["commitExt", 0];
 	_cmd set ["commitLosses", _cmd getOrDefault ["losses", 0]];
 	_cmd set ["commitKills", _cmd getOrDefault ["kills", 0]];

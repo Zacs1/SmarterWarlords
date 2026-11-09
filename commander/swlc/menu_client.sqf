@@ -43,7 +43,7 @@ SWLC_menuItems = [
 	["Request a pickup", [8], "", -5, [["expression", "['pickup'] call SWLC_menuSend"]], "1", "1"],
 	["Release my groups", [9], "", -5, [["expression", "['release'] call SWLC_menuSend"]], "1", "1"],
 	["What's the plan?", [10], "", -5, [["expression", "['plan'] call SWLC_menuSend"]], "1", "1"],
-	["AI commanders panel (Insert)", [11], "", -5, [["expression", "call SWLC_clPanelToggle"]], "1", "1"]
+	["Cancel objective (press twice)", [11], "", -5, [["expression", "['cancel'] call SWLC_menuSend"]], "1", "1"]
 ];
 
 // One frame later, so the closing action menu doesn't take this list with it.
