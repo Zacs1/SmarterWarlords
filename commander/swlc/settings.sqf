@@ -36,6 +36,8 @@ SWLC_settings = createHashMapFromArray [
 	["voteArmourWeight", 6],
 	["voteUnscoutedFactor", 1.5],
 	["voteRecentFailSeconds", 600],
+	["voteStuckSeconds", 120],        // nudge Warlords' vote after this long with no target; 0 is off
+	["voteStuckRepeatSeconds", 60],   // gap between nudges
 	["deadlockSeconds", 720],         // force a new vote if a target hasn't fallen after this long
 
 	// Rules variant: "rulesVariant" is the lobby's on/off. Each rule below also has its own switch.

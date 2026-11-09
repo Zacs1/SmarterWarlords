@@ -17,9 +17,11 @@ SWLC_fnc_intelLoop = {
 	scriptName format ["SWLC intel %1", _cmd get "side"];
 	while {true} do {
 		sleep CFG("intelPollSeconds");
-		private _t0 = diag_tickTime;
-		isNil {[_cmd] call SWLC_fnc_intelPoll};
-		_cmd set ["pollCost", (_cmd getOrDefault ["pollCost", 0]) + (diag_tickTime - _t0) * 1000];
+		isNil {
+			private _t0 = diag_tickTime;
+			[_cmd] call SWLC_fnc_intelPoll;
+			_cmd set ["pollCost", (_cmd getOrDefault ["pollCost", 0]) + (diag_tickTime - _t0) * 1000];
+		};
 		_cmd set ["pollCount", (_cmd getOrDefault ["pollCount", 0]) + 1];
 	};
 };

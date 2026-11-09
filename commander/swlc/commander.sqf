@@ -30,9 +30,13 @@ SWLC_fnc_commanderLoop = {
 	params ["_cmd"];
 	scriptName format ["SWLC commander %1", _cmd get "side"];
 	while {true} do {
-		private _t0 = diag_tickTime;
-		isNil {[_cmd] call SWLC_fnc_cmdTick};
-		private _cost = (diag_tickTime - _t0) * 1000;
+		// Timed inside the isNil: a scheduled script can be suspended for a whole frame between two of its lines.
+		private _cost = 0;
+		isNil {
+			private _t0 = diag_tickTime;
+			[_cmd] call SWLC_fnc_cmdTick;
+			_cost = (diag_tickTime - _t0) * 1000;
+		};
 		[_cmd, _cost] call SWLC_fnc_cmdLogCost;
 		sleep CFG("tickSeconds");
 	};
@@ -46,24 +50,24 @@ SWLC_fnc_commanderGuard = {
 		sleep CFG("guardSeconds");
 		private _side = _cmd get "side";
 		private _spent = 0;
-		private _t0 = diag_tickTime;
 		isNil {
+			private _t0 = diag_tickTime;
 			if (isNull ([_side] call SWLC_fnc_adTarget)) then {
 				[_cmd] call SWLC_fnc_voteCast;
 			};
+			_spent = (diag_tickTime - _t0) * 1000;
 		};
-		_spent = (diag_tickTime - _t0) * 1000;
 		// One group per step, so a round of re-asserted waypoints doesn't all land in one frame.
 		{
 			private _g = _x;
-			_t0 = diag_tickTime;
 			isNil {
+				private _t0 = diag_tickTime;
 				if (!isNull _g && {[_g] call SWLC_fnc_adGuardOrder}) then {
 					["C_GUARD", [["side", _side], ["group", groupId _g], ["why", _g getVariable ["SWLC_guardWhy", "?"]]]] call SWLC_fnc_log;
 				};
 				if (!isNull _g) then {[_cmd, _g] call SWLC_fnc_squadLight};
+				_spent = _spent + (diag_tickTime - _t0) * 1000;
 			};
-			_spent = _spent + (diag_tickTime - _t0) * 1000;
 			sleep 0.01;
 		} forEach ((_cmd get "groups") select {true});
 		_cmd set ["guardCost", (_cmd getOrDefault ["guardCost", 0]) + _spent];
@@ -109,10 +113,35 @@ SWLC_fnc_cmdTick = {
 };
 
 // Tracks the side's target and reacts when it changes.
+// A side's vote has been seen to never resolve, leaving it with no target for the whole round. Warlords' vote
+// machine moves on when the side's sector count changes, so a stuck vote gets that nudge, and the state is logged.
+SWLC_fnc_cmdVoteStuck = {
+	params ["_cmd", "_t"];
+	if (!isNull _t) exitWith {_cmd deleteAt "noTargetSince"};
+	private _side = _cmd get "side";
+	if (([_cmd] call SWLC_fnc_rebuilding) || {[_side] call SWLC_fnc_adSideHasPlayers}) exitWith {_cmd deleteAt "noTargetSince"};
+	private _since = _cmd getOrDefault ["noTargetSince", -1];
+	if (_since < 0) exitWith {_cmd set ["noTargetSince", time]};
+	private _wait = CFG("voteStuckSeconds");
+	if (_wait <= 0 || {(time - _since) < _wait} || {time < (_cmd getOrDefault ["voteStuckNext", 0])}) exitWith {};
+	_cmd set ["voteStuckNext", time + CFG("voteStuckRepeatSeconds")];
+	private _var = format ["BIS_WL_lastSectorCnt_%1", _side];
+	private _cnt = missionNamespace getVariable [_var, 0];
+	["C_VOTESTUCK", [["side", _side], ["after", round (time - _since)],
+		["votes", {!isNull (_x getVariable ["BIS_WL_selectedSector", objNull])} count ([_side] call SWLC_fnc_adAIWarlords)],
+		["options", count ([_side] call SWLC_fnc_adAvailable)],
+		["count", _cnt],
+		["selTime", missionNamespace getVariable [format ["BIS_WL_selectionTime_%1", _side], -999]],
+		["reset", missionNamespace getVariable ["BIS_WL_resetVoting", "nil"]],
+		["aiReset", missionNamespace getVariable ["BIS_WL_AIVotingReset", "nil"]]]] call SWLC_fnc_log;
+	missionNamespace setVariable [_var, _cnt + 1];
+};
+
 SWLC_fnc_cmdTarget = {
 	params ["_cmd"];
 	private _side = _cmd get "side";
 	private _t = [_side] call SWLC_fnc_adTarget;
+	[_cmd, _t] call SWLC_fnc_cmdVoteStuck;
 
 	if (_t isNotEqualTo (_cmd get "target")) then {
 		private _old = _cmd get "target";
