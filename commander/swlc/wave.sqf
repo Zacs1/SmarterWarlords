@@ -200,19 +200,24 @@ SWLC_fnc_waveFootOrder = {
 // One sector's groups leave together. Anyone not ready at the cap follows when it can.
 SWLC_fnc_waveDepart = {
 	params ["_cmd", "_op", "_rec", "_batch"];
+	if (_batch isEqualTo []) exitWith {_rec set ["batch", []]};
+	// A copy: a group that fails while it's being sent is taken out of the real list.
+	_batch = +_batch;
 	[_cmd, _op, _batch] call SWLC_fnc_kitFinish;
 	private _riding = 0;
 	private _walking = 0;
 	private _late = 0;
 	{
 		private _g = _x;
-		if ([_g] call SWLC_fnc_groupReady) then {
-			[_cmd, _op, _g] call SWLC_fnc_waveSendGroup;
-			if (count ([_g] call SWLC_fnc_vehRecOf) > 0) then {_riding = _riding + 1} else {_walking = _walking + 1};
-		} else {
-			_g setVariable ["SWLC_leg", "LATE"];
-			_late = _late + 1;
-		};
+		[_cmd, _g, "waveDepart", {
+			if ([_g] call SWLC_fnc_groupReady) then {
+				[_cmd, _op, _g] call SWLC_fnc_waveSendGroup;
+				if (count ([_g] call SWLC_fnc_vehRecOf) > 0) then {_riding = _riding + 1} else {_walking = _walking + 1};
+			} else {
+				_g setVariable ["SWLC_leg", "LATE"];
+				_late = _late + 1;
+			};
+		}] call SWLC_fnc_resGuarded;
 	} forEach _batch;
 	_rec set ["batch", []];
 	["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "depart"], ["sector", _rec get "name"], ["mount_s", round (time - (_rec get "goTime"))], ["riding", _riding], ["walking", _walking], ["late", _late],
@@ -225,58 +230,60 @@ SWLC_fnc_waveVehicleLegs = {
 	params ["_cmd", "_op", "_live"];
 	{
 		private _g = _x;
-		switch (_g getVariable ["SWLC_leg", ""]) do {
-			case "LATE": {
-				[_cmd, _g] call SWLC_fnc_vehMountGroup;
-				private _deadline = (_g getVariable ["SWLC_mountGo", time]) + CFG("mountCapSeconds") + CFG("mountLateExtra");
-				if ([_g] call SWLC_fnc_groupReady) then {
-					[_cmd, _op, _g] call SWLC_fnc_waveSendGroup;
-				} else {
-					if (time >= _deadline) then {
-						private _rec = [_g] call SWLC_fnc_vehRecOf;
-						if (count _rec > 0 && {(_rec get "state") != "arriving"}) then {
-							[_g] call SWLC_fnc_vehForceBoard;
-							[_cmd, _op, _g] call SWLC_fnc_waveSendGroup;
-						} else {
-							if (count _rec > 0) then {
-								["C_VEH", [["side", _cmd get "side"], ["id", _rec get "id"], ["event", "left_unused"], ["group", groupId _g]]] call SWLC_fnc_log;
-								_rec set ["group", grpNull];
-								_rec set ["state", "parked"];
-								_g setVariable ["SWLC_rec", createHashMap];
+		[_cmd, _g, "waveLegs", {
+			switch (_g getVariable ["SWLC_leg", ""]) do {
+				case "LATE": {
+					[_cmd, _g] call SWLC_fnc_vehMountGroup;
+					private _deadline = (_g getVariable ["SWLC_mountGo", time]) + CFG("mountCapSeconds") + CFG("mountLateExtra");
+					if ([_g] call SWLC_fnc_groupReady) then {
+						[_cmd, _op, _g] call SWLC_fnc_waveSendGroup;
+					} else {
+						if (time >= _deadline) then {
+							private _rec = [_g] call SWLC_fnc_vehRecOf;
+							if (count _rec > 0 && {(_rec get "state") != "arriving"}) then {
+								[_g] call SWLC_fnc_vehForceBoard;
+								[_cmd, _op, _g] call SWLC_fnc_waveSendGroup;
+							} else {
+								if (count _rec > 0) then {
+									["C_VEH", [["side", _cmd get "side"], ["id", _rec get "id"], ["event", "left_unused"], ["group", groupId _g]]] call SWLC_fnc_log;
+									_rec set ["group", grpNull];
+									_rec set ["state", "parked"];
+									_g setVariable ["SWLC_rec", createHashMap];
+								};
+								[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
 							};
+						};
+					};
+				};
+				case "DRIVE": {
+					if ((_g getVariable ["SWLC_legAbandon", false]) || {_g getVariable ["SWLC_legLost", false]}) then {
+						_g setVariable ["SWLC_legAbandon", false];
+						_g setVariable ["SWLC_legLost", false];
+						[_cmd, _g, "abandoned"] call SWLC_fnc_vehDismount;
+						[_cmd get "side", "stuck", [], _g] call SWLC_fnc_radio;
+						[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
+					} else {
+						if (((leader _g) distance2D (_g getVariable "SWLC_dismount")) <= CFG("dismountArriveRadius") || {[_g] call SWLC_fnc_adOrderDone}) then {
+							[_cmd, _g, "dismount"] call SWLC_fnc_vehDismount;
+							[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
+						};
+					};
+				};
+				case "FOLLOW": {
+					if ((_g getVariable ["SWLC_legLost", false]) || {_g getVariable ["SWLC_legAbandon", false]}) then {
+						_g setVariable ["SWLC_legAbandon", false];
+						_g setVariable ["SWLC_legLost", false];
+						[_cmd, _g, "abandoned"] call SWLC_fnc_vehDismount;
+						if (([_g] call SWLC_fnc_state) == "Assaulting") then {
+							_g setVariable ["SWLC_leg", "FOOT"];
+							[_g, [_op get "target"] call SWLC_fnc_sweepOrder, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
+						} else {
 							[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
 						};
 					};
 				};
 			};
-			case "DRIVE": {
-				if ((_g getVariable ["SWLC_legAbandon", false]) || {_g getVariable ["SWLC_legLost", false]}) then {
-					_g setVariable ["SWLC_legAbandon", false];
-					_g setVariable ["SWLC_legLost", false];
-					[_cmd, _g, "abandoned"] call SWLC_fnc_vehDismount;
-					[_cmd get "side", "stuck", [], _g] call SWLC_fnc_radio;
-					[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
-				} else {
-					if (((leader _g) distance2D (_g getVariable "SWLC_dismount")) <= CFG("dismountArriveRadius") || {[_g] call SWLC_fnc_adOrderDone}) then {
-						[_cmd, _g, "dismount"] call SWLC_fnc_vehDismount;
-						[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
-					};
-				};
-			};
-			case "FOLLOW": {
-				if ((_g getVariable ["SWLC_legLost", false]) || {_g getVariable ["SWLC_legAbandon", false]}) then {
-					_g setVariable ["SWLC_legAbandon", false];
-					_g setVariable ["SWLC_legLost", false];
-					[_cmd, _g, "abandoned"] call SWLC_fnc_vehDismount;
-					if (([_g] call SWLC_fnc_state) == "Assaulting") then {
-						_g setVariable ["SWLC_leg", "FOOT"];
-						[_g, [_op get "target"] call SWLC_fnc_sweepOrder, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
-					} else {
-						[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
-					};
-				};
-			};
-		};
+		}] call SWLC_fnc_resGuarded;
 	} forEach _live;
 	[_cmd, _op, _live] call SWLC_fnc_vehFollowTick;
 };
@@ -288,15 +295,17 @@ SWLC_fnc_rallyArrivals = {
 	private _r = CFG("holdArriveRadius");
 	{
 		private _g = _x;
-		private _st = [_g] call SWLC_fnc_state;
-		if (_st == "Regrouping" || {_st == "Advancing" && {(_g getVariable ["SWLC_leg", ""]) in ["FOOT", "FOLLOW"]}}) then {
-			if ((leader _g distance2D _rally) <= _r || {[_g] call SWLC_fnc_adOrderDone}) then {
-				if (_st == "Regrouping") then {_g setVariable ["SWLC_restUntil", time + CFG("breakRestSeconds")]};
-				[_g, "Waiting", _rally, "at_rally"] call SWLC_fnc_setState;
-				["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "rally_arrival"], ["group", groupId _g], ["from", _st]]] call SWLC_fnc_log;
-				[_cmd get "side", "rally", [], _g] call SWLC_fnc_radio;
+		[_cmd, _g, "rallyArrivals", {
+			private _st = [_g] call SWLC_fnc_state;
+			if (_st == "Regrouping" || {_st == "Advancing" && {(_g getVariable ["SWLC_leg", ""]) in ["FOOT", "FOLLOW"]}}) then {
+				if ((leader _g distance2D _rally) <= _r || {[_g] call SWLC_fnc_adOrderDone}) then {
+					if (_st == "Regrouping") then {_g setVariable ["SWLC_restUntil", time + CFG("breakRestSeconds")]};
+					[_g, "Waiting", _rally, "at_rally"] call SWLC_fnc_setState;
+					["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "rally_arrival"], ["group", groupId _g], ["from", _st]]] call SWLC_fnc_log;
+					[_cmd get "side", "rally", [], _g] call SWLC_fnc_radio;
+				};
 			};
-		};
+		}] call SWLC_fnc_resGuarded;
 	} forEach _live;
 };
 
@@ -355,9 +364,11 @@ SWLC_fnc_rallyTick = {
 		_op set ["firstAtRally", -1];
 		if ((_op get "phase") != "ASSAULT") then {[_cmd, _op] call SWLC_fnc_pushStart};
 		{
-			[_cmd, _op, _x] call SWLC_fnc_waveGoIn;
-			["C_WAVE", [["side", _side], ["wave", _op get "id"], ["event", "reinforce"], ["group", groupId _x]]] call SWLC_fnc_log;
-			[_side, "reinforce", [[_target] call SWLC_fnc_adName], _x] call SWLC_fnc_radio;
+			[_cmd, _x, "waveReinforce", {
+				[_cmd, _op, _x] call SWLC_fnc_waveGoIn;
+				["C_WAVE", [["side", _side], ["wave", _op get "id"], ["event", "reinforce"], ["group", groupId _x]]] call SWLC_fnc_log;
+				[_side, "reinforce", [[_target] call SWLC_fnc_adName], _x] call SWLC_fnc_radio;
+			}] call SWLC_fnc_resGuarded;
 		} forEach _ready;
 	};
 
@@ -372,7 +383,7 @@ SWLC_fnc_rallyTick = {
 	_op set ["forceGo", false];
 	_op set ["firstAtRally", -1];
 	[_cmd, _op] call SWLC_fnc_pushStart;
-	{[_cmd, _op, _x] call SWLC_fnc_waveGoIn} forEach _ready;
+	{[_cmd, _x, "waveGoIn", {[_cmd, _op, _g] call SWLC_fnc_waveGoIn}] call SWLC_fnc_resGuarded} forEach _ready;
 	[_cmd, _op, _ready] call SWLC_fnc_smartSmoke;
 	["C_WAVE", [["side", _side], ["wave", _op get "id"], ["event", "assault"], ["groups", count _ready], ["men", _op get "launchStrength"], ["target", [_target] call SWLC_fnc_adName],
 		["by_timer", _byTimer && {!_byCount}], ["forced", _forced], ["wait", round _waited]]] call SWLC_fnc_log;
@@ -433,11 +444,13 @@ SWLC_fnc_assaultTick = {
 	private _active = false;
 	{
 		private _g = _x;
-		if (([_target, getPosATL leader _g] call SWLC_fnc_adInSquare) || {(behaviour leader _g) == "COMBAT"}) then {_active = true};
-		// Waypoints used up: keep sweeping until the sector flips.
-		if ((_g getVariable ["SWLC_leg", ""]) == "FOOT" && {[_g] call SWLC_fnc_adOrderDone}) then {
-			[_g, [_target] call SWLC_fnc_sweepOrder, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
-		};
+		[_cmd, _g, "assault", {
+			if (([_target, getPosATL leader _g] call SWLC_fnc_adInSquare) || {(behaviour leader _g) == "COMBAT"}) then {_active = true};
+			// Waypoints used up: keep sweeping until the sector flips.
+			if ((_g getVariable ["SWLC_leg", ""]) == "FOOT" && {[_g] call SWLC_fnc_adOrderDone}) then {
+				[_g, [_target] call SWLC_fnc_sweepOrder, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
+			};
+		}] call SWLC_fnc_resGuarded;
 	} forEach _attackers;
 	if (_active) then {_op set ["lastProgress", time]};
 	if ((time - (_op get "lastProgress")) >= CFG("waveNoProgressSeconds")) exitWith {"no_progress"};
@@ -460,8 +473,10 @@ SWLC_fnc_pushOver = {
 	_op set ["prepDone", false];
 	_op set ["forceGo", false];
 	{
-		[_x, "Regrouping", _op get "rally", "fall_back"] call SWLC_fnc_setState;
-		[_x, [[_op get "rally", "MOVE", 30]], "AWARE", "FULL", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;
+		[_cmd, _x, "pushOver", {
+			[_x, "Regrouping", _op get "rally", "fall_back"] call SWLC_fnc_setState;
+			[_x, [[_op get "rally", "MOVE", 30]], "AWARE", "FULL", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;
+		}] call SWLC_fnc_resGuarded;
 	} forEach _attackers;
 };
 
@@ -482,10 +497,12 @@ SWLC_fnc_waveResolve = {
 		[_side, "seized", [[_op get "target"] call SWLC_fnc_adName]] call SWLC_fnc_radio;
 	};
 	{
-		_x setVariable ["SWLC_waveId", -1];
-		[_cmd, _x] call SWLC_fnc_vehRelease;
-		[_x] call SWLC_fnc_adClearOrder;
-		[_x, "Unassigned", [], "wave_over"] call SWLC_fnc_setState;
+		[_cmd, _x, "waveResolve", {
+			_x setVariable ["SWLC_waveId", -1];
+			[_cmd, _x] call SWLC_fnc_vehRelease;
+			[_x] call SWLC_fnc_adClearOrder;
+			[_x, "Unassigned", [], "wave_over"] call SWLC_fnc_setState;
+		}] call SWLC_fnc_resGuarded;
 	} forEach _live;
 	{
 		private _rec = _y;

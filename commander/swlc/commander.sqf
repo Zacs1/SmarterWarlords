@@ -67,21 +67,27 @@ SWLC_fnc_commanderGuard = {
 		[_cmd] call SWLC_fnc_resWatchSupervisor;
 		private _side = _cmd get "side";
 		private _spent = 0;
+		private _voteOk = false;
 		isNil {
 			private _t0 = diag_tickTime;
 			if (isNull ([_side] call SWLC_fnc_adTarget)) then {
 				[_cmd] call SWLC_fnc_voteCast;
 			};
 			_spent = (diag_tickTime - _t0) * 1000;
+			_voteOk = true;
 		};
+		if (!_voteOk) then {[_cmd, "guardVote"] call SWLC_fnc_resStageFault};
 		// One group per step, so a round of re-asserted waypoints doesn't all land in one frame.
 		{
 			private _g = _x;
+			private _sliceOk = false;
 			isNil {
 				private _t0 = diag_tickTime;
 				if (!isNull _g) then {[_cmd, _g, "guard", SWLC_fnc_cmdGuardGroup, "guard"] call SWLC_fnc_resGuarded};
 				_spent = _spent + (diag_tickTime - _t0) * 1000;
+				_sliceOk = true;
 			};
+			if (!_sliceOk) then {[_cmd, "guard"] call SWLC_fnc_resStageFault};
 			sleep 0.01;
 		} forEach ((_cmd get "groups") select {true});
 		_cmd set ["guardCost", (_cmd getOrDefault ["guardCost", 0]) + _spent];
@@ -187,6 +193,7 @@ SWLC_fnc_cmdMusterSlices = {
 		private _name = _x;
 		private _busy = false;
 		private _spent = 0;
+		private _sliceOk = false;
 		isNil {
 			private _t0 = diag_tickTime;
 			private _now = _cmd get "op";
@@ -196,7 +203,9 @@ SWLC_fnc_cmdMusterSlices = {
 				[_cmd, _now, _rec] call SWLC_fnc_musterTick;
 			};
 			_spent = (diag_tickTime - _t0) * 1000;
+			_sliceOk = true;
 		};
+		if (!_sliceOk) then {[_cmd, "waveMusters"] call SWLC_fnc_resStageFault};
 		[_cmd, "waveMusters", _spent] call SWLC_fnc_cmdStageCost;
 		[_cmd, _spent] call SWLC_fnc_cmdSliceDone;
 		if (_busy) then {sleep CFG("tickYieldSeconds")};
@@ -210,11 +219,14 @@ SWLC_fnc_cmdAssignSlices = {
 	{
 		private _g = _x;
 		private _spent = 0;
+		private _sliceOk = false;
 		isNil {
 			private _t0 = diag_tickTime;
 			if (!isNil {_cmd get "op"} && {(units _g findIf {alive _x}) >= 0} && {([_g] call SWLC_fnc_state) == "Unassigned"} && {time >= (_g getVariable ["SWLC_noAssignUntil", -1])}) then {[_cmd, _g, "assign", SWLC_fnc_musterAssign] call SWLC_fnc_resGuarded};
 			_spent = (diag_tickTime - _t0) * 1000;
+			_sliceOk = true;
 		};
+		if (!_sliceOk) then {[_cmd, "cmdAssign"] call SWLC_fnc_resStageFault};
 		[_cmd, "cmdAssign", _spent] call SWLC_fnc_cmdStageCost;
 		[_cmd, _spent] call SWLC_fnc_cmdSliceDone;
 		sleep CFG("tickYieldSeconds");

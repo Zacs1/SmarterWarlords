@@ -10,6 +10,7 @@ SWLC_fnc_upkeepSlices = {
 	if !(CFG("resilience")) exitWith {};
 	private _work = [];
 	private _spent = 0;
+	private _sliceOk = false;
 	isNil {
 		private _t0 = diag_tickTime;
 		private _mine = (_cmd get "groups") select {[_x] call SWLC_fnc_upkeepMine};
@@ -17,15 +18,19 @@ SWLC_fnc_upkeepSlices = {
 		private _lead = CFG("upkeepLeader");
 		{
 			// Every pass, not once: the setting doesn't reach men who join or respawn later.
-			if (_noFlee) then {_x allowFleeing 0};
-			if (_lead) then {[_cmd, _x] call SWLC_fnc_upkeepLeader};
+			[_cmd, _x, "upkeepLeader", {
+				if (_noFlee) then {_x allowFleeing 0};
+				if (_lead) then {[_cmd, _x] call SWLC_fnc_upkeepLeader};
+			}] call SWLC_fnc_resGuarded;
 		} forEach _mine;
 		private _n = CFG("upkeepSlices") max 1;
 		private _i = (_cmd getOrDefault ["upkeepIdx", 0]) mod _n;
 		_cmd set ["upkeepIdx", (_i + 1) mod _n];
 		{if ((_forEachIndex mod _n) == _i) then {_work pushBack _x}} forEach _mine;
 		_spent = (diag_tickTime - _t0) * 1000;
+		_sliceOk = true;
 	};
+	if (!_sliceOk) then {[_cmd, "upkeep"] call SWLC_fnc_resStageFault};
 	[_cmd, "upkeep", _spent] call SWLC_fnc_cmdStageCost;
 	[_cmd, _spent] call SWLC_fnc_cmdSliceDone;
 	if (_work isEqualTo []) exitWith {};
@@ -33,16 +38,21 @@ SWLC_fnc_upkeepSlices = {
 	{
 		private _g = _x;
 		private _cost = 0;
+		private _sliceOk = false;
 		isNil {
 			private _t0 = diag_tickTime;
 			if ([_g] call SWLC_fnc_upkeepMine) then {
-				if !([_cmd, _g] call SWLC_fnc_upkeepRemnant) then {
-					[_cmd, _g] call SWLC_fnc_upkeepLeftovers;
-					[_cmd, _g] call SWLC_fnc_upkeepStragglers;
-				};
+				[_cmd, _g, "upkeep", {
+					if !([_cmd, _g] call SWLC_fnc_upkeepRemnant) then {
+						[_cmd, _g] call SWLC_fnc_upkeepLeftovers;
+						[_cmd, _g] call SWLC_fnc_upkeepStragglers;
+					};
+				}] call SWLC_fnc_resGuarded;
 			};
 			_cost = (diag_tickTime - _t0) * 1000;
+			_sliceOk = true;
 		};
+		if (!_sliceOk) then {[_cmd, "upkeep"] call SWLC_fnc_resStageFault};
 		[_cmd, "upkeep", _cost] call SWLC_fnc_cmdStageCost;
 		[_cmd, _cost] call SWLC_fnc_cmdSliceDone;
 		sleep CFG("tickYieldSeconds");

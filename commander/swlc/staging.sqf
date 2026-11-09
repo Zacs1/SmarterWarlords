@@ -171,16 +171,18 @@ SWLC_fnc_musterArrivals = {
 	{
 		private _rec = _y;
 		{
-			if (([_x] call SWLC_fnc_state) == "Travelling") then {
-				private _goal = _x getVariable ["SWLC_goal", []];
-				if (_goal isNotEqualTo [] && {(leader _x distance2D _goal) <= _r}) then {
-					[_x, "Mustering", _goal, "arrived"] call SWLC_fnc_setState;
-					if ((_rec get "firstArrive") < 0) then {_rec set ["firstArrive", time]};
-					["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "arrival"], ["group", groupId _x], ["sector", _rec get "name"]]] call SWLC_fnc_log;
-					[_cmd get "side", "arrived", [], _x] call SWLC_fnc_radio;
+			[_cmd, _x, "musterArrivals", {
+				if (([_x] call SWLC_fnc_state) == "Travelling") then {
+					private _goal = _x getVariable ["SWLC_goal", []];
+					if (_goal isNotEqualTo [] && {(leader _x distance2D _goal) <= _r}) then {
+						[_x, "Mustering", _goal, "arrived"] call SWLC_fnc_setState;
+						if ((_rec get "firstArrive") < 0) then {_rec set ["firstArrive", time]};
+						["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "arrival"], ["group", groupId _x], ["sector", _rec get "name"]]] call SWLC_fnc_log;
+						[_cmd get "side", "arrived", [], _x] call SWLC_fnc_radio;
+					};
 				};
-			};
-		} forEach (_rec get "groups");
+			}] call SWLC_fnc_resGuarded;
+		} forEach ((_rec get "groups") select {true});
 	} forEach (_cmd get "musters");
 };
 
@@ -193,11 +195,13 @@ SWLC_fnc_musterSweep = {
 		private _rec = _musters get _x;
 		if (([_rec get "sector"] call SWLC_fnc_adOwner) != _side) then {
 			{
-				if (([_x] call SWLC_fnc_state) in ["Travelling", "Mustering", "Mounting"]) then {
-					[_cmd, _x] call SWLC_fnc_waveRemoveGroup;
-					[_x] call SWLC_fnc_adClearOrder;
-					[_x, "Unassigned", [], "muster_lost"] call SWLC_fnc_setState;
-				};
+				[_cmd, _x, "musterSweep", {
+					if (([_x] call SWLC_fnc_state) in ["Travelling", "Mustering", "Mounting"]) then {
+						[_cmd, _x] call SWLC_fnc_waveRemoveGroup;
+						[_x] call SWLC_fnc_adClearOrder;
+						[_x, "Unassigned", [], "muster_lost"] call SWLC_fnc_setState;
+					};
+				}] call SWLC_fnc_resGuarded;
 			} forEach ((_rec get "groups") + (_rec get "batch"));
 			{
 				private _o = _rec get _x;
@@ -239,10 +243,12 @@ SWLC_fnc_musterTick = {
 	_rec set ["goTime", time];
 	_rec set ["firstArrive", -1];
 	{
-		[_x] call SWLC_fnc_waveGroupStart;
-		_x setVariable ["SWLC_mountGo", time];
-		[_x, "Mounting", _op get "rally", "go"] call SWLC_fnc_setState;
-	} forEach _arrived;
+		[_cmd, _x, "musterGo", {
+			[_x] call SWLC_fnc_waveGroupStart;
+			_x setVariable ["SWLC_mountGo", time];
+			[_x, "Mounting", _op get "rally", "go"] call SWLC_fnc_setState;
+		}] call SWLC_fnc_resGuarded;
+	} forEach (+_arrived);
 	["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "muster_go"], ["sector", _rec get "name"], ["groups", count _arrived], ["wait", round _waited], ["forced", _forced]]] call SWLC_fnc_log;
 	if (({count ([_x] call SWLC_fnc_vehRecOf) > 0} count _arrived) > 0) then {[_cmd get "side", "mount"] call SWLC_fnc_radio};
 	[_cmd, _op, _rec, _arrived] call SWLC_fnc_musterMountTick;
@@ -253,8 +259,10 @@ SWLC_fnc_musterMountTick = {
 	[_cmd, _op, _batch] call SWLC_fnc_kitTick;
 	{
 		// Kit first, then board, so nobody climbs in on the way to the crate.
-		if !([_x] call SWLC_fnc_kitPending) then {[_cmd, _x] call SWLC_fnc_vehMountGroup};
-	} forEach _batch;
+		[_cmd, _x, "musterMount", {
+			if !([_x] call SWLC_fnc_kitPending) then {[_cmd, _x] call SWLC_fnc_vehMountGroup};
+		}] call SWLC_fnc_resGuarded;
+	} forEach (+_batch);
 	if ((time - (_rec get "goTime")) >= CFG("mountCapSeconds") || {(_batch findIf {!([_x] call SWLC_fnc_groupReady)}) < 0}) then {
 		[_cmd, _op, _rec, _batch] call SWLC_fnc_waveDepart;
 	};

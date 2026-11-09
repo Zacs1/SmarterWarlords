@@ -186,15 +186,19 @@ SWLC_fnc_defRespond = {
 	// A picket on this sector is already there.
 	{
 		if ((count (_rec get "groups")) >= _need) exitWith {};
-		_x setVariable ["SWLC_picketSector", nil];
-		[_cmd, _rec, _x, "picket"] call SWLC_fnc_defSend;
+		[_cmd, _x, "defPicket", {
+			_x setVariable ["SWLC_picketSector", nil];
+			[_cmd, _rec, _x, "picket"] call SWLC_fnc_defSend;
+		}] call SWLC_fnc_resGuarded;
 	} forEach ((_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Picket" && {(_x getVariable ["SWLC_picketSector", objNull]) isEqualTo _s}});
 
 	// 1. Reserve first.
 	private _reserve = [(_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Reserve"}] call _nearest;
 	{
 		if ((count (_rec get "groups")) >= _need) exitWith {};
-		[_cmd, _rec, _x, "reserve"] call SWLC_fnc_defSend;
+		[_cmd, _x, "defReserve", {
+			[_cmd, _rec, _x, "reserve"] call SWLC_fnc_defSend;
+		}] call SWLC_fnc_resGuarded;
 	} forEach _reserve;
 
 	// 2. A sector with a muster in progress: its groups defend at once.
@@ -206,8 +210,10 @@ SWLC_fnc_defRespond = {
 		};
 		if (_staged isNotEqualTo []) then {
 			{
-				if (_prop && {!isNil "_opNow"}) then {_x setVariable ["SWLC_peeledOp", _opNow get "id"]};
-				[_cmd, _rec, _x, "staging_abort"] call SWLC_fnc_defSend;
+				[_cmd, _x, "defStaged", {
+					if (_prop && {!isNil "_opNow"}) then {_x setVariable ["SWLC_peeledOp", _opNow get "id"]};
+					[_cmd, _rec, _x, "staging_abort"] call SWLC_fnc_defSend;
+				}] call SWLC_fnc_resGuarded;
 			} forEach _staged;
 			_muster set ["firstArrive", -1];
 			["C_DEF", [["side", _side], ["event", "staging_abort"], ["sector", [_s] call SWLC_fnc_adName], ["groups", count _staged]]] call SWLC_fnc_log;
@@ -226,10 +232,12 @@ SWLC_fnc_defRespond = {
 		private _pool = _live select {([_x] call SWLC_fnc_state) in ["Mustering", "Travelling", "Waiting", "Advancing"] && {(behaviour leader _x) != "COMBAT"}};
 		{
 			if ((count (_rec get "groups")) >= _need || {_peeled >= _cap}) exitWith {};
-			_x setVariable ["SWLC_peeledOp", _op get "id"];
-			[_cmd, _rec, _x, "peeled"] call SWLC_fnc_defSend;
-			_peeled = _peeled + 1;
-			["C_DEF", [["side", _side], ["event", "peel"], ["sector", [_s] call SWLC_fnc_adName], ["group", groupId _x], ["peeled", _peeled], ["cap", _cap], ["need", _need]]] call SWLC_fnc_log;
+			[_cmd, _x, "defPeel", {
+				_x setVariable ["SWLC_peeledOp", _op get "id"];
+				[_cmd, _rec, _x, "peeled"] call SWLC_fnc_defSend;
+				_peeled = _peeled + 1;
+				["C_DEF", [["side", _side], ["event", "peel"], ["sector", [_s] call SWLC_fnc_adName], ["group", groupId _x], ["peeled", _peeled], ["cap", _cap], ["need", _need]]] call SWLC_fnc_log;
+			}] call SWLC_fnc_resGuarded;
 		} forEach ([_pool] call _nearest);
 	};
 
@@ -245,8 +253,10 @@ SWLC_fnc_defRespond = {
 			private _pool = if (isNil "_op") then {[]} else {([_op] call SWLC_fnc_waveLive) select {([_x] call SWLC_fnc_state) in ["Mustering", "Travelling", "Mounting", "Advancing"]}};
 			{
 				if ((count (_rec get "groups")) >= _need) exitWith {};
-				if (_prop) then {_x setVariable ["SWLC_peeledOp", _op get "id"]};
-				[_cmd, _rec, _x, "pulled"] call SWLC_fnc_defSend;
+				[_cmd, _x, "defPull", {
+					if (_prop) then {_x setVariable ["SWLC_peeledOp", _op get "id"]};
+					[_cmd, _rec, _x, "pulled"] call SWLC_fnc_defSend;
+				}] call SWLC_fnc_resGuarded;
 			} forEach ([_pool] call _nearest);
 		};
 	};
@@ -256,15 +266,17 @@ SWLC_fnc_defStandDown = {
 	params ["_cmd", "_name", "_rec", "_why"];
 	private _returned = false;
 	{
-		if (({alive _x} count units _x) > 0 && {([_x] call SWLC_fnc_state) == "Defending"}) then {
-			if ((_x getVariable ["SWLC_peeledOp", -1]) >= 0) then {
-				_x setVariable ["SWLC_peeledOp", -1];
-				_x setVariable ["SWLC_peeledBackAt", time];
-				_returned = true;
+		[_cmd, _x, "defStandDown", {
+			if (({alive _x} count units _x) > 0 && {([_x] call SWLC_fnc_state) == "Defending"}) then {
+				if ((_x getVariable ["SWLC_peeledOp", -1]) >= 0) then {
+					_x setVariable ["SWLC_peeledOp", -1];
+					_x setVariable ["SWLC_peeledBackAt", time];
+					_returned = true;
+				};
+				[_x] call SWLC_fnc_adClearOrder;
+				[_x, "Unassigned", [], "stand_down"] call SWLC_fnc_setState;
 			};
-			[_x] call SWLC_fnc_adClearOrder;
-			[_x, "Unassigned", [], "stand_down"] call SWLC_fnc_setState;
-		};
+		}] call SWLC_fnc_resGuarded;
 	} forEach (_rec get "groups");
 	if (_returned && {_why == "clear"}) then {[_cmd get "side", "defreturn", [_name]] call SWLC_fnc_radio};
 	["C_DEF", [["side", _cmd get "side"], ["event", "stand_down"], ["sector", _name], ["why", _why], ["groups", count (_rec get "groups")], ["duration", round (time - (_rec get "first"))]]] call SWLC_fnc_log;
@@ -284,60 +296,70 @@ SWLC_fnc_defReserveTick = {
 
 	if ((count _reserve) > _size) then {
 		{
-			[_x] call SWLC_fnc_adClearOrder;
-			[_x, "Unassigned", [], "reserve_shrunk"] call SWLC_fnc_setState;
-			_reserve = _reserve - [_x];
+			[_cmd, _x, "reserveShrink", {
+				[_x] call SWLC_fnc_adClearOrder;
+				[_x, "Unassigned", [], "reserve_shrunk"] call SWLC_fnc_setState;
+				_reserve = _reserve - [_x];
+			}] call SWLC_fnc_resGuarded;
 		} forEach (_reserve select [_size, count _reserve]);
 	};
 	{
 		if ((count _reserve) >= _size) exitWith {};
 		private _g = _x;
-		_g setVariable ["SWLC_patrolAt", -1e6];
-		_reserve pushBack _g;
-		[_g, "Reserve", [_post] call SWLC_fnc_adPos, "reserve"] call SWLC_fnc_setState;
-		["C_DEF", [["side", _side], ["event", "reserve_join"], ["group", groupId _g], ["post", [_post] call SWLC_fnc_adName], ["size", _size]]] call SWLC_fnc_log;
+		[_cmd, _g, "reserveJoin", {
+			_g setVariable ["SWLC_patrolAt", -1e6];
+			_reserve pushBack _g;
+			[_g, "Reserve", [_post] call SWLC_fnc_adPos, "reserve"] call SWLC_fnc_setState;
+			["C_DEF", [["side", _side], ["event", "reserve_join"], ["group", groupId _g], ["post", [_post] call SWLC_fnc_adName], ["size", _size]]] call SWLC_fnc_log;
+		}] call SWLC_fnc_resGuarded;
 	} forEach ((_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Unassigned"});
 
 	private _c = [_post] call SWLC_fnc_adPos;
 	{
 		private _g = _x;
-		if ((time - (_g getVariable ["SWLC_patrolAt", -1e6])) >= CFG("reservePatrolSeconds")) then {
-			_g setVariable ["SWLC_patrolAt", time];
-			private _spot = [_c, random 360, 15 + random 45] call SWLC_fnc_offset;
-			if (surfaceIsWater _spot) then {_spot = +_c};
-			_g setVariable ["SWLC_goal", _spot];
-			[_g, [[_spot, "MOVE", 15]], "SAFE", "LIMITED", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;
-			[_g, _post, _spot, random 360] call SWLC_fnc_defMoveTo;
-		};
+		[_cmd, _g, "reservePatrol", {
+			if ((time - (_g getVariable ["SWLC_patrolAt", -1e6])) >= CFG("reservePatrolSeconds")) then {
+				_g setVariable ["SWLC_patrolAt", time];
+				private _spot = [_c, random 360, 15 + random 45] call SWLC_fnc_offset;
+				if (surfaceIsWater _spot) then {_spot = +_c};
+				_g setVariable ["SWLC_goal", _spot];
+				[_g, [[_spot, "MOVE", 15]], "SAFE", "LIMITED", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;
+				[_g, _post, _spot, random 360] call SWLC_fnc_defMoveTo;
+			};
+		}] call SWLC_fnc_resGuarded;
 	} forEach _reserve;
 
 	// A group that was still seated when it was pulled couldn't fast travel. Try again once it's on foot.
 	{
 		private _g = _x;
-		private _retry = _g getVariable ["SWLC_defRetry", []];
-		if (_retry isNotEqualTo []) then {
-			if (([_g] call SWLC_fnc_state) != "Defending") then {
-				_g setVariable ["SWLC_defRetry", []];
-			} else {
-				if (vehicle leader _g == leader _g) then {
+		[_cmd, _g, "defRetry", {
+			private _retry = _g getVariable ["SWLC_defRetry", []];
+			if (_retry isNotEqualTo []) then {
+				if (([_g] call SWLC_fnc_state) != "Defending") then {
 					_g setVariable ["SWLC_defRetry", []];
-					([_g] + _retry) call SWLC_fnc_defMoveTo;
+				} else {
+					if (vehicle leader _g == leader _g) then {
+						_g setVariable ["SWLC_defRetry", []];
+						([_g] + _retry) call SWLC_fnc_defMoveTo;
+					};
 				};
 			};
-		};
+		}] call SWLC_fnc_resGuarded;
 	} forEach (_cmd get "groups");
 
 	// Defenders holding a spot shuffle as well.
 	{
 		private _g = _x;
-		if (([_g] call SWLC_fnc_state) == "Defending" && {(_g getVariable ["SWLC_lambsTask", ""]) == ""} && {(time - (_g getVariable ["SWLC_patrolAt", -1e6])) >= CFG("reservePatrolSeconds")}) then {
-			_g setVariable ["SWLC_patrolAt", time];
-			private _goal = _g getVariable ["SWLC_goal", []];
-			if (_goal isNotEqualTo []) then {
-				private _spot = [_goal, _g] call SWLC_fnc_shuffleSpot;
-				[_g, [[_spot, "MOVE", 8]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
+		[_cmd, _g, "defShuffle", {
+			if (([_g] call SWLC_fnc_state) == "Defending" && {(_g getVariable ["SWLC_lambsTask", ""]) == ""} && {(time - (_g getVariable ["SWLC_patrolAt", -1e6])) >= CFG("reservePatrolSeconds")}) then {
+				_g setVariable ["SWLC_patrolAt", time];
+				private _goal = _g getVariable ["SWLC_goal", []];
+				if (_goal isNotEqualTo []) then {
+					private _spot = [_goal, _g] call SWLC_fnc_shuffleSpot;
+					[_g, [[_spot, "MOVE", 8]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
+				};
 			};
-		};
+		}] call SWLC_fnc_resGuarded;
 	} forEach (_cmd get "groups");
 };
 

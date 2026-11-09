@@ -146,12 +146,18 @@ SWLC_fnc_capLoop = {
 	scriptName "SWLC capture";
 	while {true} do {
 		sleep CFG("capturePollSeconds");
+		private _pollOk = false;
 		isNil {
 			{
 				private _side = _x;
 				{[_x, _side] call SWLC_fnc_capWatch} forEach ([_side] call SWLC_fnc_capWatched);
 			} forEach [west, east];
 			{[_x, SWLC_capRecs get _x] call SWLC_fnc_capUpdate} forEach (keys SWLC_capRecs);
+			_pollOk = true;
+		};
+		if (!_pollOk && {["resGroupGuard"] call SWLC_fnc_resItem}) then {
+			["C_SUP", [["side", "-"], ["action", "stage_error"], ["stale_s", 0], ["last_group", "-"], ["last_stage", "capture"],
+				["error", missionNamespace getVariable ["SWLC_lastScriptError", "unknown"]]]] call SWLC_fnc_log;
 		};
 	};
 };

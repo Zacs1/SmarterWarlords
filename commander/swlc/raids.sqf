@@ -96,7 +96,7 @@ SWLC_fnc_raidStart = {
 	_cmd set ["raid", _rec];
 	[_cmd, "start", _s, [["by", _by], ["cost", CFG("raidCostCP")], ["groups", count _groups], ["added", _added], ["nominal", ([_s, _side] call SWLC_fnc_capNominalFor) toFixed 1]]] call SWLC_fnc_raidLog;
 	[_side, "raidorder", [[_s] call SWLC_fnc_adName]] call SWLC_fnc_radio;
-	{[_cmd, _rec, _x] call SWLC_fnc_raidSend} forEach _groups;
+	{[_cmd, _x, "raidSend", {[_cmd, _rec, _g] call SWLC_fnc_raidSend}] call SWLC_fnc_resGuarded} forEach _groups;
 	_rec
 };
 
@@ -116,10 +116,12 @@ SWLC_fnc_raidClear = {
 	missionNamespace setVariable [format ["SWLC_raidSector_%1", _side], objNull];
 	missionNamespace setVariable [format ["SWLC_raid_%1", _side], [], true];
 	{
-		if (([_x] call SWLC_fnc_groupMen) > 0 && {([_x] call SWLC_fnc_state) == "Raiding"}) then {
-			[_x] call SWLC_fnc_adClearOrder;
-			[_x, "Unassigned", [], "raid_over"] call SWLC_fnc_setState;
-		};
+		[_cmd, _x, "raidClear", {
+			if (([_x] call SWLC_fnc_groupMen) > 0 && {([_x] call SWLC_fnc_state) == "Raiding"}) then {
+				[_x] call SWLC_fnc_adClearOrder;
+				[_x, "Unassigned", [], "raid_over"] call SWLC_fnc_setState;
+			};
+		}] call SWLC_fnc_resGuarded;
 	} forEach (_rec get "groups");
 	_cmd deleteAt "raid";
 	_cmd set ["raidCooldownUntil", time + CFG("raidCooldownSeconds")];
@@ -148,10 +150,12 @@ SWLC_fnc_raidMerge = {
 	private _cap = SWLC_capRecs getOrDefault [_key, createHashMap];
 	if (count _cap > 0) then {[_key, _cap, "became_target"] call SWLC_fnc_capFinish};
 	{
-		if (([_x] call SWLC_fnc_groupMen) > 0 && {([_x] call SWLC_fnc_state) == "Raiding"}) then {
-			[_x] call SWLC_fnc_adClearOrder;
-			[_x, "Unassigned", [], "raid_merged"] call SWLC_fnc_setState;
-		};
+		[_cmd, _x, "raidMerge", {
+			if (([_x] call SWLC_fnc_groupMen) > 0 && {([_x] call SWLC_fnc_state) == "Raiding"}) then {
+				[_x] call SWLC_fnc_adClearOrder;
+				[_x, "Unassigned", [], "raid_merged"] call SWLC_fnc_setState;
+			};
+		}] call SWLC_fnc_resGuarded;
 	} forEach (_rec get "groups");
 	_rec set ["why", "became_target"];
 	[_cmd, "stop", _s, [["why", "became_target"]]] call SWLC_fnc_raidLog;
@@ -172,11 +176,13 @@ SWLC_fnc_raidStop = {
 	_rec set ["graceUntil", time + CFG("raidGraceSeconds")];
 	_rec set ["why", _why];
 	{
-		if (([_x] call SWLC_fnc_groupMen) > 0 && {([_x] call SWLC_fnc_state) == "Raiding"}) then {
-			[_x] call SWLC_fnc_adClearOrder;
-			[_x, "Unassigned", [], "raid_stopped"] call SWLC_fnc_setState;
-			[_cmd, _x] call SWLC_fnc_raidGoHome;
-		};
+		[_cmd, _x, "raidStop", {
+			if (([_x] call SWLC_fnc_groupMen) > 0 && {([_x] call SWLC_fnc_state) == "Raiding"}) then {
+				[_x] call SWLC_fnc_adClearOrder;
+				[_x, "Unassigned", [], "raid_stopped"] call SWLC_fnc_setState;
+				[_cmd, _x] call SWLC_fnc_raidGoHome;
+			};
+		}] call SWLC_fnc_resGuarded;
 	} forEach (_rec get "groups");
 	[_cmd, "stop", _s, [["why", _why]]] call SWLC_fnc_raidLog;
 	[_side, "raidstop", [[_s] call SWLC_fnc_adName]] call SWLC_fnc_radio;
@@ -280,7 +286,7 @@ SWLC_fnc_raidTick = {
 	_rec set ["groups", _live];
 	if (_live isEqualTo [] && {(_rec get "by") in ["ai", "probe"]}) exitWith {[_cmd, _rec, "wiped"] call SWLC_fnc_raidStop};
 	if (time >= (_rec get "expires")) exitWith {[_cmd, _rec, "expired"] call SWLC_fnc_raidStop};
-	{[_x, _s] call SWLC_fnc_raidShuffle} forEach _live;
+	{[_cmd, _x, "raidShuffle", {[_g, _s] call SWLC_fnc_raidShuffle}] call SWLC_fnc_resGuarded} forEach _live;
 };
 
 // ---- Probes ----

@@ -762,7 +762,12 @@ SWLC_fnc_resSweepStart = {
 SWLC_fnc_resSweepSlice = {
 	params ["_cmd"];
 	if !(CFG("resilience")) exitWith {};
-	isNil {[_cmd] call SWLC_fnc_resSweepStart};
+	private _startOk = false;
+	isNil {
+		[_cmd] call SWLC_fnc_resSweepStart;
+		_startOk = true;
+	};
+	if (!_startOk) then {[_cmd, "resSweepStart"] call SWLC_fnc_resStageFault};
 
 	private _idle = 0;
 	private _total = 0;
@@ -771,6 +776,7 @@ SWLC_fnc_resSweepSlice = {
 	{
 		private _g = _x;
 		private _spent = 0;
+		private _sliceOk = false;
 		isNil {
 			private _t0 = diag_tickTime;
 			if (!isNull _g && {_g in (_cmd get "groups")}) then {
@@ -781,11 +787,18 @@ SWLC_fnc_resSweepSlice = {
 				};
 			};
 			_spent = (diag_tickTime - _t0) * 1000;
+			_sliceOk = true;
 		};
+		if (!_sliceOk) then {[_cmd, "resSweep"] call SWLC_fnc_resStageFault};
 		[_cmd, "resSweep", _spent] call SWLC_fnc_cmdStageCost;
 		[_cmd, _spent] call SWLC_fnc_cmdSliceDone;
 		sleep CFG("tickYieldSeconds");
 	} forEach ((_cmd get "groups") select {true});
 
-	isNil {[_cmd, _idle, _total] call SWLC_fnc_resIdleCap};
+	private _capOk = false;
+	isNil {
+		[_cmd, _idle, _total] call SWLC_fnc_resIdleCap;
+		_capOk = true;
+	};
+	if (!_capOk) then {[_cmd, "resIdleCap"] call SWLC_fnc_resStageFault};
 };

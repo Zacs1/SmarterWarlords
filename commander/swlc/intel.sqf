@@ -18,11 +18,14 @@ SWLC_fnc_intelLoop = {
 	if ((_cmd get "side") == east) then {sleep (CFG("intelPollSeconds") / 2)};
 	while {true} do {
 		sleep CFG("intelPollSeconds");
+		private _pollOk = false;
 		isNil {
 			private _t0 = diag_tickTime;
 			[_cmd] call SWLC_fnc_intelPoll;
 			_cmd set ["pollCost", (_cmd getOrDefault ["pollCost", 0]) + (diag_tickTime - _t0) * 1000];
+			_pollOk = true;
 		};
+		if (!_pollOk) then {[_cmd, "intelPoll"] call SWLC_fnc_resStageFault};
 		_cmd set ["pollCount", (_cmd getOrDefault ["pollCount", 0]) + 1];
 	};
 };
@@ -294,7 +297,12 @@ SWLC_fnc_intelPostScan = {
 		};
 	} forEach _found;
 	["C_INTEL", [["side", _side], ["event", "scan"], ["sector", [_s] call SWLC_fnc_adName], ["found", count _sightings]]] call SWLC_fnc_log;
-	isNil {[_cmd, _sightings, "scan"] call SWLC_fnc_intelPost};
+	private _postOk = false;
+	isNil {
+		[_cmd, _sightings, "scan"] call SWLC_fnc_intelPost;
+		_postOk = true;
+	};
+	if (!_postOk) then {[_cmd, "intelPost"] call SWLC_fnc_resStageFault};
 };
 
 // Rebuilt each commander tick. Sector name -> summary.

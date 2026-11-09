@@ -74,11 +74,13 @@ SWLC_fnc_picketTick = {
 	private _pickets = _groups select {([_x] call SWLC_fnc_state) == "Picket"};
 	{
 		private _g = _x;
-		private _s = _g getVariable ["SWLC_picketSector", objNull];
-		if (!(_s in _front)) then {
-			[_cmd, _g, "not_front_line"] call SWLC_fnc_picketRelease;
-			_pickets = _pickets - [_g];
-		};
+		[_cmd, _g, "picketFront", {
+			private _s = _g getVariable ["SWLC_picketSector", objNull];
+			if (!(_s in _front)) then {
+				[_cmd, _g, "not_front_line"] call SWLC_fnc_picketRelease;
+				_pickets = _pickets - [_g];
+			};
+		}] call SWLC_fnc_resGuarded;
 	} forEach +_pickets;
 
 	// How many pickets the side can afford.
@@ -89,20 +91,24 @@ SWLC_fnc_picketTick = {
 	if (_short > 0 && {_pickets isNotEqualTo []}) then {
 		private _order = [_pickets, [], {_front find (_x getVariable ["SWLC_picketSector", objNull])}, "DESCEND"] call BIS_fnc_sortBy;
 		{
-			[_cmd, _x, "attack_short"] call SWLC_fnc_picketRelease;
-			_pickets = _pickets - [_x];
-			_attackers = _attackers + 1;
+			[_cmd, _x, "picketShort", {
+				[_cmd, _x, "attack_short"] call SWLC_fnc_picketRelease;
+				_pickets = _pickets - [_x];
+				_attackers = _attackers + 1;
+			}] call SWLC_fnc_resGuarded;
 		} forEach (_order select [0, _short]);
 	};
 
 	// Nobody stands watch all round. A picket hands over, and rests from picket duty for a while.
 	{
-		if ((time - (_x getVariable ["SWLC_picketSince", time])) >= CFG("picketRotateSeconds") && {(behaviour leader _x) != "COMBAT"}) then {
-			_x setVariable ["SWLC_picketRestUntil", time + CFG("picketRestSeconds")];
-			[_cmd, _x, "rotate"] call SWLC_fnc_picketRelease;
-			_pickets = _pickets - [_x];
-			_attackers = _attackers + 1;
-		};
+		[_cmd, _x, "picketRotate", {
+			if ((time - (_x getVariable ["SWLC_picketSince", time])) >= CFG("picketRotateSeconds") && {(behaviour leader _x) != "COMBAT"}) then {
+				_x setVariable ["SWLC_picketRestUntil", time + CFG("picketRestSeconds")];
+				[_cmd, _x, "rotate"] call SWLC_fnc_picketRelease;
+				_pickets = _pickets - [_x];
+				_attackers = _attackers + 1;
+			};
+		}] call SWLC_fnc_resGuarded;
 	} forEach +_pickets;
 
 	private _roomFromCap = (floor ((count _groups) * CFG("picketMaxFraction"))) - (count _pickets);
@@ -117,7 +123,7 @@ SWLC_fnc_picketTick = {
 			if (_pool isNotEqualTo []) then {
 				private _c = [_s] call SWLC_fnc_adPos;
 				private _picked = ([_pool, [], {([_x] call SWLC_fnc_groupMen) * 150 + (leader _x distance2D _c)}, "ASCEND"] call BIS_fnc_sortBy) # 0;
-				[_cmd, _picked, _s] call SWLC_fnc_picketAssign;
+				[_cmd, _picked, "picketAssign", {[_cmd, _picked, _s] call SWLC_fnc_picketAssign}] call SWLC_fnc_resGuarded;
 				_pickets pushBack _picked;
 				_room = _room - 1;
 			};
@@ -127,14 +133,16 @@ SWLC_fnc_picketTick = {
 	// Pickets shuffle so Warlords doesn't treat a waiting leader as stuck.
 	{
 		private _g = _x;
-		private _since = time - (_g getVariable ["SWLC_patrolAt", -1e6]);
-		if (_since >= CFG("reservePatrolSeconds") && {([_g] call SWLC_fnc_adOrderDone) || {_since >= 2 * CFG("reservePatrolSeconds")}}) then {
-			_g setVariable ["SWLC_patrolAt", time];
-			private _goal = _g getVariable ["SWLC_goal", []];
-			if (_goal isNotEqualTo []) then {
-				private _spot = [_goal, _g] call SWLC_fnc_shuffleSpot;
-				[_g, [[_spot, "MOVE", 8]], "AWARE", "NORMAL", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;
+		[_cmd, _g, "picketShuffle", {
+			private _since = time - (_g getVariable ["SWLC_patrolAt", -1e6]);
+			if (_since >= CFG("reservePatrolSeconds") && {([_g] call SWLC_fnc_adOrderDone) || {_since >= 2 * CFG("reservePatrolSeconds")}}) then {
+				_g setVariable ["SWLC_patrolAt", time];
+				private _goal = _g getVariable ["SWLC_goal", []];
+				if (_goal isNotEqualTo []) then {
+					private _spot = [_goal, _g] call SWLC_fnc_shuffleSpot;
+					[_g, [[_spot, "MOVE", 8]], "AWARE", "NORMAL", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;
+				};
 			};
-		};
+		}] call SWLC_fnc_resGuarded;
 	} forEach _pickets;
 };

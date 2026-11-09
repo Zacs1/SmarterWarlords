@@ -138,7 +138,7 @@ SWLC_fnc_vehTick = {
 				_r set ["state", "ready"];
 				["C_VEH", [["side", _side], ["id", _r get "id"], ["event", "landed"], ["after", round (time - (_r get "boughtAt"))], ["x", round ((getPosATL _v) # 0)], ["y", round ((getPosATL _v) # 1)]]] call SWLC_fnc_log;
 			};
-			[_cmd, _r] call SWLC_fnc_vehStuckCheck;
+			[_cmd, _r get "group", "vehStuck", {[_cmd, _r] call SWLC_fnc_vehStuckCheck}] call SWLC_fnc_resGuarded;
 			if (CFG("verboseLog")) then {
 				private _p = getPosATL _v;
 				["C_VTRK", [["side", _side], ["id", _r get "id"], ["state", _r get "state"], ["wave", _r get "wave"], ["x", round (_p # 0)], ["y", round (_p # 1)]]] call SWLC_fnc_log;
@@ -304,34 +304,36 @@ SWLC_fnc_vehFollowTick = {
 	private _foot = _live select {(_x getVariable ["SWLC_leg", ""]) == "FOOT" && {([_x] call SWLC_fnc_state) == "Assaulting"}};
 	{
 		private _g = _x;
-		private _r = [_g] call SWLC_fnc_vehRecOf;
-		if ((_g getVariable ["SWLC_leg", ""]) == "FOLLOW" && {count _r > 0} && {([_g] call SWLC_fnc_state) == "Assaulting"}) then {
-			private _mine = _foot;
-			private _v = _r get "obj";
-			private _here = getPosATL _v;
-			private _dest = +_here;
-			private _leadDist = -1;
-			if (_mine isNotEqualTo []) then {
-				private _lead = _mine # 0;
-				{if ((leader _x distance2D _tpos) < (leader _lead distance2D _tpos)) then {_lead = _x}} forEach _mine;
-				private _lp = getPosATL leader _lead;
-				_leadDist = _lp distance2D _tpos;
-				private _behind = [_lp, [_lp, _here] call SWLC_fnc_bearing, CFG("combatFollowDist")] call SWLC_fnc_offset;
-				// Only ever go forward to a spot behind the lead, and never into the sector ahead of the infantry.
-				if (((_behind distance2D _tpos) >= _leadDist) && {(_here distance2D _tpos) > (_leadDist + 50) || {[_target, _lp, 0] call SWLC_fnc_adInSquare}}) then {
-					_dest = _behind;
+		[_cmd, _g, "vehFollow", {
+			private _r = [_g] call SWLC_fnc_vehRecOf;
+			if ((_g getVariable ["SWLC_leg", ""]) == "FOLLOW" && {count _r > 0} && {([_g] call SWLC_fnc_state) == "Assaulting"}) then {
+				private _mine = _foot;
+				private _v = _r get "obj";
+				private _here = getPosATL _v;
+				private _dest = +_here;
+				private _leadDist = -1;
+				if (_mine isNotEqualTo []) then {
+					private _lead = _mine # 0;
+					{if ((leader _x distance2D _tpos) < (leader _lead distance2D _tpos)) then {_lead = _x}} forEach _mine;
+					private _lp = getPosATL leader _lead;
+					_leadDist = _lp distance2D _tpos;
+					private _behind = [_lp, [_lp, _here] call SWLC_fnc_bearing, CFG("combatFollowDist")] call SWLC_fnc_offset;
+					// Only ever go forward to a spot behind the lead, and never into the sector ahead of the infantry.
+					if (((_behind distance2D _tpos) >= _leadDist) && {(_here distance2D _tpos) > (_leadDist + 50) || {[_target, _lp, 0] call SWLC_fnc_adInSquare}}) then {
+						_dest = _behind;
+					};
+				};
+				private _order = _g getVariable ["SWLC_order", []];
+				private _cur = if (_order isEqualTo []) then {[]} else {((_order # 0) # 0) # 0};
+				if (_cur isEqualTo [] || {(_cur distance2D _dest) > CFG("combatReorderDist")}) then {
+					_g setVariable ["SWLC_goal", _dest];
+					[_g, [[_dest, "MOVE", 25]], "AWARE", "NORMAL", "COLUMN", "RED"] call SWLC_fnc_adSetOrder;
+				};
+				if (CFG("verboseLog")) then {
+					["C_VPOS", [["side", side _g], ["wave", _w get "id"], ["id", _r get "id"], ["role", _r get "role"], ["x", round (_here # 0)], ["y", round (_here # 1)],
+						["d_target", round (_here distance2D _tpos)], ["lead_d", round _leadDist], ["in_square", [_target, _here] call SWLC_fnc_adInSquare]]] call SWLC_fnc_log;
 				};
 			};
-			private _order = _g getVariable ["SWLC_order", []];
-			private _cur = if (_order isEqualTo []) then {[]} else {((_order # 0) # 0) # 0};
-			if (_cur isEqualTo [] || {(_cur distance2D _dest) > CFG("combatReorderDist")}) then {
-				_g setVariable ["SWLC_goal", _dest];
-				[_g, [[_dest, "MOVE", 25]], "AWARE", "NORMAL", "COLUMN", "RED"] call SWLC_fnc_adSetOrder;
-			};
-			if (CFG("verboseLog")) then {
-				["C_VPOS", [["side", side _g], ["wave", _w get "id"], ["id", _r get "id"], ["role", _r get "role"], ["x", round (_here # 0)], ["y", round (_here # 1)],
-					["d_target", round (_here distance2D _tpos)], ["lead_d", round _leadDist], ["in_square", [_target, _here] call SWLC_fnc_adInSquare]]] call SWLC_fnc_log;
-			};
-		};
+		}] call SWLC_fnc_resGuarded;
 	} forEach _live;
 };
