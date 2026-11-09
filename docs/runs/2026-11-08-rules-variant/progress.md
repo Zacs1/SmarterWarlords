@@ -56,3 +56,12 @@ Every soak must measure each AI commander's activity and pass or fail on it. See
 
 - Guard fix confirmed by gatee2: 117 C_GUARD in 17.7 min against about 3000 before, and the rest are real overwrites (why=count, Warlords appending waypoints). Measurement problem also found: avg_ms was far above the sum of stage costs (about 5 ms against 12-49 ms), because the timing starts in scheduled code before the `isNil`, so the measurement can include a whole frame. Next: measure inside the `isNil`.
 - gatee2 could not test Part E: WEST's vote at t=39 never resolved, so it had no target for 1052 s and no wave. That happened in 1 of 22 recent rounds, and gated5 with the same setup got its target. Cause not found from the logs. Added `SWLC_fnc_cmdVoteStuck` (`voteStuckSeconds` 120, repeat 60): logs C_VOTESTUCK with the vote state and nudges Warlords' vote machine via `BIS_WL_lastSectorCnt_<side>`. Rerun gatee.
+
+- gated5: front reached, but a vote already running landed on the raid sector, so the refusal, grace and probe tests had no valid raid to work with. Setup now sends that vote back until WEST's target is another sector. Rerun after gatee3.
+
+- gatee3: setup failed with fail_no_front because it waited for the raid front, which leaves out the side's own target. It now waits for the picket front, which is what the test uses. Rerun after gated6.
+- Timing now measured properly (gatee3): tick avg 12.3 ms, max 63, poll 2.3, guard 0.8. Largest stage waveTick 4.2 ms, then vehTick, picketTick and defenceTick about 1.4 each. Target "well under 5 ms" is still not met, but the tick is every 10 s per side, so about 1.2 ms per second per side. No C_VOTESTUCK fired this round.
+
+- gated6: WEST's only choice was the raid sector (no neutral sector in reach), so it still could not raid. Setup now hands that sector over when nothing neutral is reachable, and picks the raid sector itself. Rerun after gatee4.
+
+- gatee4 was stopped 3 minutes in by Claude Code because the system ran critically low on memory (2.7 of 31.5 GB free, several `cl` compiler processes at about 1.3 GB each, none started by this run). No server was left running. The runner's check that the server install is unchanged did not run for this round. Paused: rounds restart only when the user says so. Queue when resumed: gatee4, gated7, gatec2, gateh LAMBS, then regression and soaks.
