@@ -71,6 +71,8 @@ SWLC_settings = createHashMapFromArray [
 	["switchClearMargin", 25],
 
 	// Muster: groups form up at their own sector, then leave for the rally
+	["rollingMuster", true],          // each group leaves as soon as it is ready, instead of waiting for the others at the sector
+	["musterGroupSeconds", 15],       // rolling muster: a group spends this long at the sector to buy and pick up kit
 	["musterSeconds", 30],            // the short wait after the first group arrives at a sector
 	["musterMaxSeconds", 70],         // longer only while men just bought are still landing
 	["musterHopGain", 800],           // fast travel to a sector this much closer to the target, if the group has one
@@ -81,7 +83,7 @@ SWLC_settings = createHashMapFromArray [
 
 	// Rally and go
 	["goMinGroups", 2],               // groups ready at the rally that go in together
-	["rallyLoneWait", 180],           // a lone group with nobody fighting waits this long, then goes in anyway
+	["rallyLoneWait", 60],            // a lone group with nobody fighting waits this long, then goes in anyway
 	["rallyOutside", 200],            // metres outside the sector square
 	["rallyJoinRadius", 500],         // a group this close to the rally skips the muster
 	["rallyMinAgreement", 0.3],       // how much the groups' directions must agree before their average is used

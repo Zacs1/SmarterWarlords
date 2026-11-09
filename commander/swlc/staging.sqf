@@ -176,6 +176,7 @@ SWLC_fnc_musterArrivals = {
 					private _goal = _x getVariable ["SWLC_goal", []];
 					if (_goal isNotEqualTo [] && {(leader _x distance2D _goal) <= _r}) then {
 						[_x, "Mustering", _goal, "arrived"] call SWLC_fnc_setState;
+						_x setVariable ["SWLC_musterAt", time];
 						if ((_rec get "firstArrive") < 0) then {_rec set ["firstArrive", time]};
 						["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "arrival"], ["group", groupId _x], ["sector", _rec get "name"]]] call SWLC_fnc_log;
 						[_cmd get "side", "arrived", [], _x] call SWLC_fnc_radio;
@@ -227,6 +228,31 @@ SWLC_fnc_musterTick = {
 	if ((_rec get "batch") isNotEqualTo []) then {
 		[_cmd, _op, _rec, _rec get "batch"] call SWLC_fnc_musterMountTick;
 	};
+	if (CFG("rollingMuster")) exitWith {
+		// Nobody waits for anybody: each group goes when its own men have landed and it has had its turn at the shop.
+		private _forced = _op getOrDefault ["forceGo", false];
+		private _leaving = _arrived select {
+			private _g = _x;
+			private _waited = time - (_g getVariable ["SWLC_musterAt", time]);
+			_forced || {_waited >= CFG("musterGroupSeconds") && {
+				_waited >= CFG("musterMaxSeconds") || {((units _g) findIf {alive _x && {((getPosATL _x) # 2) > 3 || {vehicle _x isKindOf "ParachuteBase"}}}) < 0}
+			}}
+		};
+		if (_leaving isEqualTo []) exitWith {};
+		_rec set ["groups", (_rec get "groups") - _leaving];
+		_rec set ["batch", (_rec get "batch") + _leaving];
+		_rec set ["goTime", time];
+		_rec set ["firstArrive", -1];
+		{
+			[_cmd, _x, "musterGo", {
+				[_x] call SWLC_fnc_waveGroupStart;
+				_x setVariable ["SWLC_mountGo", time];
+				[_x, "Mounting", _op get "rally", "go"] call SWLC_fnc_setState;
+			}] call SWLC_fnc_resGuarded;
+		} forEach (+_leaving);
+		["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "muster_go"], ["sector", _rec get "name"], ["groups", count _leaving], ["wait", 0], ["forced", _forced], ["rolling", true]]] call SWLC_fnc_log;
+		[_cmd, _op, _rec, _rec get "batch"] call SWLC_fnc_musterMountTick;
+	};
 	if ((_rec get "batch") isNotEqualTo [] || {_arrived isEqualTo []}) exitWith {};
 
 	private _first = _rec get "firstArrive";
@@ -263,6 +289,16 @@ SWLC_fnc_musterMountTick = {
 			if !([_x] call SWLC_fnc_kitPending) then {[_cmd, _x] call SWLC_fnc_vehMountGroup};
 		}] call SWLC_fnc_resGuarded;
 	} forEach (+_batch);
+	if (CFG("rollingMuster")) exitWith {
+		private _gone = _batch select {
+			((time - (_x getVariable ["SWLC_mountGo", time])) >= CFG("mountCapSeconds")) || {[_x] call SWLC_fnc_groupReady}
+		};
+		if (_gone isEqualTo []) exitWith {};
+		// waveDepart empties the record's batch, so whoever is still boarding goes back in afterwards.
+		private _stay = _batch - _gone;
+		[_cmd, _op, _rec, _gone] call SWLC_fnc_waveDepart;
+		_rec set ["batch", _stay];
+	};
 	if ((time - (_rec get "goTime")) >= CFG("mountCapSeconds") || {(_batch findIf {!([_x] call SWLC_fnc_groupReady)}) < 0}) then {
 		[_cmd, _op, _rec, _batch] call SWLC_fnc_waveDepart;
 	};

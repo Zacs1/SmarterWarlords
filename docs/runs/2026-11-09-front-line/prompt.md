@@ -108,3 +108,9 @@ Gate: in the final soak, after a sector falls, the fighting stays at or around i
 - docs/design/rules-variant.md updated with parts A to E and the decision log.
 - Hand-off doc in the run folder: per part, what was built, gates PASS or FAIL with evidence (log and plot paths), the baseline comparison from part E, the rally and muster placement per link from part A, known issues, deferred items, red flags, and the player-visible text list.
 - Final message: per-part results; the front-line numbers against the baseline; whether players get the defender fast travel rule or only the commander does; what to look for when we play it; decisions to review; anything that needs me.
+
+---
+
+## Addition from the user, during the run (verbatim)
+
+Also a side note but I really want the feeling of sustained intensive combat, so maybe relax the rally and prep point time requirements so that groups can set off as soon as their own individual commander is happy (I.e all the troops they've spawned in have gotten in a vehicle, let's go, type thing) and then at the rally point they only rally and wait if no other troops are already attacking that point, if they are, they go straight in to support those troops
