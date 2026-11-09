@@ -92,3 +92,4 @@ Every soak must measure each AI commander's activity and pass or fail on it. See
 ## Parallel rounds (user approved, 2026-11-09)
 - The user allowed up to 3 servers at once for scenario rounds; the final soak stays solo. `tools/run-round.ps1` now takes a free slot (ports 2402/2412/2422, own mission folder `SWL_Test[_N].Tanoa`), held by an exclusive lock file; `-Solo` needs an empty machine and holds every slot.
 - gateh4l (LAMBS) and gatec2 started alongside gated10.
+- gated10: setup failure, not a commander failure. With no neutral sector in WEST's reach, the setup kept handing WEST every EAST sector in turn until no front was left (fail_no_front at 2:02). Setup now gives a WEST sector that doesn't touch the raid sector back to neutral instead, as the Part E test does. Rerunning as gated11.
