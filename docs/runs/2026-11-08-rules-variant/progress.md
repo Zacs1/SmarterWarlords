@@ -65,3 +65,6 @@ Every soak must measure each AI commander's activity and pass or fail on it. See
 - gated6: WEST's only choice was the raid sector (no neutral sector in reach), so it still could not raid. Setup now hands that sector over when nothing neutral is reachable, and picks the raid sector itself. Rerun after gatee4.
 
 - gatee4 was stopped 3 minutes in by Claude Code because the system ran critically low on memory (2.7 of 31.5 GB free, several `cl` compiler processes at about 1.3 GB each, none started by this run). No server was left running. The runner's check that the server install is unchanged did not run for this round. Paused: rounds restart only when the user says so. Queue when resumed: gatee4, gated7, gatec2, gateh LAMBS, then regression and soaks.
+
+- 2026-11-09 10:55: the user said the machine is free from 13:30 today and testing can resume then. Timer set for 13:32 in this session. No rounds before that.
+- 11:15 Performance pass from the logs, no Arma rounds (waiting for 13:30). Commander tick split into slices across frames, each muster and each new group in its own frame, sides half a tick apart, repeated lookups cached, verbose-only lines skipped in the playable build. Linted only. Compare `avg_ms`, new `max_frame_ms` and C_PROF when rounds resume.

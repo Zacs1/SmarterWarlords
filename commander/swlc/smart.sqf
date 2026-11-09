@@ -420,7 +420,7 @@ SWLC_fnc_smartDigIn = {
 		_from = "enemy_sector";
 		private _enemy = SWLC_sectors select {([_x] call SWLC_fnc_adOwner) == ([_side] call SWLC_fnc_adEnemySide)};
 		if (_enemy isNotEqualTo []) then {
-			private _near = ([_enemy, [], {([_x] call SWLC_fnc_adPos) distance2D _c}, "ASCEND"] call BIS_fnc_sortBy) # 0;
+			private _near = ([_enemy, _c] call SWLC_fnc_adNearest);
 			_bearing = [_c, [_near] call SWLC_fnc_adPos] call SWLC_fnc_bearing;
 		};
 	};

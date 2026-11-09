@@ -19,7 +19,7 @@ SWLC_fnc_opBearing = {
 	if (_groups isNotEqualTo [] && {sqrt (_sx * _sx + _sy * _sy) >= CFG("rallyMinAgreement") * (count _groups)}) exitWith {_sx atan2 _sy};
 	private _owned = [_side] call SWLC_fnc_adOwned;
 	private _from = if (_owned isEqualTo []) then {[[_side] call SWLC_fnc_adBase] call SWLC_fnc_adPos} else {
-		[([_owned, [], {([_x] call SWLC_fnc_adPos) distance2D _tpos}, "ASCEND"] call BIS_fnc_sortBy) # 0] call SWLC_fnc_adPos
+		[([_owned, _tpos] call SWLC_fnc_adNearest)] call SWLC_fnc_adPos
 	};
 	[_tpos, _from] call SWLC_fnc_bearing
 };
@@ -78,7 +78,8 @@ SWLC_fnc_waveLive = {
 	(_w get "groups") select {({alive _x} count units _x) > 0 && {(_x getVariable ["SWLC_waveId", -1]) == (_w get "id")}}
 };
 
-SWLC_fnc_waveTick = {
+// The operation's tick comes in three parts, each in its own frame: this, each muster (cmdMusterSlices), then waveTail.
+SWLC_fnc_waveHead = {
 	params ["_cmd"];
 	[_cmd] call SWLC_fnc_musterSweep;
 	private _op = _cmd get "op";
@@ -88,7 +89,12 @@ SWLC_fnc_waveTick = {
 	if ((_cmd get "target") isNotEqualTo _target) exitWith {[_cmd, "target_changed"] call SWLC_fnc_waveResolve};
 	[_cmd, _op] call SWLC_fnc_wavePlan;
 	[_cmd, _op] call SWLC_fnc_musterArrivals;
-	{[_cmd, _op, _y] call SWLC_fnc_musterTick} forEach (_cmd get "musters");
+};
+
+SWLC_fnc_waveTail = {
+	params ["_cmd"];
+	private _op = _cmd get "op";
+	if (isNil "_op") exitWith {};
 	private _live = [_op] call SWLC_fnc_waveLive;
 	[_cmd, _op, _live] call SWLC_fnc_waveVehicleLegs;
 	[_cmd, _op, _live] call SWLC_fnc_rallyArrivals;

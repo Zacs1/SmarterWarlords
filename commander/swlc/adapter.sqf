@@ -37,9 +37,24 @@ SWLC_fnc_adLinks = { (_this # 0) getVariable "SWLC_links" };
 
 SWLC_fnc_adName = {
 	params ["_s"];
-	private _n = _s getVariable ["Name", ""];
-	if (_n != "") exitWith {_n};
-	format ["grid %1", mapGridPosition (_s getVariable "SWLC_pos")]
+	private _n = _s getVariable "SWLC_name";
+	if (!isNil "_n") exitWith {_n};
+	_n = _s getVariable ["Name", ""];
+	if (_n == "") then {_n = format ["grid %1", mapGridPosition (_s getVariable "SWLC_pos")]};
+	_s setVariable ["SWLC_name", _n];
+	_n
+};
+
+// The sector in a non-empty list nearest a position.
+SWLC_fnc_adNearest = {
+	params ["_list", "_pos"];
+	private _best = _list # 0;
+	private _bestD = 1e12;
+	{
+		private _d = (_x getVariable "SWLC_pos") distance2D _pos;
+		if (_d < _bestD) then {_bestD = _d; _best = _x};
+	} forEach _list;
+	_best
 };
 
 SWLC_fnc_adOwner = { (_this # 0) getVariable ["BIS_WL_sectorSide", sideUnknown] };
@@ -473,16 +488,27 @@ SWLC_fnc_adInfantryList = {
 };
 
 // "AT", "AA" or "" for a launcher class, read from its ammunition's AI usage flags.
+// Looked up in the config once per launcher: the kit and rearm checks ask about every soldier.
+SWLC_launcherKinds = createHashMap;
+
 SWLC_fnc_adLauncherKind = {
 	params ["_w"];
 	if (_w == "") exitWith {""};
+	private _known = SWLC_launcherKinds getOrDefault [_w, -1];
+	if (_known isEqualType "") exitWith {_known};
+	private _kind = "";
 	private _mags = getArray (configFile >> "CfgWeapons" >> _w >> "magazines");
-	if (_mags isEqualTo []) exitWith {""};
-	private _ammo = getText (configFile >> "CfgMagazines" >> (_mags # 0) >> "ammo");
-	private _flags = getText (configFile >> "CfgAmmo" >> _ammo >> "aiAmmoUsageFlags");
-	if ("256" in _flags) exitWith {"AA"};
-	if ("512" in _flags || {"128" in _flags}) exitWith {"AT"};
-	""
+	if (_mags isNotEqualTo []) then {
+		private _ammo = getText (configFile >> "CfgMagazines" >> (_mags # 0) >> "ammo");
+		private _flags = getText (configFile >> "CfgAmmo" >> _ammo >> "aiAmmoUsageFlags");
+		if ("256" in _flags) then {
+			_kind = "AA";
+		} else {
+			if ("512" in _flags || {"128" in _flags}) then {_kind = "AT"};
+		};
+	};
+	SWLC_launcherKinds set [_w, _kind];
+	_kind
 };
 
 // Launchers from the side's own infantry: "AT" and "AA" -> [launcher, magazine, backpack].

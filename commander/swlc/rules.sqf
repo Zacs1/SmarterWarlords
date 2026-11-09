@@ -198,7 +198,7 @@ SWLC_fnc_rulesSafeSector = {
 	params ["_side", "_pos"];
 	private _safe = ([_side] call SWLC_fnc_adOwned) select {!([_side, _x] call SWLC_fnc_capBeingSeized)};
 	if (_safe isEqualTo []) exitWith {[_side] call SWLC_fnc_adBase};
-	([_safe, [], {([_x] call SWLC_fnc_adPos) distance2D _pos}, "ASCEND"] call BIS_fnc_sortBy) # 0
+	([_safe, _pos] call SWLC_fnc_adNearest)
 };
 
 // Warlords puts a respawned AI warlord beside a living subordinate. If that is inside a sector being seized,

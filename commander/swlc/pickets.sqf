@@ -37,7 +37,7 @@ SWLC_fnc_picketSpot = {
 	private _side = _cmd get "side";
 	private _out = ([_s] call SWLC_fnc_adLinks) select {([_x] call SWLC_fnc_adOwner) != _side};
 	private _bearing = if (_out isEqualTo []) then {random 360} else {
-		[_c, [([_out, [], {([_x] call SWLC_fnc_adPos) distance2D _c}, "ASCEND"] call BIS_fnc_sortBy) # 0] call SWLC_fnc_adPos] call SWLC_fnc_bearing
+		[_c, [([_out, _c] call SWLC_fnc_adNearest)] call SWLC_fnc_adPos] call SWLC_fnc_bearing
 	};
 	private _spots = [_cmd, _s, _bearing] call SWLC_fnc_defSpots;
 	[selectRandom _spots, _bearing]

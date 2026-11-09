@@ -1,10 +1,46 @@
 // Mustering: groups form up at the owned sector nearest them, several sectors at once, then leave for the rally.
 #include "macros.hpp"
 
+// selectBestPlaces is slow and the ground doesn't change, so each search is done once.
+SWLC_stagingPlaces = createHashMap;
+
+SWLC_fnc_stagingPlaces = {
+	params ["_centre", "_radius"];
+	private _key = [round (_centre # 0), round (_centre # 1), _radius];
+	private _places = SWLC_stagingPlaces get _key;
+	if (isNil "_places") then {
+		_places = selectBestPlaces [_centre, _radius, CFG("stagingPlaceExpr"), 20, 40];
+		SWLC_stagingPlaces set [_key, _places];
+	};
+	_places
+};
+
+SWLC_fnc_musterSpotRadius = {
+	params ["_sector"];
+	(([_sector] call SWLC_fnc_adSize) / 2 + 40) max 120
+};
+
+SWLC_fnc_defenceSpotRadius = {
+	params ["_sector"];
+	(([_sector] call SWLC_fnc_adSize) / 2 + 30) max 60
+};
+
+// Does every sector's searches at the start of the round, in separate frames, so none lands mid-fight.
+SWLC_fnc_stagingWarm = {
+	{
+		private _s = _x;
+		private _c = [_s] call SWLC_fnc_adPos;
+		{
+			[_c, _x] call SWLC_fnc_stagingPlaces;
+			sleep 0.1;
+		} forEach [[_s] call SWLC_fnc_musterSpotRadius, [_s] call SWLC_fnc_defenceSpotRadius];
+	} forEach SWLC_sectors;
+};
+
 // Spread-out positions on the far side from the target, biased to buildings and trees.
 SWLC_fnc_buildStagingSpots = {
 	params ["_side", "_centre", "_tpos", ["_radius", 150]];
-	private _places = selectBestPlaces [_centre, _radius, CFG("stagingPlaceExpr"), 20, 40];
+	private _places = [_centre, _radius] call SWLC_fnc_stagingPlaces;
 	private _back = [_tpos, _centre] call SWLC_fnc_bearing;
 	private _scored = [];
 	{
@@ -42,8 +78,7 @@ SWLC_fnc_musterRec = {
 	if ((_rec get "op") != (_op get "id")) then {
 		_rec set ["op", _op get "id"];
 		_rec set ["slot", 0];
-		private _radius = (([_sector] call SWLC_fnc_adSize) / 2 + 40) max 120;
-		private _spots = [_side, _rec get "pos", _op get "tpos", _radius] call SWLC_fnc_buildStagingSpots;
+		private _spots = [_side, _rec get "pos", _op get "tpos", [_sector] call SWLC_fnc_musterSpotRadius] call SWLC_fnc_buildStagingSpots;
 		_rec set ["spots", _spots];
 		if (isNull (_rec get "crate")) then {
 			private _anchor = _spots # 0;
@@ -73,12 +108,12 @@ SWLC_fnc_musterChoose = {
 	private _owned = [_side] call SWLC_fnc_adOwned;
 	if (_owned isEqualTo []) exitWith {[objNull, objNull]};
 	private _here = getPosATL leader _g;
-	private _near = ([_owned, [], {([_x] call SWLC_fnc_adPos) distance2D _here}, "ASCEND"] call BIS_fnc_sortBy) # 0;
+	private _near = ([_owned, _here] call SWLC_fnc_adNearest);
 	private _threats = _cmd get "threats";
 	private _safe = _owned select {!(([_x] call SWLC_fnc_adName) in _threats) && {[_side, _x] call SWLC_fnc_adCanFTTo}};
 	private _forward = objNull;
 	if (_safe isNotEqualTo []) then {
-		private _best = ([_safe, [], {([_x] call SWLC_fnc_adPos) distance2D _tpos}, "ASCEND"] call BIS_fnc_sortBy) # 0;
+		private _best = ([_safe, _tpos] call SWLC_fnc_adNearest);
 		private _gain = (([_near] call SWLC_fnc_adPos) distance2D _tpos) - (([_best] call SWLC_fnc_adPos) distance2D _tpos);
 		if (_gain >= CFG("musterHopGain")) then {_forward = _best};
 	};

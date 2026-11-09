@@ -10,6 +10,7 @@ SWLC_settings = createHashMapFromArray [
 	["playerGroupGrace", 120],
 
 	// Timing
+	["tickYieldSeconds", 0.01],       // pause between the slices of a tick, enough to reach the next frame
 	["tickSeconds", 10],              // commander decision tick
 	["guardSeconds", 3],              // waypoint guard (re-asserts orders Warlords overwrote)
 

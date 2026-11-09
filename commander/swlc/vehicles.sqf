@@ -139,8 +139,10 @@ SWLC_fnc_vehTick = {
 				["C_VEH", [["side", _side], ["id", _r get "id"], ["event", "landed"], ["after", round (time - (_r get "boughtAt"))], ["x", round ((getPosATL _v) # 0)], ["y", round ((getPosATL _v) # 1)]]] call SWLC_fnc_log;
 			};
 			[_cmd, _r] call SWLC_fnc_vehStuckCheck;
-			private _p = getPosATL _v;
-			["C_VTRK", [["side", _side], ["id", _r get "id"], ["state", _r get "state"], ["wave", _r get "wave"], ["x", round (_p # 0)], ["y", round (_p # 1)]]] call SWLC_fnc_log;
+			if (CFG("verboseLog")) then {
+				private _p = getPosATL _v;
+				["C_VTRK", [["side", _side], ["id", _r get "id"], ["state", _r get "state"], ["wave", _r get "wave"], ["x", round (_p # 0)], ["y", round (_p # 1)]]] call SWLC_fnc_log;
+			};
 		};
 	} forEach (_cmd get "vehicles");
 	_cmd set ["vehicles", _keep];
@@ -326,8 +328,10 @@ SWLC_fnc_vehFollowTick = {
 				_g setVariable ["SWLC_goal", _dest];
 				[_g, [[_dest, "MOVE", 25]], "AWARE", "NORMAL", "COLUMN", "RED"] call SWLC_fnc_adSetOrder;
 			};
-			["C_VPOS", [["side", side _g], ["wave", _w get "id"], ["id", _r get "id"], ["role", _r get "role"], ["x", round (_here # 0)], ["y", round (_here # 1)],
-				["d_target", round (_here distance2D _tpos)], ["lead_d", round _leadDist], ["in_square", [_target, _here] call SWLC_fnc_adInSquare]]] call SWLC_fnc_log;
+			if (CFG("verboseLog")) then {
+				["C_VPOS", [["side", side _g], ["wave", _w get "id"], ["id", _r get "id"], ["role", _r get "role"], ["x", round (_here # 0)], ["y", round (_here # 1)],
+					["d_target", round (_here distance2D _tpos)], ["lead_d", round _leadDist], ["in_square", [_target, _here] call SWLC_fnc_adInSquare]]] call SWLC_fnc_log;
+			};
 		};
 	} forEach _live;
 };

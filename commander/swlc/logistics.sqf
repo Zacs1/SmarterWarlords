@@ -136,7 +136,8 @@ SWLC_fnc_kitTick = {
 	private _pendingAT = {(_x getVariable ["SWLC_kitTask", ""]) == "AT"} count _units;
 	private _pendingAA = {(_x getVariable ["SWLC_kitTask", ""]) == "AA"} count _units;
 	private _free = _units select {(_x getVariable ["SWLC_kitTask", ""]) == "" && {secondaryWeapon _x == ""} && {[_cmd get "side", getPosATL _x] call SWLC_fnc_econKitAllowed}};
-	_free = [_free, [], {[1, 0] select (_x == leader group _x)}, "DESCEND"] call BIS_fnc_sortBy;
+	// Leaders go last.
+	_free = (_free select {_x != leader group _x}) + (_free select {_x == leader group _x});
 
 	private _needAT = (_wantAT - _haveAT - _pendingAT) min ((count _free) max 0);
 	if (_needAT > 0 && {"AT" in _table}) then {

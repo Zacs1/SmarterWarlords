@@ -15,6 +15,7 @@ SWLC_fnc_intelStart = {
 SWLC_fnc_intelLoop = {
 	params ["_cmd"];
 	scriptName format ["SWLC intel %1", _cmd get "side"];
+	if ((_cmd get "side") == east) then {sleep (CFG("intelPollSeconds") / 2)};
 	while {true} do {
 		sleep CFG("intelPollSeconds");
 		isNil {
@@ -34,9 +35,14 @@ SWLC_fnc_intelInstallHandlers = {
 	}];
 };
 
+// Worked out once per class: this runs for every target every group can see.
+SWLC_intelCats = createHashMap;
+
 SWLC_fnc_intelCategory = {
 	params ["_cls"];
-	switch (true) do {
+	private _known = SWLC_intelCats getOrDefault [_cls, -1];
+	if (_known isEqualType "") exitWith {_known};
+	private _cat = switch (true) do {
 		case (_cls isKindOf "ParachuteBase"): {""};    // Warlords airdrops: parachutes are Helicopter-class
 		case (_cls isKindOf "Man"): {"infantry"};
 		case (_cls isKindOf "StaticWeapon"): {"static"};
@@ -51,6 +57,8 @@ SWLC_fnc_intelCategory = {
 		case (_cls isKindOf "Car"): {"light"};
 		default {""};
 	};
+	SWLC_intelCats set [_cls, _cat];
+	_cat
 };
 
 SWLC_fnc_intelHalfLife = {
@@ -80,7 +88,9 @@ SWLC_fnc_intelPoll = {
 	private _seen = createHashMap;
 	private _maxAge = CFG("intelMaxKnowAge");
 	private _minKnows = CFG("intelMinKnows");
-	private _groups = allGroups select {side _x == _side && {({alive _x} count units _x) > 0}};
+	private _groups = allGroups select {side _x == _side && {(units _x findIf {alive _x}) >= 0}};
+	// A group's target list is mostly its own side, so this comes first.
+	private _hostile = [west, east, resistance] select {[_side, _x] call BIS_fnc_sideIsEnemy};
 
 	{
 		private _g = _x;
@@ -88,7 +98,7 @@ SWLC_fnc_intelPoll = {
 		if (alive _l) then {
 			{
 				_x params ["_acc", "_t", "_tSide", "_type", "_pos", "_age"];
-				if (alive _t && {_tSide in [west, east, resistance]} && {[_side, _tSide] call BIS_fnc_sideIsEnemy}) then {
+				if (_tSide in _hostile && {alive _t}) then {
 					private _knows = _l knowsAbout _t;
 					if (_knows >= _minKnows && {(_pos # 0) > 1 || {(_pos # 1) > 1}}) then {
 						private _cat = [_type] call SWLC_fnc_intelCategory;
@@ -125,6 +135,7 @@ SWLC_fnc_intelPost = {
 	private _board = _cmd get "board";
 	private _now = time;
 	private _touched = createHashMap;
+	private _entries = createHashMap;
 	{
 		_x params ["_cat", "_pos", "_t", "_conf", "_g", "_knows"];
 		private _r = [CFG("intelMergeVehicle"), CFG("intelMergeInfantry")] select (_cat == "infantry");
@@ -142,6 +153,7 @@ SWLC_fnc_intelPost = {
 			if !(isNull _t) then {(_e get "units") pushBackUnique _t};
 		};
 		private _id = _e get "id";
+		_entries set [_id, _e];
 		_touched set [_id, (_touched getOrDefault [_id, []]) + [_t]];
 	} forEach _sightings;
 
@@ -149,14 +161,11 @@ SWLC_fnc_intelPost = {
 	{
 		private _id = _x;
 		private _n = if (_source == "player") then {count _y} else {count (_y arrayIntersect _y)};
-		private _i = _board findIf {(_x get "id") == _id};
-		if (_i >= 0) then {
-			private _e = _board # _i;
-			private _new = (_e get "count") max _n;
-			if (_new != (_e get "count")) then {
-				_e set ["count", _new];
-				["C_INTEL", [["side", _cmd get "side"], ["event", "count"], ["id", _id], ["cat", _e get "cat"], ["count", _new]]] call SWLC_fnc_log;
-			};
+		private _e = _entries get _id;
+		private _new = (_e get "count") max _n;
+		if (_new != (_e get "count")) then {
+			_e set ["count", _new];
+			["C_INTEL", [["side", _cmd get "side"], ["event", "count"], ["id", _id], ["cat", _e get "cat"], ["count", _new]]] call SWLC_fnc_log;
 		};
 	} forEach _touched;
 	_touched
@@ -223,11 +232,13 @@ SWLC_fnc_intelAge = {
 SWLC_fnc_intelPresence = {
 	params ["_cmd", "_groups"];
 	private _presence = _cmd get "presence";
+	private _at = _groups apply {getPosATL leader _x};
 	{
 		private _s = _x;
-		private _name = [_s] call SWLC_fnc_adName;
-		if ((_groups findIf {[_s, getPosATL leader _x, 80] call SWLC_fnc_adInSquare}) >= 0) then {
-			_presence set [_name, time];
+		private _c = _s getVariable "SWLC_pos";
+		private _h = (_s getVariable "SWLC_size") / 2 + 80;
+		if ((_at findIf {abs ((_x # 0) - (_c # 0)) <= _h && {abs ((_x # 1) - (_c # 1)) <= _h}}) >= 0) then {
+			_presence set [[_s] call SWLC_fnc_adName, time];
 		};
 	} forEach SWLC_sectors;
 };
@@ -292,6 +303,26 @@ SWLC_fnc_intelSummarise = {
 	private _now = time;
 	private _map = createHashMap;
 	private _minConf = CFG("intelThreatMinConf");
+	private _delay = CFG("reactionDelay");
+	private _airRadius = CFG("intelAirRadius");
+	// Sorted by sector first, so each sector only looks at its own entries.
+	private _airBoard = [];
+	private _bySector = createHashMap;
+	{
+		if ((_x get "conf") >= _minConf && {(_now - (_x get "born")) >= _delay}) then {
+			if ((_x get "cat") in ["heli", "jet"]) then {
+				_airBoard pushBack _x;
+			} else {
+				private _home = _x get "sector";
+				if (!isNull _home) then {
+					private _key = [_home] call SWLC_fnc_adName;
+					private _list = _bySector getOrDefault [_key, []];
+					_list pushBack _x;
+					_bySector set [_key, _list];
+				};
+			};
+		};
+	} forEach (_cmd get "board");
 	{
 		private _s = _x;
 		private _name = [_s] call SWLC_fnc_adName;
@@ -299,27 +330,20 @@ SWLC_fnc_intelSummarise = {
 		private _infantry = 0; private _armour = 0; private _light = 0; private _static = 0; private _air = 0; private _at = 0;
 		private _newest = 1e6;
 		{
+			if (((_x get "pos") distance2D _c) <= _airRadius) then {_air = _air + (_x get "count")};
+		} forEach _airBoard;
+		{
 			private _e = _x;
-			if ((_e get "conf") >= _minConf && {(_now - (_e get "born")) >= CFG("reactionDelay")}) then {
-				private _cat = _e get "cat";
-				private _n = _e get "count";
-				private _d = (_e get "pos") distance2D _c;
-				if (_cat in ["heli", "jet"]) then {
-					if (_d <= CFG("intelAirRadius")) then {_air = _air + _n};
-				} else {
-					if ((_e get "sector") isEqualTo _s) then {
-						switch (_cat) do {
-							case "infantry": {_infantry = _infantry + _n};
-							case "tank"; case "apc": {_armour = _armour + _n};
-							case "light": {_light = _light + _n};
-							case "static": {_static = _static + _n};
-							case "unknownAT": {_at = _at + _n};
-						};
-						_newest = _newest min (_now - (_e get "seen"));
-					};
-				};
+			private _n = _e get "count";
+			switch (_e get "cat") do {
+				case "infantry": {_infantry = _infantry + _n};
+				case "tank"; case "apc": {_armour = _armour + _n};
+				case "light": {_light = _light + _n};
+				case "static": {_static = _static + _n};
+				case "unknownAT": {_at = _at + _n};
 			};
-		} forEach (_cmd get "board");
+			_newest = _newest min (_now - (_e get "seen"));
+		} forEach (_bySector getOrDefault [_name, []]);
 		private _presence = (_now - ((_cmd get "presence") getOrDefault [_name, -1e6]));
 		private _scouted = _newest <= CFG("intelScoutedSeconds") || {_presence <= CFG("intelScoutedSeconds")};
 		_map set [_name, createHashMapFromArray [["infantry", _infantry], ["armour", _armour], ["light", _light], ["static", _static], ["air", _air], ["at", _at],

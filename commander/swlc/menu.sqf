@@ -167,7 +167,7 @@ SWLC_fnc_menuFollow = {
 	if ((_leader distance2D _p) > CFG("menuFollowFar") && {(time - (_g getVariable ["SWLC_followFT", -1e6])) >= CFG("menuFollowFTSeconds")}) then {
 		private _safe = ([_side] call SWLC_fnc_adOwned) select {!(([_x] call SWLC_fnc_adName) in _threats) && {[_side, _x] call SWLC_fnc_adCanFTTo}};
 		if (_safe isNotEqualTo []) then {
-			private _hop = ([_safe, [], {([_x] call SWLC_fnc_adPos) distance2D _p}, "ASCEND"] call BIS_fnc_sortBy) # 0;
+			private _hop = ([_safe, _p] call SWLC_fnc_adNearest);
 			private _sp = [_hop] call SWLC_fnc_adPos;
 			if (((_sp distance2D _p) + CFG("menuFollowFTGain")) < (_leader distance2D _p)) then {
 				private _land = [_sp, [_sp, _p] call SWLC_fnc_bearing, 40 + random 30] call SWLC_fnc_offset;
@@ -214,7 +214,7 @@ SWLC_fnc_menuBorrowLeave = {
 	private _safe = _owned select {!(([_x] call SWLC_fnc_adName) in _threats)};
 	if (_safe isEqualTo []) then {_safe = _owned};
 	if (_safe isEqualTo []) exitWith {false};
-	private _home = [([_safe, [], {([_x] call SWLC_fnc_adPos) distance2D _here}, "ASCEND"] call BIS_fnc_sortBy) # 0] call SWLC_fnc_adPos;
+	private _home = [([_safe, _here] call SWLC_fnc_adNearest)] call SWLC_fnc_adPos;
 	private _spot = [_home, random 360, 20 + random 30] call SWLC_fnc_offset;
 	if (surfaceIsWater _spot || {[_cmd, _spot, 25] call SWLC_fnc_menuBlocked}) then {_spot = +_home};
 

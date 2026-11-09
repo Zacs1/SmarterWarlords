@@ -67,7 +67,7 @@ SWLC_fnc_raidSend = {
 	private _side = _cmd get "side";
 	private _from = ([_side] call SWLC_fnc_adOwned) select {[_side, _x] call SWLC_fnc_adCanFTTo};
 	if (_from isEqualTo []) exitWith {};
-	private _hop = ([_from, [], {([_x] call SWLC_fnc_adPos) distance2D _c}, "ASCEND"] call BIS_fnc_sortBy) # 0;
+	private _hop = ([_from, _c] call SWLC_fnc_adNearest);
 	private _sp = [_hop] call SWLC_fnc_adPos;
 	private _land = [_sp, [_sp, _c] call SWLC_fnc_bearing, 40 + random 30] call SWLC_fnc_offset;
 	if (surfaceIsWater _land) then {_land = _sp};
@@ -134,7 +134,7 @@ SWLC_fnc_raidGoHome = {
 	private _owned = [_cmd get "side"] call SWLC_fnc_adOwned;
 	if (_owned isEqualTo []) exitWith {};
 	private _p = getPosATL leader _g;
-	private _home = [([_owned, [], {([_x] call SWLC_fnc_adPos) distance2D _p}, "ASCEND"] call BIS_fnc_sortBy) # 0] call SWLC_fnc_adPos;
+	private _home = [([_owned, _p] call SWLC_fnc_adNearest)] call SWLC_fnc_adPos;
 	private _spot = [_home, random 360, 20 + random 30] call SWLC_fnc_offset;
 	if (surfaceIsWater _spot) then {_spot = +_home};
 	[_g, [[_spot, "MOVE", 20]], "AWARE", "FULL", "WEDGE", "YELLOW"] call SWLC_fnc_adSetOrder;
@@ -395,7 +395,7 @@ SWLC_fnc_probeTick = {
 	private _g = ([_spare, [], {[_x] call SWLC_fnc_groupMen}, "ASCEND"] call BIS_fnc_sortBy) # 0;
 	private _side = _cmd get "side";
 	private _owned = [_side] call SWLC_fnc_adOwned;
-	private _home = ([_owned, [], {([_x] call SWLC_fnc_adPos) distance2D _c}, "ASCEND"] call BIS_fnc_sortBy) # 0;
+	private _home = ([_owned, _c] call SWLC_fnc_adNearest);
 	private _spot = [_side, _c, [_c, [_home] call SWLC_fnc_adPos] call SWLC_fnc_bearing, CFG("probeObserveDist") max (([_s] call SWLC_fnc_adSize) * 0.71 + 80)] call SWLC_fnc_validHoldPoint;
 	[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
 	private _rode = [_cmd, _g, _spot] call SWLC_fnc_scoutDispatch;

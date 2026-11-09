@@ -40,6 +40,7 @@ if (!isServer) exitWith {};
 		[] call SWLC_fnc_intelInstallHandlers;
 		if (SWLC_settings get "rulesVariant") then {[] call SWLC_fnc_rulesInstall};
 		[] call SWLC_fnc_econInit;
+		[] spawn SWLC_fnc_stagingWarm;
 		[west] call SWLC_fnc_startCommander;
 		[east] call SWLC_fnc_startCommander;
 		SWLC_debug = SWLC_settings get "debugOverlay";

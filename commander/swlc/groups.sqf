@@ -29,6 +29,20 @@ SWLC_fnc_groupsMen = {
 };
 
 // Merges new warlord groups into the side's list and removes dead or player-held ones.
+SWLC_fnc_dropGroups = {
+	params ["_cmd", "_drop"];
+	if (_drop isEqualTo []) exitWith {};
+	private _side = _cmd get "side";
+	{
+		private _had = ({alive _x} count units _x) > 0;
+		[_cmd, _x] call SWLC_fnc_waveRemoveGroup;
+		[_x] call SWLC_fnc_adClearOrder;
+		_x setVariable ["SWLC_state", "-"];
+		["C_STATE", [["side", _side], ["group", groupId _x], ["from", "any"], ["to", "released"], ["reason", ["all_dead", "player"] select _had]]] call SWLC_fnc_log;
+	} forEach _drop;
+	_cmd set ["groups", ((_cmd get "groups") - _drop) select {!isNull _x}];
+};
+
 SWLC_fnc_refreshGroups = {
 	params ["_cmd"];
 	private _side = _cmd get "side";
@@ -45,17 +59,9 @@ SWLC_fnc_refreshGroups = {
 		};
 	} forEach ([_side] call SWLC_fnc_adOwnableGroups);
 
-	private _drop = _list select {
+	[_cmd, _list select {
 		({alive _x} count units _x) == 0 || {[_x] call SWLC_fnc_adGroupHasPlayer}
-	};
-	{
-		private _had = ({alive _x} count units _x) > 0;
-		[_cmd, _x] call SWLC_fnc_waveRemoveGroup;
-		[_x] call SWLC_fnc_adClearOrder;
-		_x setVariable ["SWLC_state", "-"];
-		["C_STATE", [["side", _side], ["group", groupId _x], ["from", "any"], ["to", "released"], ["reason", ["all_dead", "player"] select _had]]] call SWLC_fnc_log;
-	} forEach _drop;
-	_cmd set ["groups", _list - _drop];
+	}] call SWLC_fnc_dropGroups;
 
 	{
 		if (CFG("replaceVanillaBuying")) then {

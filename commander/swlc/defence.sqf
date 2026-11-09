@@ -25,6 +25,7 @@ SWLC_fnc_defCentralSector = {
 	private _side = _cmd get "side";
 	private _owned = ([_side] call SWLC_fnc_adOwned) select {[_x] call SWLC_fnc_adPos isNotEqualTo []};
 	if (_owned isEqualTo []) exitWith {objNull};
+	if (_owned isEqualTo (_cmd getOrDefault ["centralOwned", []])) exitWith {_cmd get "centralSector"};
 	private _best = objNull;
 	private _bestSum = 1e12;
 	{
@@ -33,17 +34,30 @@ SWLC_fnc_defCentralSector = {
 		{_sum = _sum + (_p distance2D ([_x] call SWLC_fnc_adPos))} forEach _owned;
 		if (_sum < _bestSum) then {_bestSum = _sum; _best = _x};
 	} forEach _owned;
+	_cmd set ["centralOwned", _owned];
+	_cmd set ["centralSector", _best];
 	_best
 };
 
-// Enemy strength the side knows of near an owned sector.
-// Returns [infantry, armour, light, bearing from the sector to the enemy].
-SWLC_fnc_defThreatAt = {
-	params ["_cmd", "_s"];
-	private _c = [_s] call SWLC_fnc_adPos;
-	private _r = (([_s] call SWLC_fnc_adSize) / 2) + CFG("defenceRadius");
+// Board entries fresh enough to count as a threat to a sector.
+SWLC_fnc_defRecent = {
+	params ["_cmd"];
 	private _minConf = CFG("intelThreatMinConf");
 	private _maxAge = CFG("defenceSightAge");
+	private _delay = CFG("reactionDelay");
+	private _now = time;
+	(_cmd get "board") select {
+		(_x get "cat") in ["infantry", "tank", "apc", "light"] && {(_x get "conf") >= _minConf} && {(_now - (_x get "seen")) <= _maxAge} && {(_now - (_x get "born")) >= _delay}
+	}
+};
+
+// Enemy strength the side knows of near an owned sector. Pass defRecent's list when checking many sectors.
+// Returns [infantry, armour, light, bearing from the sector to the enemy].
+SWLC_fnc_defThreatAt = {
+	params ["_cmd", "_s", ["_recent", 0]];
+	if !(_recent isEqualType []) then {_recent = [_cmd] call SWLC_fnc_defRecent};
+	private _c = [_s] call SWLC_fnc_adPos;
+	private _r = (([_s] call SWLC_fnc_adSize) / 2) + CFG("defenceRadius");
 	private _inf = 0;
 	private _arm = 0;
 	private _light = 0;
@@ -52,22 +66,19 @@ SWLC_fnc_defThreatAt = {
 	private _weight = 0;
 	{
 		private _e = _x;
-		private _cat = _e get "cat";
-		if (_cat in ["infantry", "tank", "apc", "light"] && {(_e get "conf") >= _minConf} && {(time - (_e get "seen")) <= _maxAge} && {(time - (_e get "born")) >= CFG("reactionDelay")}) then {
-			private _p = _e get "pos";
-			if ((_p distance2D _c) <= _r) then {
-				private _n = _e get "count";
-				switch (_cat) do {
-					case "infantry": {_inf = _inf + _n};
-					case "light": {_light = _light + _n};
-					default {_arm = _arm + _n};
-				};
-				_sx = _sx + (_p # 0) * _n;
-				_sy = _sy + (_p # 1) * _n;
-				_weight = _weight + _n;
+		private _p = _e get "pos";
+		if ((_p distance2D _c) <= _r) then {
+			private _n = _e get "count";
+			switch (_e get "cat") do {
+				case "infantry": {_inf = _inf + _n};
+				case "light": {_light = _light + _n};
+				default {_arm = _arm + _n};
 			};
+			_sx = _sx + (_p # 0) * _n;
+			_sy = _sy + (_p # 1) * _n;
+			_weight = _weight + _n;
 		};
-	} forEach (_cmd get "board");
+	} forEach _recent;
 	private _bearing = if (_weight > 0) then {[_c, [_sx / _weight, _sy / _weight]] call SWLC_fnc_bearing} else {random 360};
 	[_inf, _arm, _light, _bearing]
 };
@@ -79,7 +90,7 @@ SWLC_fnc_defSpots = {
 	private _size = [_s] call SWLC_fnc_adSize;
 	// buildStagingSpots prefers the far side from its reference point, so put that point opposite the enemy.
 	private _ref = [_c, _bearing + 180, 1000] call SWLC_fnc_offset;
-	private _spots = [_cmd get "side", _c, _ref, (_size / 2 + 30) max 60] call SWLC_fnc_buildStagingSpots;
+	private _spots = [_cmd get "side", _c, _ref, [_s] call SWLC_fnc_defenceSpotRadius] call SWLC_fnc_buildStagingSpots;
 	if (_spots isEqualTo []) then {_spots = [[_c, _bearing, _size / 4] call SWLC_fnc_offset]};
 	_spots
 };
@@ -99,7 +110,7 @@ SWLC_fnc_defHop = {
 	private _safe = ([_side] call SWLC_fnc_adOwned) select {!([_x] call _hot) && {[_side, _x] call SWLC_fnc_adCanFTTo}};
 	if (_safe isEqualTo []) exitWith {objNull};
 	private _c = [_s] call SWLC_fnc_adPos;
-	([_safe, [], {([_x] call SWLC_fnc_adPos) distance2D _c}, "ASCEND"] call BIS_fnc_sortBy) # 0
+	([_safe, _c] call SWLC_fnc_adNearest)
 };
 
 // Fast travels the group when it's far, then walks it to the spot.
@@ -336,11 +347,12 @@ SWLC_fnc_defenceTick = {
 	private _side = _cmd get "side";
 	private _threats = _cmd get "threats";
 	private _owned = [_side] call SWLC_fnc_adOwned;
+	private _recent = [_cmd] call SWLC_fnc_defRecent;
 
 	// Detect
 	{
 		private _s = _x;
-		([_cmd, _s] call SWLC_fnc_defThreatAt) params ["_inf", "_arm", "_light", "_bearing"];
+		([_cmd, _s, _recent] call SWLC_fnc_defThreatAt) params ["_inf", "_arm", "_light", "_bearing"];
 		private _seizing = [_side, _s] call SWLC_fnc_adEnemySeizing;
 		if (_seizing || {_arm > 0} || {(_inf + 3 * _light) >= CFG("defenceMinInfantry")}) then {
 			private _name = [_s] call SWLC_fnc_adName;
