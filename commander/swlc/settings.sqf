@@ -55,6 +55,31 @@ SWLC_settings = createHashMapFromArray [
 	["respawnCheckSeconds", 8],
 	["respawnSectorMargin", 50],
 	["ruleCommitTimer", true],        // a target that has stalled gets a decision
+	// Parts A and C: holding a lost sector. See holdouts.sqf.
+	["ruleHoldouts", true],           // groups still inside a sector the side loses stay and fight, and reinforcements go to them first
+	["holdoutCheckSeconds", 3],
+	["holdoutMargin", 60],            // a group this far outside the square still counts as inside when the sector falls
+	["holdoutVoteGrace", 150],        // how long the side may be without the sector as its target (a Warlords vote) before the holdouts give up
+	["holdoutUnprotectGrace", 60],    // a sector added to the conquered list comes off this long after the holdouts are done
+	["holdoutCoverRadius", 120],      // where holdouts look for cover around the sector
+	["holdoutGarrison", true],        // with LAMBS, holdouts garrison the buildings
+	["holdoutSettleSeconds", 20],     // at their spot this long before garrisoning
+	["holdoutBreakFraction", 0.34],   // at or below this share of its men a holdout group falls back
+	["holdoutFallbackBeyond", 40],    // the fallback point is this far outside the square, on the way to the nearest owned sector
+	["holdoutFallbackMax", 300],      // and never further than this from the sector centre
+	["holdoutCoverSearch", 60],       // cover is searched this close to the fallback point
+	["holdoutArriveMargin", 30],      // a reinforcement has arrived when it is this close to the square
+	["holdoutResupply", true],        // buy a crate for holdouts who are low
+	["holdoutResupplyCost", 200],     // CP, only out of what is above the reserve
+	["holdoutResupplyCooldown", 240],
+	["holdoutResupplyFirstDelay", 30],
+	["holdoutResupplyDelay", 30],     // seconds from paying to the crate landing
+	["holdoutRestock", true],         // a holdout in combat or garrisoned takes from a delivered crate where he stands
+	["holdoutRestockSeconds", 15],
+	["holdoutSwitching", true],       // part C: the goal switches to defending the next sector when fighting starts there
+	["holdClearSeconds", 120],        // that sector counts as clear after this long with no fighting and no enemy known inside
+	["holdNearXMetres", 350],         // a group fighting this close to the lost sector is not pulled away
+	["holdDefendNearMetres", 150],    // a group this far outside the threatened sector's square turns to defend it
 	["commitSeconds", 660],           // 11 minutes on one target
 	["commitExtendSeconds", 180],     // staying buys this much more time
 	["commitMaxExtensions", 2],

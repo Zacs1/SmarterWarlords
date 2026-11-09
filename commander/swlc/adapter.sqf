@@ -447,6 +447,27 @@ SWLC_fnc_adForceRevote = {
 	};
 };
 
+// Lifts Warlords' kill zone for a side in a sector it doesn't own, by adding it to the conquered list. True if added.
+SWLC_fnc_adProtectSector = {
+	params ["_side", "_s"];
+	private _var = format ["BIS_WL_conqueredSectors_%1", _side];
+	private _list = missionNamespace getVariable [_var, []];
+	if (_s in _list) exitWith {false};
+	_list pushBack _s;
+	missionNamespace setVariable [_var, _list];
+	publicVariable _var;
+	true
+};
+
+SWLC_fnc_adUnprotectSector = {
+	params ["_side", "_s"];
+	private _var = format ["BIS_WL_conqueredSectors_%1", _side];
+	private _list = missionNamespace getVariable [_var, []];
+	if !(_s in _list) exitWith {};
+	missionNamespace setVariable [_var, _list - [_s]];
+	publicVariable _var;
+};
+
 // Purchases. classes = array of class names. Returns the spawned objects, or [] on failure.
 // The commander pays with AI warlords' funds, then calls Warlords' own airdrop path.
 SWLC_fnc_adPurchasable = {
