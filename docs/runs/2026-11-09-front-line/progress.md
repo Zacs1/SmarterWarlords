@@ -29,3 +29,8 @@ Prompt: `prompt.md` here (authoritative). Time limit from the user: built and te
 ## Defence helpers started (about 19:10)
 
 Four worktree helpers from e7d218d: stance (item 1), alert (items 2 and 4), fortify (item 3), steamroll analyser (item 5). Rounds running meanwhile: smokefront, fronta1. frontb and frontd follow when a slot frees.
+
+## Round results so far
+
+- smokefront (`2026-11-09_19-01-02_smokefront`, merged build): 0 script errors.
+- fronta1 (`2026-11-09_19-01-20_fronta1`): holdouts form, target stays on X (99%), reinforcements leave within 60 s, Part C switches to Y and back. FAILs were the scenario's fault: X was flipped at 34 s when groups were 1 man each, and the "harmless" EAST garrison shot them dead by 76 s. Scenario fixed (full groups, garrison disarmed), rerun as fronta2.
