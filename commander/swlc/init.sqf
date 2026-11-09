@@ -28,7 +28,7 @@ if (!isServer) exitWith {};
 
 	{
 		call compile preprocessFileLineNumbers format ["swlc\%1.sqf", _x];
-	} forEach ["util", "adapter", "radio", "intel", "groups", "staging", "logistics", "vehicles", "wave", "watchdog", "resilience", "defence", "smart", "status", "rules", "raids", "pickets", "economy", "squads", "strategy", "menu", "commander", "debug"];
+	} forEach ["util", "adapter", "radio", "intel", "groups", "staging", "logistics", "vehicles", "wave", "watchdog", "routes", "resilience", "defence", "smart", "status", "rules", "raids", "pickets", "economy", "squads", "strategy", "menu", "commander", "debug"];
 
 	waitUntil {sleep 1; [] call SWLC_fnc_adReady};
 	[] call SWLC_fnc_adInit;
@@ -41,6 +41,7 @@ if (!isServer) exitWith {};
 		if (SWLC_settings get "rulesVariant") then {[] call SWLC_fnc_rulesInstall};
 		[] call SWLC_fnc_econInit;
 		[] spawn SWLC_fnc_stagingWarm;
+		[] spawn SWLC_fnc_routeStart;
 		[west] call SWLC_fnc_startCommander;
 		[east] call SWLC_fnc_startCommander;
 		SWLC_debug = SWLC_settings get "debugOverlay";

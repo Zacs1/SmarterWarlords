@@ -149,6 +149,43 @@ SWLC_settings = createHashMapFromArray [
 	// Locality
 	["resLocality", true],
 
+	// Resilience: "resilience" gates every behaviour below. It stays active when the rules variant is off.
+	["resilience", true],
+
+	// Route network: long moves follow roads and tracks in short hops
+	["routeNetwork", true],
+	["routeHopMetres", 350],          // grid square used to thin the network, and the spacing of hops
+	["routeMinMetres", 700],          // moves shorter than this stay direct
+	["routeHopRadius", 40],           // a hop counts as reached this close
+	["routeAttachMetres", 600],       // how far a position can be from the network and still join it
+	["routeMaxDetour", 2.5],          // a road this many times the straight line is ignored if the straight line is open ground
+	["routeOffRouteMetres", 800],     // further than this from every remaining hop and the group gets a new route
+	["routeAvoidPenalty", 6],         // how much dearer an avoided node is when finding another route
+	["routeAvoidSeconds", 300],       // how long a route that failed stays avoided
+	["routeGoalMatchMetres", 200],    // a route counts for progress only if it ends this close to the group's goal
+	["routeMaxExpansions", 3000],     // limit on one path search
+	["routeSectorRoadRadius", 1000],  // furthest a sector can be from its nearest road and still seed the network
+	["routeGapJoinMetres", 25],       // a road's dead end joins any road this close, for breaks in the road data
+	["routeBuildBatch", 50],          // road segments or loop steps handled per frame while building
+	["routeMaxSegments", 80000],      // safety limit on road segments read while building
+	["routeLogNetwork", true],        // write a generated network to the RPT for tools/extract_routes.py
+	["routeCacheMax", 4096],          // entries per route cache before it's emptied
+
+	// No land moves across water
+	["noWaterMoves", true],
+	["routeWaterSample", 25],         // metres between water samples on a straight line
+	["routeOriginSnapMetres", 80],    // a point in the water counts from dry ground this close to it
+	["routeFTNearMetres", 300],       // an owned sector this close to a destination is good enough to fast travel to
+	["routeBlockedRetrySeconds", 20], // how often a group with no land route retries, fast travel included
+
+	// Every destination goes to open ground
+	["validateDestinations", true],
+	["routeSafeSearchMetres", 120],   // how far a destination can be moved to reach open ground
+	["routeSafeStep", 8],             // spacing of the rings searched
+	["routeSafeMargin", 2],           // metres kept clear of a building or rock
+	["routeSafeMaxSlopeDeg", 40],     // ground steeper than this isn't open
+	["routeSafeSkipNearMetres", 30],  // a destination this close to the leader is left alone
+
 	// Intel board
 	["intelPollSeconds", 5],
 	["intelMaxKnowAge", 30],          // ignore what a group last saw longer ago than this

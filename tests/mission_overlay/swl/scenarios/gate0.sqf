@@ -113,10 +113,13 @@ SWLG_testGroup = _g;
 			private _wpIdx = currentWaypoint _g;
 			private _wpPos = if (_wpIdx < count waypoints _g) then {waypointPosition [_g, _wpIdx]} else {[-1, -1, -1]};
 			private _dist = _pos distance2D _dest;
+			// A long move's current waypoint is a hop on the way, so on-order means it's one the commander wrote.
+			private _wpOff = _wpPos distance2D _dest;
+			{_wpOff = _wpOff min (_wpPos distance2D _x)} forEach (_g getVariable ["SWLC_wpActual", []]);
 			["MOVE_TEST", [
 				"event=track",
 				format ["dist=%1", round _dist],
-				format ["wpdist=%1", round (_wpPos distance2D _dest)],
+				format ["wpdist=%1", round _wpOff],
 				format ["wp=%1/%2", _wpIdx, count waypoints _g],
 				format ["alive=%1", {alive _x} count units _g],
 				format ["beh=%1", behaviour leader _g]
