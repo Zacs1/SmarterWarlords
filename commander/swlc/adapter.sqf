@@ -378,14 +378,14 @@ SWLC_fnc_adEnemyNear = {
 // [group, sector, landingPos]. Moves the group's on-foot units to landingPos.
 // Returns true if it happened. Refuses silently (returns false) if any rule isn't met.
 SWLC_fnc_adFastTravel = {
-	params ["_g", "_s", "_landing"];
+	params ["_g", "_s", "_landing", ["_anyDistance", false]];
 	private _side = side _g;
 	if !([_side, _s] call SWLC_fnc_adCanFTTo) exitWith {false};
 	private _units = [_g] call SWLC_fnc_alive;
 	if (_units isEqualTo []) exitWith {false};
 	if ((_units findIf {vehicle _x != _x}) >= 0) exitWith {false};
 	private _leader = leader _g;
-	if ((_leader distance2D _landing) < CFG("ftMinDistance")) exitWith {false};
+	if (!_anyDistance && {(_leader distance2D _landing) < CFG("ftMinDistance")}) exitWith {false};
 	if ([_side, getPosATL _leader] call SWLC_fnc_adEnemyNear) exitWith {false};
 	if ((time - (_g getVariable ["SWLC_lastFT", -1000])) < CFG("ftGroupCooldown")) exitWith {false};
 

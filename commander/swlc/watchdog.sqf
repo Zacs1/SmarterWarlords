@@ -118,7 +118,7 @@ SWLC_fnc_watchdogEscalate = {
 		private _sp = [_x] call SWLC_fnc_adPos;
 		private _land = [_sp, [_sp, _toward] call SWLC_fnc_bearing, 40 + random 30] call SWLC_fnc_offset;
 		if (surfaceIsWater _land) then {_land = _sp};
-		_moved = [_g, _x, _land] call SWLC_fnc_adFastTravel;
+		_moved = [_g, _x, _land, _anyDistance] call SWLC_fnc_adFastTravel;
 		if (_moved) exitWith {};
 	} forEach _owned;
 	["C_WD", [["side", _side], ["group", groupId _g], ["action", "escalate"], ["fast_travelled", _moved], ["state", _state]]] call SWLC_fnc_log;
