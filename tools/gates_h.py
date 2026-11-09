@@ -77,7 +77,7 @@ def posture_correct(data) -> tuple[bool, str]:
 def posture_no_thrash(data) -> tuple[bool, str]:
     times: dict[str, list[int]] = defaultdict(list)
     for e in squad(data, "posture", "mode"):
-        times[e.get("group", "?")].append(int(_num(e, "t")))
+        times[f"{e.get('side', '?')} {e.get('group', '?')}"].append(int(_num(e, "t")))
     worst = 0.0
     worst_group = "-"
     for group, stamps in times.items():
@@ -95,7 +95,7 @@ def posture_no_thrash(data) -> tuple[bool, str]:
 def bounds_alternate(data) -> tuple[bool, str]:
     runs: dict[str, list[str]] = defaultdict(list)
     for e in squad(data, "bound", "bound"):
-        runs[e.get("group", "?")].append(e.get("team", "?"))
+        runs[f"{e.get('side', '?')} {e.get('group', '?')}"].append(e.get("team", "?"))
     if not runs:
         return False, "no bounds logged"
     best_group, best_len = "-", 0

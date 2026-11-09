@@ -93,3 +93,10 @@ Every soak must measure each AI commander's activity and pass or fail on it. See
 - The user allowed up to 3 servers at once for scenario rounds; the final soak stays solo. `tools/run-round.ps1` now takes a free slot (ports 2402/2412/2422, own mission folder `SWL_Test[_N].Tanoa`), held by an exclusive lock file; `-Solo` needs an empty machine and holds every slot.
 - gateh4l (LAMBS) and gatec2 started alongside gated10.
 - gated10: setup failure, not a commander failure. With no neutral sector in WEST's reach, the setup kept handing WEST every EAST sector in turn until no front was left (fail_no_front at 2:02). Setup now gives a WEST sector that doesn't touch the raid sector back to neutral instead, as the Part E test does. Rerunning as gated11.
+
+## PC crash at 15:30 (2026-11-09)
+- The PC blue-screened at about 15:30 with bugcheck 0x116 (VIDEO_TDR_FAILURE, status C000009A) in the graphics driver. No restart or shutdown command came from this run. An identical 0x116 with the same status is in the log for 2026-10-21, before this project's rounds. Three servers had been up for 11 minutes when it happened, the first time that many ran, so a contribution from load can't be ruled out. Dedicated servers don't render, and no resource exhaustion events were logged. Running two servers at a time from here as a precaution.
+- Rounds cut off by the crash: smoker (9 of 12 min), gateh4l (10 of 14 min), gated11 (just started). Their unchanged-install checks didn't run.
+- smoker: 0 script errors. Route network generated in 40 s: 162 nodes, 182 edges, one component, every sector on a road. Written to commander/swlc/maps/Tanoa_routes.sqf. C_LEADER fired once; no other resilience action needed.
+- gatec2 (Part C scenario): all 6 PASS, 0 script errors.
+- gateh4l (Part H, LAMBS): all PASS after a gate fix. Posture thrash failed at 1.69 changes a minute because the gate merged same-named groups on both sides (Alpha 1-5); keyed by side it is 1.07 against a limit of 1.5. No rerun needed.
