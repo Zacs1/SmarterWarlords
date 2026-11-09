@@ -40,3 +40,5 @@ Four worktree helpers from e7d218d: stance (item 1), alert (items 2 and 4), fort
 "instead of needing to be done by 8:20 it'll be more like 9:30-9:45 instead, so you've got some more time". New target 21:30-21:45; the extra time goes to testing.
 
 - frontb1 (`2026-11-09_19-08-14_frontb1`, build e7d218d): all Part B checks PASS. Tagged `front-b-done` on that build.
+
+- frontd1 (`2026-11-09_19-19-34_frontd1`): collision, radio and board, survivors resuming all PASS. Three FAILs, none a commander bug: joins (sighted strength never needed more groups, rerun with a raised `responseMargin` to exercise it), the fallback case (the scenario's spot was inside `engagedObjectiveMargin`, added by the review after the scenario was written), and one `post_contact_reset` counted as interference (that action only fires when the group isn't fighting). Scenario and gate fixed, rerun as frontd2.
