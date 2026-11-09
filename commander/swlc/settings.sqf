@@ -5,6 +5,32 @@
 SWLC_settings = createHashMapFromArray [
 	// Master switch
 	["commanderEnabled", true],
+
+	// Alert and defence in depth: defence starts when the enemy picks one of our sectors. Not under the rules variant.
+	["alertEnabled", true],
+	["alertScreen", true],            // a small group forward on the approach
+	["alertCounter", true],           // a reserve held near the sector that goes in when attackers break in
+	// Groups per stance: [main position, screen, counter reserve, most of the side's groups all three may take together].
+	["alertLayers", createHashMapFromArray [["attack", [1, 1, 0, 0.34]], ["hold", [2, 1, 1, 0.6]], ["rebuild", [3, 1, 2, 0.8]]]],
+	["alertValueHigh", 60],           // a sector worth at least this (a base or a muster always is) gets one more main group
+	["alertApproachSample", 500],     // the approach bearing is read where the route is this far from the sector
+	["alertApproachCandidates", 3],   // nearest enemy sectors compared by road
+	["alertRoadRange", 700],          // road points are recorded this far out along the approach
+	["alertRoadSpacing", 60],
+	["alertRoadMax", 8],
+	["alertRoadSearch", 40],          // straight-line approach: how far from the line a road can be
+	["alertRoadLineMetres", [200, 400, 600]],
+	["alertCoverRadius", 120],        // main position: cover searched around a point on the approach side
+	["alertCoverBias", 0.6],          // that point, as a share of the half-width of the sector out from the centre
+	["alertCoverArc", 100],           // cover has to be within this many degrees of the approach bearing
+	["alertCoverMinFraction", 0.25],  // and at least this share of the half-width out from the centre
+	["alertCoverOutside", 50],        // and no more than this far outside the sector square
+	["alertScreenBeyond", 250],       // screen: metres beyond the sector edge
+	["alertScreenCover", 60],         // cover searched this close to the screen's spot
+	["alertCounterBack", 150],        // counter reserve: metres behind the sector edge, away from the approach
+	["alertBreakInMen", 2],           // enemy men known inside the square before the reserve goes in
+	["alertInsideMargin", 0],         // metres outside the square that count as inside
+	["alertFaceSeconds", 30],         // how often a group at its spot is turned to face the approach
 	["killLog", true],                // one C_KILL line per man killed, with position and sides, for the front-line analysis
 
 	// A group a human was in within this many seconds is never ordered

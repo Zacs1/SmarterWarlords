@@ -165,6 +165,11 @@ SWLC_fnc_defRespond = {
 	private _prop = [] call SWLC_fnc_propOn;
 	private _margin = [1, CFG("responseMargin")] select _prop;
 	private _need = ((ceil (((_rec get "strength") * _margin) / CFG("defenceMenPerGroup"))) max 1) min CFG("defenceMaxGroups");
+	// A warning, not a sighting: the enemy has picked this sector but nobody has seen it yet. Groups already in a fight stay in it.
+	private _alertOnly = _rec getOrDefault ["alertOnly", false];
+	_need = _need max (_rec getOrDefault ["alertNeed", 0]);
+	private _calm = {!_alertOnly || {!([_x] call SWLC_fnc_groupFighting)}};
+	private _limit = _prop || _alertOnly;
 	private _peak = _rec getOrDefault ["needPeak", _need];
 	if (_prop && {_need > _peak} && {_groups isNotEqualTo []}) then {
 		["C_DEF", [["side", _side], ["event", "escalate"], ["sector", [_s] call SWLC_fnc_adName], ["need", _need], ["was", _peak], ["strength", _rec get "strength"]]] call SWLC_fnc_log;
@@ -178,7 +183,7 @@ SWLC_fnc_defRespond = {
 		[_list, [], {leader _x distance2D _c}, "ASCEND"] call BIS_fnc_sortBy
 	};
 
-	private _big = (_rec get "strength") >= CFG("responseCounterattackMen");
+	private _big = !_alertOnly && {(_rec get "strength") >= CFG("responseCounterattackMen")};
 	private _attack = _cmd get "target";
 	private _worth = isNull _attack || {([_cmd, _s] call SWLC_fnc_defSectorValue) > (([_attack] call SWLC_fnc_adWorth) + ([_side, _attack] call SWLC_fnc_stratWorth))};
 	private _opNow = _cmd get "op";
@@ -193,7 +198,7 @@ SWLC_fnc_defRespond = {
 	} forEach ((_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Picket" && {(_x getVariable ["SWLC_picketSector", objNull]) isEqualTo _s}});
 
 	// 1. Reserve first.
-	private _reserve = [(_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Reserve"}] call _nearest;
+	private _reserve = [((_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Reserve" && {isNull (_x getVariable ["SWLC_counterFor", objNull])}}) select _calm] call _nearest;
 	{
 		if ((count (_rec get "groups")) >= _need) exitWith {};
 		[_cmd, _x, "defReserve", {
@@ -207,8 +212,8 @@ SWLC_fnc_defRespond = {
 	// 2. A sector with a muster in progress: its groups defend at once.
 	private _muster = (_cmd get "musters") getOrDefault [[_s] call SWLC_fnc_adName, createHashMap];
 	if (count _muster > 0) then {
-		private _staged = ((_muster get "groups") + (_muster get "batch")) select {([_x] call SWLC_fnc_state) in ["Mustering", "Travelling", "Mounting"]};
-		if (_prop && {!_big}) then {
+		private _staged = (((_muster get "groups") + (_muster get "batch")) select {([_x] call SWLC_fnc_state) in ["Mustering", "Travelling", "Mounting"]}) select _calm;
+		if (_limit && {!_big}) then {
 			_staged = ([_staged] call _nearest) select [0, (_need - (count (_rec get "groups"))) max 0];
 		};
 		if (_staged isNotEqualTo []) then {
@@ -218,21 +223,24 @@ SWLC_fnc_defRespond = {
 					[_cmd, _rec, _x, "staging_abort"] call SWLC_fnc_defSend;
 				}] call SWLC_fnc_resGuarded;
 			} forEach _staged;
-			_muster set ["firstArrive", -1];
-			["C_DEF", [["side", _side], ["event", "staging_abort"], ["sector", [_s] call SWLC_fnc_adName], ["groups", count _staged]]] call SWLC_fnc_log;
-			[_side, "stagingattack"] call SWLC_fnc_radio;
+			// A warning takes only the groups it needs and the muster carries on.
+			if (!_alertOnly) then {
+				_muster set ["firstArrive", -1];
+				["C_DEF", [["side", _side], ["event", "staging_abort"], ["sector", [_s] call SWLC_fnc_adName], ["groups", count _staged]]] call SWLC_fnc_log;
+				[_side, "stagingattack"] call SWLC_fnc_radio;
+			};
 		};
 	};
 
 	// 3. A raid-sized threat: the attack's least-engaged groups, never ones in a fight, up to a third of the attack.
 	// A bigger force is a counterattack and falls through to the full defence rules below.
-	if (_prop && {!_big} && {(count (_rec get "groups")) < _need}) exitWith {
+	if (_limit && {!_big} && {(count (_rec get "groups")) < _need}) exitWith {
 		private _op = _cmd get "op";
 		if (isNil "_op") exitWith {};
 		private _live = [_op] call SWLC_fnc_waveLive;
 		private _cap = floor ((count _live) * CFG("responseCapFraction"));
 		private _peeled = {(_x getVariable ["SWLC_peeledOp", -1]) == (_op get "id") && {([_x] call SWLC_fnc_state) == "Defending"}} count (_cmd get "groups");
-		private _pool = _live select {([_x] call SWLC_fnc_state) in ["Mustering", "Travelling", "Waiting", "Advancing"] && {(behaviour leader _x) != "COMBAT"}};
+		private _pool = (_live select {([_x] call SWLC_fnc_state) in ["Mustering", "Travelling", "Waiting", "Advancing"] && {(behaviour leader _x) != "COMBAT"}}) select _calm;
 		{
 			if ((count (_rec get "groups")) >= _need || {_peeled >= _cap}) exitWith {};
 			[_cmd, _x, "defPeel", {
@@ -293,12 +301,15 @@ SWLC_fnc_defReserveTick = {
 	params ["_cmd"];
 	private _side = _cmd get "side";
 	private _size = [_side] call SWLC_fnc_defReserveSize;
-	private _reserve = (_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Reserve"};
+	// Groups held as an alert's counterattack reserve are on a job: not rotated, shrunk or moved here, but they count towards the size.
+	private _reserve = (_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Reserve" && {isNull (_x getVariable ["SWLC_counterFor", objNull])}};
+	private _counters = {!isNull (_x getVariable ["SWLC_counterFor", objNull])} count (_cmd get "groups");
 	private _post = [_cmd] call SWLC_fnc_defCentralSector;
 	if (isNull _post) exitWith {};
 
 	// Everyone is in the reserve during a rebuild, so that time doesn't count as anyone's turn.
 	private _rebuilding = _size >= 1000;
+	if (!_rebuilding) then {_size = (_size - _counters) max 0};
 	if (!_rebuilding && {[_cmd] call SWLC_fnc_holdPriority}) then {_size = 0};
 	if (CFG("reserveRotate")) then {
 		private _since = time - (_cmd getOrDefault ["reserveTickAt", time]);
@@ -419,6 +430,7 @@ SWLC_fnc_defenceTick = {
 				_threats set [_name, _rec];
 			};
 			_rec set ["last", time];
+			_rec set ["alertOnly", false];
 			_rec set ["strength", (_inf + 3 * _light + 6 * _arm) max CFG("defenceMinInfantry")];
 			_rec set ["bearing", _bearing];
 			if (_new || {isNil {_rec get "spots"}}) then {_rec set ["spots", [_cmd, _s, _bearing] call SWLC_fnc_defSpots]};

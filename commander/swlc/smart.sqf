@@ -384,7 +384,7 @@ SWLC_fnc_smartHuntTick = {
 			_x params ["_pos", "_firing"];
 			if (surfaceIsWater _firing || {[_cmd get "side", _firing] call SWLC_fnc_adRestricted}) then {_firing = +_pos};
 			private _blocked = [_cmd get "side", _firing] call SWLC_fnc_adRestricted;
-			private _free = (_cmd get "groups") select {!_blocked && {([_x] call SWLC_fnc_state) in ["Unassigned", "Mustering", "Reserve"]} && {(leader _x distance2D _firing) <= CFG("huntRadius")}};
+			private _free = (_cmd get "groups") select {!_blocked && {([_x] call SWLC_fnc_state) in ["Unassigned", "Mustering", "Reserve"]} && {isNull (_x getVariable ["SWLC_counterFor", objNull])} && {(leader _x distance2D _firing) <= CFG("huntRadius")}};
 			if (_free isNotEqualTo []) then {
 				private _g = ([_free, [], {leader _x distance2D _firing}, "ASCEND"] call BIS_fnc_sortBy) # 0;
 				[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
