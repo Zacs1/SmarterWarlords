@@ -297,6 +297,9 @@ SWLC_settings = createHashMapFromArray [
 	// Defence
 	["defenceEnabled", true],
 	["reserveBySectors", [[5, 1], [10, 2], [1000000, 3]]],  // up to N sectors owned -> reserve groups
+	["reserveRotate", true],          // reserve duty goes round: the group that has served least is kept, and nobody stays for good
+	["reserveStintSeconds", 360],     // held back this long with a wave out, a group goes to join the attack
+	["reserveRestSeconds", 420],      // and can't be picked for the reserve again for this long
 	["reservePatrolSeconds", 150],    // a waiting group moves this often, or Warlords treats its leader as stuck
 	["defenceRadius", 400],           // metres outside the sector square that count as near it
 	["defenceMinInfantry", 4],

@@ -294,6 +294,17 @@ SWLC_fnc_defReserveTick = {
 	private _post = [_cmd] call SWLC_fnc_defCentralSector;
 	if (isNull _post) exitWith {};
 
+	// Everyone is in the reserve during a rebuild, so that time doesn't count as anyone's turn.
+	private _rebuilding = _size >= 1000;
+	if (CFG("reserveRotate")) then {
+		private _since = time - (_cmd getOrDefault ["reserveTickAt", time]);
+		_cmd set ["reserveTickAt", time];
+		if (!_rebuilding) then {
+			{_x setVariable ["SWLC_reserveServed", (_x getVariable ["SWLC_reserveServed", 0]) + _since]} forEach _reserve;
+		};
+		_reserve = [_reserve, [], {_x getVariable ["SWLC_reserveServed", 0]}, "ASCEND"] call BIS_fnc_sortBy;
+	};
+
 	if ((count _reserve) > _size) then {
 		{
 			[_cmd, _x, "reserveShrink", {
@@ -303,6 +314,23 @@ SWLC_fnc_defReserveTick = {
 			}] call SWLC_fnc_resGuarded;
 		} forEach (_reserve select [_size, count _reserve]);
 	};
+
+	// A wave is out and this group has done its turn: it goes to the fight, and a group coming back takes over.
+	if (CFG("reserveRotate") && {!_rebuilding} && {!isNil {_cmd get "op"}}) then {
+		{
+			private _g = _x;
+			if ((time - (_g getVariable ["SWLC_stateSince", time])) >= CFG("reserveStintSeconds")) then {
+				[_cmd, _g, "reserveRotate", {
+					_g setVariable ["SWLC_reserveRestUntil", time + CFG("reserveRestSeconds")];
+					[_g] call SWLC_fnc_adClearOrder;
+					[_g, "Unassigned", [], "reserve_rotated"] call SWLC_fnc_setState;
+					_reserve = _reserve - [_g];
+					["C_DEF", [["side", _side], ["event", "reserve_rotated"], ["group", groupId _g], ["served", round (_g getVariable ["SWLC_reserveServed", 0])]]] call SWLC_fnc_log;
+				}] call SWLC_fnc_resGuarded;
+			};
+		} forEach (+_reserve);
+	};
+
 	{
 		if ((count _reserve) >= _size) exitWith {};
 		private _g = _x;
@@ -312,7 +340,7 @@ SWLC_fnc_defReserveTick = {
 			[_g, "Reserve", [_post] call SWLC_fnc_adPos, "reserve"] call SWLC_fnc_setState;
 			["C_DEF", [["side", _side], ["event", "reserve_join"], ["group", groupId _g], ["post", [_post] call SWLC_fnc_adName], ["size", _size]]] call SWLC_fnc_log;
 		}] call SWLC_fnc_resGuarded;
-	} forEach ((_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Unassigned"});
+	} forEach ((_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Unassigned" && {_rebuilding || {time >= (_x getVariable ["SWLC_reserveRestUntil", -1])}}});
 
 	private _c = [_post] call SWLC_fnc_adPos;
 	{
