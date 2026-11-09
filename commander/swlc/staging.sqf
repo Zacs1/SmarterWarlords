@@ -110,7 +110,7 @@ SWLC_fnc_musterChoose = {
 	private _here = getPosATL leader _g;
 	private _near = ([_owned, _here] call SWLC_fnc_adNearest);
 	private _threats = _cmd get "threats";
-	private _safe = _owned select {!(([_x] call SWLC_fnc_adName) in _threats) && {[_side, _x] call SWLC_fnc_adCanFTTo}};
+	private _safe = _owned select {!([_threats, _x] call SWLC_fnc_frontHot) && {[_side, _x] call SWLC_fnc_adCanFTTo}};
 	private _forward = objNull;
 	if (_safe isNotEqualTo []) then {
 		private _best = ([_safe, _tpos] call SWLC_fnc_adNearest);

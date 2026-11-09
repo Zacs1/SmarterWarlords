@@ -23,6 +23,7 @@ SWLC_fnc_adInit = {
 		_x setVariable ["SWLC_isBase", typeOf _x == "ModuleWLBase_F"];
 		_x setVariable ["SWLC_links", _x getVariable ["BIS_WL_connectedSectors", []]];
 		_x setVariable ["SWLC_timeoutT", _x getVariable ["BIS_WL_timeoutBase", 60]];
+		_x setVariable ["SWLC_ftBase", _x getVariable ["FastTravelEnabled", true]];
 	} forEach BIS_WL_sectors;
 	SWLC_sectors = +BIS_WL_sectors;
 };
@@ -350,6 +351,14 @@ SWLC_fnc_adCanFTTo = {
 	if (_s == ([_side] call SWLC_fnc_adBase) && {[_side] call SWLC_fnc_adBaseThreatened}) exitWith {false};
 	if (CFG("rulesVariant") && {CFG("ruleNoRespawnSeized")} && {[_side, _s] call SWLC_fnc_capBeingSeized}) exitWith {false};
 	true
+};
+
+// Opens or closes fast travel to an owned sector, for players and the commander alike: Warlords' menu and adCanFTTo both
+// read this variable. Public, written only when it changes. A sector the map itself disabled stays disabled.
+SWLC_fnc_adSetFTOpen = {
+	params ["_s", "_open"];
+	private _want = _open && {_s getVariable ["SWLC_ftBase", true]};
+	if ((_s getVariable ["FastTravelEnabled", true]) isNotEqualTo _want) then {_s setVariable ["FastTravelEnabled", _want, true]};
 };
 
 SWLC_fnc_adBaseThreatened = {

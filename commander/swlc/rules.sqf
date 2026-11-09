@@ -234,6 +234,7 @@ SWLC_fnc_rulesRespawnFix = {
 // ---- Kills and losses, for the commitment decision ----
 
 SWLC_fnc_rulesInstall = {
+	[] call SWLC_fnc_frontInstall;
 	addMissionEventHandler ["EntityRespawned", {
 		params ["_new"];
 		if (!isPlayer _new && {_new isKindOf "CAManBase"} && {CFG("ruleNoRespawnSeized")}) then {[_new] spawn SWLC_fnc_rulesRespawnFix};

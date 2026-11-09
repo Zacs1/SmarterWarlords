@@ -92,7 +92,7 @@ SWLC_clPanelSide = {
 	params ["_side"];
 	private _data = missionNamespace getVariable [format ["SWLC_status_%1", _side], []];
 	if (_data isEqualTo []) exitWith {format ["<t color='#aaaaaa'>AI COMMANDERS - %1: no data yet</t><br/>", _side]};
-	_data params ["_stamp", "_target", "_rows", ["_capture", ""]];
+	_data params ["_stamp", "_target", "_rows", ["_capture", ""], ["_ftLine", ""]];
 	private _seen = SWLC_clPanelSeen getOrDefault [str _side, [-1, 0]];
 	if ((_seen # 0) != _stamp) then {
 		_seen = [_stamp, time];
@@ -100,6 +100,7 @@ SWLC_clPanelSide = {
 	};
 	private _age = time - (_seen # 1);
 	private _text = format ["<t color='#ffffff'>AI COMMANDERS - %1</t>&#160;&#160;&#160;<t color='#ffcc66'>target: %2</t>&#160;&#160;&#160;<t color='#99ee99'>%3</t><br/>", _side, [_target] call SWLC_clEsc, _capture];
+	if (_ftLine != "") then {_text = _text + format ["<t color='#ffcc66'>%1</t><br/>", [_ftLine] call SWLC_clEsc]};
 	{
 		_x params ["_name", "_job", "_place", "_reason", "_since"];
 		_text = _text + format ["%1<t color='%2'>%3</t>%4<t color='#bbbbbb'>%5</t><br/>&#160;&#160;<t color='#aaaaaa'>%6</t><br/>",

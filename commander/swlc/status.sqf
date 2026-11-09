@@ -170,5 +170,5 @@ SWLC_fnc_statusPublish = {
 	_cmd set ["statusAt", time];
 	private _target = _cmd get "target";
 	private _rows = (_cmd get "groups") apply {[_cmd, _x] call SWLC_fnc_statusRow};
-	missionNamespace setVariable [format ["SWLC_status_%1", _side], [time, if (isNull _target) then {"none"} else {[_target] call SWLC_fnc_adName}, _rows, [_target, _side] call SWLC_fnc_capStatusText], true];
+	missionNamespace setVariable [format ["SWLC_status_%1", _side], [time, if (isNull _target) then {"none"} else {[_target] call SWLC_fnc_adName}, _rows, [_target, _side] call SWLC_fnc_capStatusText, [_cmd] call SWLC_fnc_frontStatusText], true];
 };

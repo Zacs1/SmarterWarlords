@@ -65,6 +65,19 @@ SWLC_settings = createHashMapFromArray [
 	["commitFailedPushes", 2],
 	["commitRebuildMenPerGroup", 2],  // losing and below this average: pull back rather than switch
 	["commitProbeWeakBonus", 40],     // vote score bonus for a sector a probe found weak
+
+	// Front line part B: defenders keep fast travel to their own sector until real fighting reaches it
+	["ruleDefenderFT", true],
+	["frontAreaMargin", 175],         // the area: the capture square plus this many metres
+	["frontPollSeconds", 5],
+	["frontWindowSeconds", 30],       // sustained: this many seconds per window...
+	["frontWindowsTotal", 3],         // ...looking at this many finished windows...
+	["frontWindowsNeeded", 2],        // ...and this many had real fighting in them
+	["frontExchangeSeconds", 15],     // both sides fired, or someone died, within this long counts as an exchange now
+	["frontMinAttackers", 3],         // attackers who fired, came under fire or died here
+	["frontInvolvedSeconds", 90],     // how far back an attacker still counts as involved
+	["frontQuietSeconds", 120],       // real fighting or a seize gone this long lifts it
+	["frontRadioCooldown", 30],       // per side, between "closed" lines and between "open" lines
 	["rebuildSeconds", 240],
 	["abandonBanSeconds", 900],       // an abandoned target can't be picked again for this long
 	["switchWithdrawSeconds", 60],    // longest wait for attackers to leave the old target

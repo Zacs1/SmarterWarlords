@@ -165,7 +165,7 @@ SWLC_fnc_menuFollow = {
 	private _threats = _cmd get "threats";
 
 	if ((_leader distance2D _p) > CFG("menuFollowFar") && {(time - (_g getVariable ["SWLC_followFT", -1e6])) >= CFG("menuFollowFTSeconds")}) then {
-		private _safe = ([_side] call SWLC_fnc_adOwned) select {!(([_x] call SWLC_fnc_adName) in _threats) && {[_side, _x] call SWLC_fnc_adCanFTTo}};
+		private _safe = ([_side] call SWLC_fnc_adOwned) select {!([_threats, _x] call SWLC_fnc_frontHot) && {[_side, _x] call SWLC_fnc_adCanFTTo}};
 		if (_safe isNotEqualTo []) then {
 			private _hop = ([_safe, _p] call SWLC_fnc_adNearest);
 			private _sp = [_hop] call SWLC_fnc_adPos;

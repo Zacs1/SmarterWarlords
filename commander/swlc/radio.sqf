@@ -117,6 +117,8 @@ SWLC_radioLines = createHashMapFromArray [
 	["releasenone", ["You've got no groups on loan."]],
 	["plan", ["Target %1, staging at grid %2. %3 %4"]],
 	["planidle", ["No attack planned right now. %1"]],
+	["ftclose", ["Real fighting at %1. Fast travel there is closed, use the next sector over.", "%1 is a fight now, no more fast travel in. Come in from a neighbouring sector.", "Fast travel to %1 is shut, they're on it.", "%1 is hot. Fast travel closed."]],
+	["ftopen", ["%1 has gone quiet. Fast travel there is open again.", "Fast travel to %1 is back open.", "%1 is quiet. You can fast travel in again.", "Fighting's over at %1, fast travel is open."]],
 	["seizing", ["They're seizing %1!", "%1 is being taken, respond now!", "Enemy on the flag at %1!", "Losing %1, they're seizing it!"]],
 	["escalate", ["More than reported at %1, need more men.", "%1 is worse than we thought. Send help.", "Bigger force at %1, we need backup.", "They've got more at %1 than reported."]],
 	["defreturn", ["%1 is secure, heading back to the attack.", "Done at %1, rejoining the push.", "%1 is held, returning to the wave.", "Finished at %1, back to the main effort."]],
