@@ -157,7 +157,7 @@ SWLC_fnc_vehSafeToLift = {
 	private _side = _cmd get "side";
 	private _p = getPosATL _v;
 	if ((behaviour leader _g) == "COMBAT") exitWith {false};
-	if ([_g] call SWLC_fnc_groupFighting) exitWith {false};
+	if (!isNil "SWLC_fnc_groupFighting" && {[_g] call SWLC_fnc_groupFighting}) exitWith {false};
 	if (((crew _v) findIf {isPlayer _x}) >= 0) exitWith {false};
 	if ((allPlayers findIf {alive _x && {(_x distance2D _p) < CFG("vehUnstickPlayerRadius")}}) >= 0) exitWith {false};
 	private _enemy = (_p nearEntities [["Man", "Car", "Tank", "Air", "Ship", "StaticWeapon"], CFG("vehUnstickEnemyRadius")]) findIf {
