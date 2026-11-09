@@ -131,14 +131,18 @@ def measure(group: Group, changes: int = 0, commander_round: bool = False) -> Ac
 
 
 def measure_round(data) -> list[Activity]:
-    changes: dict[str, int] = {}
+    # Group names repeat across sides, so the count is per side and name.
+    changes: dict[tuple[str, str], int] = {}
     commander_round = bool(data.of("C_STATE"))
     for row in data.of("C_STATE"):
-        changes[row.get("group", "")] = changes.get(row.get("group", ""), 0) + 1
+        key = (row.get("side", ""), row.get("group", ""))
+        changes[key] = changes.get(key, 0) + 1
     rows = []
     for group in data.groups.values():
         if group.is_ai and group.is_warlord:
-            rows.append(measure(group, changes.get(group.id, changes.get(group.name, changes.get(group.name.split(" ", 1)[-1], 0))), commander_round))
+            names = (group.id, group.name, group.name.split(" ", 1)[-1])
+            count = next((changes[(group.side, n)] for n in names if (group.side, n) in changes), 0)
+            rows.append(measure(group, count, commander_round))
     rows.sort(key=lambda a: (a.group.side, a.group.name))
     return rows
 
