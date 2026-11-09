@@ -177,6 +177,9 @@ SWLC_fnc_stanceEvaluate = {
 	// A commit-timer rebuild runs its full length.
 	if ([_cmd] call SWLC_fnc_commitRebuilding) exitWith {};
 	private _wanted = [_stance, _n get "ratio", _n get "known"] call SWLC_fnc_stanceWanted;
+	// Nobody on this side has fought for a long time: the enemy isn't pressing, and two sides both waiting is a dead round.
+	if (((_cmd get "groups") findIf {[_x] call SWLC_fnc_groupFighting}) >= 0) then {_cmd set ["stanceFoughtAt", time]};
+	if (_wanted != "attack" && {_stance == "hold"} && {(time - ((_cmd getOrDefault ["stanceFoughtAt", -1e6]) max (_cmd getOrDefault ["stanceSince", -1e6]))) >= CFG("stanceQuietSeconds")}) then {_wanted = "attack"};
 	if (_wanted == _stance) exitWith {_cmd deleteAt "stanceHeldLogged"};
 	private _left = ((_cmd getOrDefault ["stanceSince", -1e6]) + CFG("stanceMinSeconds")) - time;
 	if (_left > 0) exitWith {
