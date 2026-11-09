@@ -10,7 +10,7 @@ from typing import Callable
 GATE = "parte"
 SIDE = "WEST"
 
-SMALL_RAID_MAX_NEED = 2
+SMALL_RAID_MAX_NEED = 3  # the scenario sets 4 men per group for stage 1, so 8 raiders need the picket, the reserve and one group from the wave
 
 
 def ge(data, event: str) -> list[dict[str, str]]:

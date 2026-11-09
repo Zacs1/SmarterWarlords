@@ -5,7 +5,8 @@
 
 param(
     [string]$Scenario = '',
-    [string]$Overrides = ''
+    [string]$Overrides = '',
+    [string]$MissionName = 'SWL_Test.Tanoa'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,7 +16,7 @@ $stock = Join-Path $root 'reference\missions_f_warlords\MPScenarios\MP_Warlords_
 $commander = Join-Path $root 'commander'
 $overlay = Join-Path $root 'tests\mission_overlay'
 $missions = Join-Path $root 'tests\missions'
-$out = Join-Path $missions 'SWL_Test.Tanoa'
+$out = Join-Path $missions $MissionName
 
 if (-not (Test-Path (Join-Path $stock 'mission.sqm'))) {
     throw "Stock scenario not found at $stock. Unpack missions_f_warlords.pbo into reference/ first."

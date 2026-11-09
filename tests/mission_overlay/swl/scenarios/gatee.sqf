@@ -263,6 +263,9 @@ private _live = [_cmd] call SWLG_live;
 	[[_cmd] call SWLG_op getOrDefault ["target", objNull]] call {params ["_t"]; if (isNull _t) then {"-"} else {[_t] call SWLC_fnc_adName}}]]] call SWLG_emit;
 
 // ---- Stage 1: a small raid ----
+// The picket and the one reserve group answer first, so the reply has to need three for one to come from the wave.
+private _menPerGroup = SWLC_settings get "defenceMenPerGroup";
+SWLC_settings set ["defenceMenPerGroup", 4];
 private _rec1 = [_cmdE, _sector, "test", []] call SWLC_fnc_raidStart;
 private _men = [_sector, 8] call SWLG_placeEast;
 SWLG_enemy = [_men];
@@ -341,6 +344,7 @@ SWLC_settings set ["goMinGroups", 99];
 SWLC_settings set ["peelWorkableGroups", 3];
 
 // ---- Stage 2: a counterattack ----
+SWLC_settings set ["defenceMenPerGroup", _menPerGroup];
 _deadline = time + 90;
 waitUntil {
 	sleep 2;

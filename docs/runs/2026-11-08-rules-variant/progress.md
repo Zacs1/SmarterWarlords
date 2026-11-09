@@ -70,3 +70,25 @@ Every soak must measure each AI commander's activity and pass or fail on it. See
 - 11:15 Performance pass from the logs, no Arma rounds (waiting for 13:30). Commander tick split into slices across frames, each muster and each new group in its own frame, sides half a tick apart, repeated lookups cached, verbose-only lines skipped in the playable build. Linted only. Compare `avg_ms`, new `max_frame_ms` and C_PROF when rounds resume.
 - 12:30 gatee5: 5 Part E checks failed, all from the test raiding BLUFOR Base instead of the picketed front sector. Bohemia's WLSectorListing assigns `_sector` without declaring it, which overwrote the scenario's variable through adAvailable. WLAirdrop leaks names the same way. Both shielded with `private` in the adapter. Rerunning as gatee6.
 - 12:55 New instruction saved in prompt-resilience.md: Part R (resilience, 13 items), remaining tests batched, playable rebuilt now and after resilience and after the final soak, PLAYABLE.md at root, stop all rounds before the user plays. Resilience is built in a separate git worktree so the queued gate rounds keep running on tested code.
+
+- 13:15: playable rebuilt from 7c29c77 and PLAYABLE.md added. Four helpers building resilience in worktrees: routes and destination validation, sweep/ladder/supervisor, group upkeep, sabotage scenario and gates.
+
+- gatee7: pickets, seize alarm, reserve first, no FT into sector, wave holds and clean finish PASS. Peel, return and escalate FAIL again because EAST's only enemy neighbour was the raid sector, so the raid stood itself down. Scenario now hands a sector behind EAST's line back to neutral. Part D next, Part E rerun afterwards.
+
+- gated7: 0 script errors, front reached. The short test raid lasted 502 s because expiry is the longer of raidExpirySeconds and capture time + raidExpiryTravelSeconds, so grace, cooldown and both probes never ran. Scenario fixed; rerun as gated8 after gatee8.
+
+- gatee8: setup worked (EAST settled on another sector, raid held the whole time, real seize alarm). The response was exactly need 2, 2 groups, from picket and reserve, so nothing had to peel off the wave and the return and hold checks had nothing to judge. Stage 1 now needs three groups. Rerun as gatee9 after gated8.
+- Resilience merged on branch `resilience` (worktree .claude/worktrees/integrate), lint clean, Opus review running. Master stays on tested code until the queued gates finish.
+
+- gated8: refusals PASS, expiry/grace/undo PASS, 0 script errors. Probe stages never started: the wave had gone from Mustering to Mounting, so no group was spare and the test's free helper only took Waiting groups. Helper widened, and it retries during the wait. Rerun as gated9 after gatee9.
+- Resilience review: 12 findings, 11 fixed on `resilience`, 1 (stale leg) wrong on reading the code. Not yet run.
+
+- gatee9: peel, responders return, wave holds PASS with the raid held for its whole run. Proportionate failed only on the gate's limit of 2, which the scenario now needs to be 3. Escalation failed for a real reason: a 16-man counterattack on a sector worth less than the attack still peeled from the wave, against the written rule. Fixed; rerun as gatee10 after gated9.
+
+- gated9: refusals, expiry, garrison turn-back, AI raid purchase and clean finish PASS. Second probe judged the sector held because EAST's picket walked back in; raiders pinned outside for 380 s then lost the expiry race by 14 s (a test timing issue). Warning check counted only sightings after the raid started, though EAST had seen the probe at t=219. Test and gate adjusted; rerun as gated10 after gatee10.
+
+- gatee10: Part E all PASS, 0 script errors (tests/server/runs/*_gatee10). Tagged rules-e-done.
+
+## Parallel rounds (user approved, 2026-11-09)
+- The user allowed up to 3 servers at once for scenario rounds; the final soak stays solo. `tools/run-round.ps1` now takes a free slot (ports 2402/2412/2422, own mission folder `SWL_Test[_N].Tanoa`), held by an exclusive lock file; `-Solo` needs an empty machine and holds every slot.
+- gateh4l (LAMBS) and gatec2 started alongside gated10.

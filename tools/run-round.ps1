@@ -6,12 +6,16 @@
 # job object, so it dies with this script even if the script is killed.
 # Vanilla unless -Mods names the CBA_A3 and LAMBS stable Workshop items, which are read in place.
 # Exit codes: 0 finished, 2 mission never started, 3 server exited early, 4 server install changed.
+#
+# Up to three rounds can run at once. Each takes a free slot, which gives it its own port and mission
+# folder. -Solo needs a machine with no other server and holds every slot, for rounds whose performance
+# and balance numbers must not be skewed.
 
 param(
     [Parameter(Mandatory = $true)][double]$DurationMinutes,
     [string]$Name = 'round',
     [string]$ServerDir = 'C:\Program Files (x86)\Steam\steamapps\common\Arma 3 Server',
-    [int]$Port = 2402,
+    [switch]$Solo,
     [int]$StartTimeoutSeconds = 300,
     [switch]$NoBuild,
     # Test scenario from tests/mission_overlay/swl/scenarios, and settings overrides ("a=1;b=[2]").
@@ -115,13 +119,36 @@ $root = Split-Path -Parent $PSScriptRoot
 $exe = Join-Path $ServerDir 'arma3server_x64.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "Server exe not found: $exe" }
 
-$running = Get-Process -Name 'arma3server_x64' -ErrorAction SilentlyContinue
-if ($running) { throw "An arma3server_x64 process is already running (PID $($running.Id -join ', ')). Stop it first." }
+# Slots: 2402, 2412, 2422. Arma also uses the few ports above each one. A slot is held by an open
+# exclusive file, which Windows releases even if this script is killed.
+$maxServers = 3
+$running = @(Get-CimInstance Win32_Process -Filter "Name='arma3server_x64.exe'")
+if ($Solo -and $running.Count -gt 0) { throw "-Solo needs no other server running (PID $($running.ProcessId -join ', '))." }
+if ($running.Count -ge $maxServers) { throw "$($running.Count) servers are already running; the limit is $maxServers." }
+$usedPorts = @($running | ForEach-Object { if ($_.CommandLine -match '-port=(\d+)') { [int]$Matches[1] } })
+
+$slotsDir = Join-Path $root 'tests\server\runs'
+New-Item -ItemType Directory -Force -Path $slotsDir | Out-Null
+$slotLocks = @()
+$slot = -1
+for ($i = 0; $i -lt $maxServers; $i++) {
+    if ($usedPorts -contains (2402 + 10 * $i)) { continue }
+    try {
+        $slotLocks += [System.IO.File]::Open((Join-Path $slotsDir ".slot$i.lock"), 'OpenOrCreate', 'ReadWrite', 'None')
+    } catch [System.IO.IOException] {
+        continue
+    }
+    if ($slot -lt 0) { $slot = $i }
+    if (-not $Solo) { break }
+}
+if ($slot -lt 0 -or ($Solo -and $slotLocks.Count -lt $maxServers)) { throw 'No free server slot.' }
+$Port = 2402 + 10 * $slot
+$mission = if ($slot -eq 0) { 'SWL_Test.Tanoa' } else { "SWL_Test_$slot.Tanoa" }
 
 if (-not $NoBuild) {
-    & (Join-Path $PSScriptRoot 'build-test-mission.ps1') -Scenario $Scenario -Overrides $Overrides
+    & (Join-Path $PSScriptRoot 'build-test-mission.ps1') -Scenario $Scenario -Overrides $Overrides -MissionName $mission
 }
-& (Join-Path $PSScriptRoot 'install-test-mission.ps1') -ServerDir $ServerDir
+& (Join-Path $PSScriptRoot 'install-test-mission.ps1') -ServerDir $ServerDir -MissionName $mission
 
 $stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
 $runDir = Join-Path $root "tests\server\runs\${stamp}_$Name"
@@ -134,7 +161,7 @@ $paramLines = ($Params -split ',' | Where-Object { $_.Trim() } | ForEach-Object 
     $k, $v = $_ -split '=', 2
     '				{0} = {1};' -f $k.Trim(), $v.Trim()
 }) -join "`r`n"
-$cfgText = (Get-Content -LiteralPath $template -Raw) -replace '@PARAMS@', $paramLines
+$cfgText = (Get-Content -LiteralPath $template -Raw) -replace '@PARAMS@', $paramLines -replace '@MISSION@', $mission
 Set-Content -LiteralPath $cfg -Value $cfgText -Encoding ascii
 $basic = Join-Path $root 'tests\server\basic.cfg'
 
@@ -238,9 +265,10 @@ finally {
     Remove-Item -LiteralPath (Join-Path $runDir 'server.pid') -ErrorAction SilentlyContinue -Confirm:$false
 }
 
-if (Get-Process -Name 'arma3server_x64' -ErrorAction SilentlyContinue) {
-    Write-Output 'WARNING: an arma3server_x64 process is still running.'
+if ($server -and (Get-Process -Id $server.Id -ErrorAction SilentlyContinue)) {
+    Write-Output "WARNING: this round's server (PID $($server.Id)) is still running."
 }
+$slotLocks | ForEach-Object { $_.Dispose() }
 
 $after = Get-InstallSnapshot
 $diff = Compare-Object -ReferenceObject $before -DifferenceObject $after

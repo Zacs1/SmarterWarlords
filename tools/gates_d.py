@@ -16,6 +16,7 @@ AI_GROUPS_MAX = 2
 NOMINAL_TOLERANCE_S = 2.0
 # A sighting and a detect land on the same commander tick, in either order.
 STEALTH_TOLERANCE_S = 3
+SIGHTING_LEAD_S = 60  # the raiders can have been seen a little before the raid was bought, as the probe group often is
 # Income can arrive in the half second between the two CP samples around a purchase.
 CP_DROP_FRACTION = 0.9
 # Warlords pays 10 x value x the income multiplier. Half of that still tells a payout from ordinary income.
@@ -112,7 +113,7 @@ def _stealth_window(data, sector: str, start: float, end: float) -> tuple[bool, 
         return True, f"{sector}: no warning"
     first = _num(detects[0], "t")
     caps = [_num(e, "t") for e in data.of("C_CAP") if e.get("side") == "WEST" and e.get("event") == "start" and e.get("sector") == sector and _num(e, "t") >= start]
-    seen = [_num(e, "t") for e in data.of("C_INTEL") if e.get("side") == "EAST" and e.get("event") == "new" and e.get("sector") == sector and _num(e, "t") >= start]
+    seen = [_num(e, "t") for e in data.of("C_INTEL") if e.get("side") == "EAST" and e.get("event") == "new" and e.get("sector") == sector and _num(e, "t") >= start - SIGHTING_LEAD_S]
     legitimate = min(caps + seen) if caps or seen else None
     if legitimate is None or first < legitimate - STEALTH_TOLERANCE_S:
         return False, f"{sector}: EAST warned at t={first:.0f}, first sighting or seize {legitimate}"
