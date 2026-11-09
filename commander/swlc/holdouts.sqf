@@ -10,13 +10,14 @@
 #include "macros.hpp"
 
 {SWLC_radioLines set _x} forEach [
+	["holdvote", ["Our people are still holding %1. Vote %1 so we can reinforce them.", "%1 has fallen with our men inside. Put your vote on %1 and we'll go get them.", "Holdouts in %1. They need %1 voted as our target to get help."]],
 	["holdformed", ["We've lost %1 but we're still in there. Holding on.", "%1 has fallen with our people inside. They're staying.", "Enemy has %1. Our groups inside are holding."]],
 	["holdgoal_hold", ["Holding %1. All free units get to them.", "Priority is %1. Reinforce the holdouts.", "Holding %1, reinforcements go there first."]],
 	["holdgoal_counter", ["Counterattacking %1.", "Holdouts are gone. Counterattack %1.", "We're taking %1 back."]],
 	["holdgoal_defend", ["Defending %1. Expel them.", "Enemy at %1, everyone not fighting defends it.", "Defending %1, push them out."]],
 	["holdsupply", ["Resupply on the way to %1.", "Ammo drop coming in at %1.", "Crate inbound for the holdouts at %1."]]
 ];
-{CFG("radioCooldowns") set _x} forEach [["holdformed", 20], ["holdgoal_hold", 20], ["holdgoal_counter", 20], ["holdgoal_defend", 20], ["holdsupply", 30]];
+{CFG("radioCooldowns") set _x} forEach [["holdformed", 20], ["holdgoal_hold", 20], ["holdgoal_counter", 20], ["holdgoal_defend", 20], ["holdsupply", 30], ["holdvote", 30]];
 
 SWLC_holdSkipStates = ["Raiding", "Probing", "Borrowed", "Pickup", "Hunting"];
 
@@ -141,10 +142,22 @@ SWLC_fnc_holdStart = {
 	private _target = _cmd get "target";
 	private _was = if (isNull _target) then {"none"} else {[_target] call SWLC_fnc_adName};
 	_cmd set ["preferredTarget", _s];
-	if (_target isNotEqualTo _s) then {[_side] call SWLC_fnc_adForceRevote};
+	if (_target isNotEqualTo _s) then {
+		// A human side's vote is theirs: ask for X, don't cancel what they picked.
+		if ([_side] call SWLC_fnc_adSideHasPlayers) exitWith {[_side, "holdvote", [_rec get "name"]] call SWLC_fnc_radio};
+		// Anyone attacking the old target gets out first, or Warlords' kill loop finds them there.
+		if (!isNull _target && {[] call SWLC_fnc_commitOn}) exitWith {[_cmd, _target, "hold"] call SWLC_fnc_commitLeave};
+		[_side] call SWLC_fnc_adForceRevote;
+	};
 	[_cmd, "formed", [["groups", count (_rec get "groups")], ["men", [_rec get "groups"] call SWLC_fnc_groupsMen], ["target_was", _was], ["protected", _added]]] call SWLC_fnc_holdLog;
 	[_side, "holdformed", [_rec get "name"]] call SWLC_fnc_radio;
 	[_cmd, ["hold", _s]] call SWLC_fnc_holdSetGoal;
+};
+
+// True while the side is holding X or counterattacking it: everything free goes there first.
+SWLC_fnc_holdPriority = {
+	params ["_cmd"];
+	((_cmd getOrDefault ["frontGoal", []]) param [0, ""]) in ["hold", "counter"]
 };
 
 SWLC_fnc_holdMake = {
@@ -152,6 +165,7 @@ SWLC_fnc_holdMake = {
 	[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
 	if ((_g getVariable ["SWLC_lambsTask", ""]) != "") then {[_g, false] call SWLC_fnc_lambsRelease};
 	_g setVariable ["SWLC_picketSector", nil];
+	_g setVariable ["SWLC_digUntil", -1];
 	// A defence record stands its groups down when the sector's threat ends, which would release a holdout.
 	{
 		private _list = _y getOrDefault ["groups", []];
@@ -208,16 +222,22 @@ SWLC_fnc_holdRestock = {
 	_g setVariable ["SWLC_holdRestockNext", time + CFG("holdoutRestockSeconds")];
 	if ((_g getVariable ["SWLC_lambsTask", ""]) == "" && {(behaviour leader _g) != "COMBAT"}) exitWith {};
 	private _men = ([_g] call SWLC_fnc_alive) select {isNull objectParent _x};
-	private _need = [_men] call SWLC_fnc_squadRearmNeed;
-	if (_need isEqualTo []) exitWith {};
-	_need params ["_u", "_kind", "_mags", "_take"];
 	private _r = CFG("rearmRadius");
-	private _at = (_rec get "crates") findIf {alive _x && {(_x distance2D _u) <= _r} && {([magazineCargo _x, _mags] call SWLC_fnc_squadRearmFirst) != ""}};
-	if (_at < 0) exitWith {};
-	private _crate = (_rec get "crates") # _at;
-	private _class = [magazineCargo _crate, _mags] call SWLC_fnc_squadRearmFirst;
-	private _got = [_u, _crate, "crate", _class, _take] call SWLC_fnc_squadRearmTake;
-	if (_got > 0) then {[_cmd, "restock", [["group", groupId _g], ["kind", _kind], ["n", _got]]] call SWLC_fnc_holdLog};
+	private _crates = (_rec get "crates") select {alive _x};
+	// One man per turn, but a man no crate can help mustn't hold up the rest.
+	for "_i" from 1 to 6 do {
+		private _need = [_men] call SWLC_fnc_squadRearmNeed;
+		if (_need isEqualTo []) exitWith {};
+		_need params ["_u", "_kind", "_mags", "_take"];
+		private _at = _crates findIf {(_x distance2D _u) <= _r && {([magazineCargo _x, _mags] call SWLC_fnc_squadRearmFirst) != ""}};
+		if (_at >= 0) exitWith {
+			private _crate = _crates # _at;
+			private _class = [magazineCargo _crate, _mags] call SWLC_fnc_squadRearmFirst;
+			private _got = [_u, _crate, "crate", _class, _take] call SWLC_fnc_squadRearmTake;
+			if (_got > 0) then {[_cmd, "restock", [["group", groupId _g], ["kind", _kind], ["n", _got]]] call SWLC_fnc_holdLog};
+		};
+		_men = _men - [_u];
+	};
 };
 
 // One holdout's turn: fall back if broken, otherwise dig in and restock.
@@ -247,6 +267,8 @@ SWLC_fnc_holdResupply = {
 	if (([_side] call SWLC_fnc_cpFree) < _cost) exitWith {};
 	private _low = _live select {([([_x] call SWLC_fnc_alive) select {isNull objectParent _x}] call SWLC_fnc_squadRearmNeed) isNotEqualTo []};
 	if (_low isEqualTo []) exitWith {};
+	// A crate with ammo in it already beside them: another one won't help whoever it can't feed.
+	if (((_rec get "crates") findIf {alive _x && {(_x distance2D leader (_low # 0)) <= CFG("rearmRadius")} && {(magazineCargo _x) isNotEqualTo []}}) >= 0) exitWith {};
 	if !([_side, _cost] call SWLC_fnc_adDebit) exitWith {};
 	_rec set ["resupplyNext", time + CFG("holdoutResupplyCooldown")];
 	[_cmd, "resupply_sent", [["group", groupId (_low # 0)], ["cost", _cost], ["low_groups", count _low]]] call SWLC_fnc_holdLog;
@@ -268,7 +290,25 @@ SWLC_fnc_holdDeliver = {
 		private _class = ["O_CargoNet_01_ammo_F", "B_CargoNet_01_ammo_F"] select ((_cmd get "side") == west);
 		private _pos = _p findEmptyPosition [3, 25, _class];
 		if (_pos isEqualTo []) then {_pos = _p};
-		(_rec get "crates") pushBack (createVehicle [_class, _pos, [], 0, "NONE"]);
+		private _crate = createVehicle [_class, _pos, [], 0, "NONE"];
+		(_rec get "crates") pushBack _crate;
+		// Stock what these men actually fire, since a side's crate needn't match its faction's rifles.
+		private _seen = [];
+		{
+			{
+				private _man = _x;
+				{
+					_x params ["_weapon", "_n"];
+					if (_weapon != "") then {
+						private _list = [_weapon] call SWLC_fnc_squadMags;
+						if (_list isNotEqualTo [] && {!((_list # 0) in _seen)}) then {
+							_seen pushBack (_list # 0);
+							_crate addMagazineCargoGlobal [_list # 0, _n];
+						};
+					};
+				} forEach [[primaryWeapon _man, 12], [secondaryWeapon _man, 3]];
+			} forEach ([_x] call SWLC_fnc_alive);
+		} forEach _live;
 		[_cmd, "resupply_delivered", [["group", groupId _to], ["x", round (_pos # 0)], ["y", round (_pos # 1)], ["dist", round (_pos distance2D _p)]]] call SWLC_fnc_holdLog;
 	};
 };

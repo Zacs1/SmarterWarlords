@@ -114,6 +114,7 @@ SWLC_fnc_picketTick = {
 	private _roomFromCap = (floor ((count _groups) * CFG("picketMaxFraction"))) - (count _pickets);
 	private _roomFromAttack = _attackers - CFG("picketKeepAttackers");
 	private _room = _roomFromCap min _roomFromAttack;
+	if ([_cmd] call SWLC_fnc_holdPriority) then {_room = 0};
 
 	{
 		if (_room <= 0) exitWith {};

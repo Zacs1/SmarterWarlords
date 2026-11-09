@@ -98,7 +98,9 @@ SWLC_settings = createHashMapFromArray [
 	["frontWindowSeconds", 30],       // sustained: this many seconds per window...
 	["frontWindowsTotal", 3],         // ...looking at this many finished windows...
 	["frontWindowsNeeded", 2],        // ...and this many had real fighting in them
-	["frontExchangeSeconds", 15],     // both sides fired, or someone died, within this long counts as an exchange now
+	["frontExchangeSeconds", 8],      // both sides fired, or someone died, within this long counts as an exchange now
+	["frontWindowMinHits", 2],        // polls with an exchange before a window counts, so one burst can't fill two windows
+	["frontSeizeMinMen", 3],          // enemy men in the capture square for a seize to count; a lone infiltrator never closes fast travel
 	["frontMinAttackers", 3],         // attackers who fired, came under fire or died here
 	["frontInvolvedSeconds", 90],     // how far back an attacker still counts as involved
 	["frontQuietSeconds", 120],       // real fighting or a seize gone this long lifts it

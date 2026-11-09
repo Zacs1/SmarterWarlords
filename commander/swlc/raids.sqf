@@ -268,7 +268,9 @@ SWLC_fnc_raidTick = {
 	params ["_cmd"];
 	if !([] call SWLC_fnc_raidOn) exitWith {};
 	private _rec = [_cmd] call SWLC_fnc_raidOf;
-	if (count _rec == 0) exitWith {[_cmd] call SWLC_fnc_raidDecide};
+	if (count _rec == 0) exitWith {
+		if !([_cmd] call SWLC_fnc_holdPriority) then {[_cmd] call SWLC_fnc_raidDecide};
+	};
 	private _s = _rec get "sector";
 	private _side = _cmd get "side";
 	if (([_s] call SWLC_fnc_adOwner) == _side) exitWith {[_cmd, _rec] call SWLC_fnc_raidCaptured};
@@ -387,7 +389,7 @@ SWLC_fnc_probeTick = {
 	if !([] call SWLC_fnc_probeOn) exitWith {};
 	private _rec = _cmd getOrDefault ["probe", createHashMap];
 	if (count _rec > 0) exitWith {[_cmd, _rec] call SWLC_fnc_probeRun};
-	if (time < (_cmd getOrDefault ["probeNext", 0])) exitWith {};
+	if (time < (_cmd getOrDefault ["probeNext", 0]) || {[_cmd] call SWLC_fnc_holdPriority}) exitWith {};
 	private _op = _cmd get "op";
 	private _bad = !isNil "_op" && {(_op getOrDefault ["pushFails", 0]) >= 1};
 	_cmd set ["probeNext", time + ([CFG("probeEverySeconds"), CFG("probeEveryBadSeconds")] select _bad)];

@@ -201,6 +201,9 @@ SWLC_fnc_defRespond = {
 		}] call SWLC_fnc_resGuarded;
 	} forEach _reserve;
 
+	// Saving the holdouts comes first: only real fighting here may take groups that are on their way to X.
+	if (([_cmd] call SWLC_fnc_holdPriority) && {!([_s] call SWLC_fnc_frontFighting)}) exitWith {};
+
 	// 2. A sector with a muster in progress: its groups defend at once.
 	private _muster = (_cmd get "musters") getOrDefault [[_s] call SWLC_fnc_adName, createHashMap];
 	if (count _muster > 0) then {
@@ -296,6 +299,7 @@ SWLC_fnc_defReserveTick = {
 
 	// Everyone is in the reserve during a rebuild, so that time doesn't count as anyone's turn.
 	private _rebuilding = _size >= 1000;
+	if (!_rebuilding && {[_cmd] call SWLC_fnc_holdPriority}) then {_size = 0};
 	if (CFG("reserveRotate")) then {
 		private _since = time - (_cmd getOrDefault ["reserveTickAt", time]);
 		_cmd set ["reserveTickAt", time];
@@ -384,7 +388,9 @@ SWLC_fnc_defReserveTick = {
 				private _goal = _g getVariable ["SWLC_goal", []];
 				if (_goal isNotEqualTo []) then {
 					private _spot = [_goal, _g] call SWLC_fnc_shuffleSpot;
-					[_g, [[_spot, "MOVE", 8]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
+					// Holdouts move as they must to stay alive in Warlords' eyes, but stay dug in.
+					private _hold = _g getVariable ["SWLC_holdout", false];
+					[_g, [[[_spot, "MOVE", 8]], [[_spot, "MOVE", 8], [_spot, "HOLD", 0]]] select _hold, "AWARE", "FULL", "WEDGE", ["RED", "YELLOW"] select _hold] call SWLC_fnc_adSetOrder;
 				};
 			};
 		}] call SWLC_fnc_resGuarded;

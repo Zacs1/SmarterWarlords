@@ -370,7 +370,8 @@ SWLC_fnc_commitDecide = {
 // Warlords kills AI left inside a sector that is no longer their target.
 SWLC_fnc_commitLeave = {
 	params ["_cmd", "_t", "_then"];
-	[_cmd, _t] call SWLC_fnc_commitBan;
+	// A side leaving to save its holdouts hasn't given up on that sector.
+	if (_then != "hold") then {[_cmd, _t] call SWLC_fnc_commitBan};
 	private _op = _cmd get "op";
 	if (!isNil "_op") then {
 		_op set ["holdGo", true];

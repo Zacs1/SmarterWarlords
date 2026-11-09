@@ -60,8 +60,9 @@ SWLC_fnc_frontWindows = {
 		private _idx = floor ((_now - _anchor) / _w);
 		for "_i" from 1 to ((_idx - (_rec get "idx")) min (_n + 1)) do {_bits pushBack false};
 		_bits = _bits select [((count _bits) - (_n + 1)) max 0, _n + 1];
+		if (_idx != (_rec get "idx")) then {_rec set ["hits", 0]};
 		_rec set ["idx", _idx];
-		if (!_hit && {({_x} count _bits) == 0}) then {
+		if (!_hit && {({_x} count _bits) == 0} && {(_rec getOrDefault ["hits", 0]) == 0}) then {
 			_anchor = -1;
 			_bits = [];
 			_rec set ["anchor", -1];
@@ -71,10 +72,12 @@ SWLC_fnc_frontWindows = {
 		if (_anchor < 0) then {
 			_rec set ["anchor", _now];
 			_rec set ["idx", 0];
-			_bits = [true];
-		} else {
-			_bits set [(count _bits) - 1, true];
+			_rec set ["hits", 0];
+			_bits = [false];
 		};
+		private _hits = (_rec getOrDefault ["hits", 0]) + 1;
+		_rec set ["hits", _hits];
+		if (_hits >= CFG("frontWindowMinHits")) then {_bits set [(count _bits) - 1, true]};
 		_rec set ["lastHit", _now];
 	};
 	_rec set ["bits", _bits];
@@ -119,8 +122,8 @@ SWLC_fnc_frontUpdate = {
 	private _hit = _exchange && {_involved >= CFG("frontMinAttackers")};
 	private _sustained = ([_rec, _hit, _now] call SWLC_fnc_frontWindows) >= CFG("frontWindowsNeeded");
 
-	// Warlords refuses to let a sector stay safe while the enemy's countdown runs on it, so a seize counts whatever the numbers.
-	private _seizing = [_owner, _s] call SWLC_fnc_capBeingSeized;
+	// The enemy's countdown is running on it. A seize needs real numbers too: one man sneaking in is exactly who defenders must be able to reach.
+	private _seizing = ([_owner, _s] call SWLC_fnc_capBeingSeized) && {({[_s, getPosATL _x, 0] call SWLC_fnc_adInSquare} count _attackers) >= CFG("frontSeizeMinMen")};
 	if (_seizing) then {_rec set ["lastSeize", _now]};
 
 	if (_rec get "on") then {
