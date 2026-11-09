@@ -120,7 +120,11 @@ SWLC_fnc_watchdogEscalate = {
 	} forEach _owned;
 	["C_WD", [["side", _side], ["group", groupId _g], ["action", "escalate"], ["fast_travelled", _moved], ["state", _state]]] call SWLC_fnc_log;
 	if (_moved) exitWith {
-		[_g, _g getVariable ["SWLC_wpProgress", 0]] call SWLC_fnc_adApplyOrder;
+		if (CFG("resilience")) then {
+			[_g] call SWLC_fnc_routeAfterHop;
+		} else {
+			[_g, _g getVariable ["SWLC_wpProgress", 0]] call SWLC_fnc_adApplyOrder;
+		};
 		true
 	};
 	if (_ladder) exitWith {false};

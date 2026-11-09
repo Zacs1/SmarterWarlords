@@ -124,7 +124,7 @@ SWLC_fnc_defMoveTo = {
 		private _away = if (_hop isEqualTo _s) then {_awayBearing + (random 80 - 40)} else {[_sp, [_s] call SWLC_fnc_adPos] call SWLC_fnc_bearing};
 		private _landing = [_sp, _away, 30 + random 30] call SWLC_fnc_offset;
 		if (surfaceIsWater _landing) then {_landing = _sp};
-		[_g, _hop, _landing] call SWLC_fnc_adFastTravel;
+		if ([_g, _hop, _landing] call SWLC_fnc_adFastTravel) then {[_g] call SWLC_fnc_routeAfterHop};
 	};
 };
 

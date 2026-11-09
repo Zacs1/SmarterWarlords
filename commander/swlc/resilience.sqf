@@ -236,6 +236,7 @@ SWLC_fnc_groupReassign = {
 	[_g] call SWLC_fnc_adClearOrder;
 	_g setVariable ["SWLC_picketSector", nil];
 	_g setVariable ["SWLC_scoutUntil", nil];
+	_g setVariable ["SWLC_joinUntil", -1];
 	[_g, "Unassigned", [], _reason] call SWLC_fnc_setState;
 	if (!isNil {_cmd get "op"} && {!([_cmd] call SWLC_fnc_rebuilding)}) exitWith {
 		[_cmd, _g] call SWLC_fnc_musterAssign;
@@ -350,7 +351,12 @@ SWLC_fnc_ladderApply = {
 				_why = "no_route_code";
 			} else {
 				private _other = [_g, _reason] call SWLC_fnc_routeAlternate;
-				if (!isNil "_other" && {_other isEqualTo true}) then {call _log} else {_why = "no_alternate"};
+				if (!isNil "_other" && {_other isEqualTo true}) then {
+					[_g, _g getVariable ["SWLC_wpProgress", 0]] call SWLC_fnc_adApplyOrder;
+					call _log;
+				} else {
+					_why = "no_alternate";
+				};
 			};
 		};
 		case "dismount": {
@@ -459,7 +465,8 @@ SWLC_fnc_resGoalFault = {
 	private _side = _cmd get "side";
 	private _op = _cmd get "op";
 	private _fault = "";
-	if (_state in ["Travelling", "Mustering", "Mounting", "Advancing", "Waiting", "Regrouping", "Assaulting"]) then {
+	// A join-push is an Assaulting group outside any wave, on purpose, and ends itself when its time is up.
+	if (_state in ["Travelling", "Mustering", "Mounting", "Advancing", "Waiting", "Regrouping", "Assaulting"] && {(_g getVariable ["SWLC_joinUntil", -1]) < 0}) then {
 		if (isNil "_op") then {
 			_fault = "bad_goal";
 		} else {
@@ -593,8 +600,16 @@ SWLC_fnc_resIsIdle = {
 	private _age = time - (_g getVariable ["SWLC_stateSince", time]);
 	if (_state == "Unassigned") exitWith {_age >= CFG("idleGraceSeconds")};
 	if (_state == "Mustering") exitWith {_age >= CFG("musterMaxSeconds") + CFG("idleMusterMargin")};
-	if (_state == "Waiting") exitWith {_age >= _loneWait + CFG("idleWaitingMargin")};
-	(_state in SWLC_resNeedOrder) && {_age >= CFG("resSweepGraceSeconds")} && {(_g getVariable ["SWLC_order", []]) isEqualTo []}
+	if (_state == "Waiting") exitWith {
+		// Held at the rally on purpose: a player's hold, or the wait for groups peeled off to defend.
+		private _op = _cmd get "op";
+		private _held = !isNil "_op" && {(_op getOrDefault ["holdGo", false])
+			|| {time < (_op getOrDefault ["playerHoldUntil", -1])}
+			|| {(time - (_op getOrDefault ["peelHoldSince", -1e6])) < CFG("peelHoldMaxSeconds")}};
+		!_held && {_age >= _loneWait + CFG("idleWaitingMargin")}
+	};
+	// LAMBS clears the order while it has the group: that's a group with a job.
+	(_state in SWLC_resNeedOrder) && {_age >= CFG("resSweepGraceSeconds")} && {(_g getVariable ["SWLC_order", []]) isEqualTo []} && {!([_g] call SWLC_fnc_lambsBusy)}
 };
 
 // Too much of the side standing about means the plan has stopped working, whatever the reason. Drop it and start over.

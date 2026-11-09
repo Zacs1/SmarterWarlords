@@ -526,8 +526,11 @@ SWLC_fnc_smartJoinTick = {
 		private _until = _x getVariable ["SWLC_joinUntil", -1];
 		if (_until >= 0 && {time >= _until}) then {
 			_x setVariable ["SWLC_joinUntil", -1];
-			[_x] call SWLC_fnc_adClearOrder;
-			[_x, "Unassigned", [], "join_push_done"] call SWLC_fnc_setState;
+			// Something else may have given it a job since: only a group still on the push is stood down.
+			if (([_x] call SWLC_fnc_state) == "Assaulting") then {
+				[_x] call SWLC_fnc_adClearOrder;
+				[_x, "Unassigned", [], "join_push_done"] call SWLC_fnc_setState;
+			};
 		};
 	} forEach (_cmd get "groups");
 

@@ -168,12 +168,12 @@ SWLC_fnc_upkeepStraggler = {
 	};
 	if (isNull _into) then {
 		_u doFollow _l;
-		["C_STRAGGLER", [["group", groupId _g], ["unit", name _u], ["dist", round _d], ["action", "recall"], ["into", "-"]]] call SWLC_fnc_log;
+		["C_STRAGGLER", [["side", side _g], ["group", groupId _g], ["unit", name _u], ["dist", round _d], ["action", "recall"], ["into", "-"]]] call SWLC_fnc_log;
 	} else {
 		[_u] joinSilent _into;
 		_u doFollow (leader _into);
 		_u setVariable ["SWLC_stragAt", -1];
-		["C_STRAGGLER", [["group", groupId _g], ["unit", name _u], ["dist", round _d], ["action", "join"], ["into", groupId _into]]] call SWLC_fnc_log;
+		["C_STRAGGLER", [["side", side _g], ["group", groupId _g], ["unit", name _u], ["dist", round _d], ["action", "join"], ["into", groupId _into]]] call SWLC_fnc_log;
 	};
 };
 

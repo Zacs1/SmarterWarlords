@@ -71,7 +71,7 @@ SWLC_fnc_raidSend = {
 	private _sp = [_hop] call SWLC_fnc_adPos;
 	private _land = [_sp, [_sp, _c] call SWLC_fnc_bearing, 40 + random 30] call SWLC_fnc_offset;
 	if (surfaceIsWater _land) then {_land = _sp};
-	[_g, _hop, _land] call SWLC_fnc_adFastTravel;
+	if ([_g, _hop, _land] call SWLC_fnc_adFastTravel) then {[_g] call SWLC_fnc_routeAfterHop};
 };
 
 // Starts a paid raid. Payment and the refusal check are the caller's.

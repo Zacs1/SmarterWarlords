@@ -145,6 +145,15 @@ SWLC_fnc_routeSafePos = {
 
 // True if a land unit can get from _from to _to: same road or track component, or an all-land straight line.
 // Without the network, only the straight line counts.
+// A fast travel moved the group after its order was set: plan the rest of the way from where it landed, or it
+// walks back to the first hop of the route it had.
+SWLC_fnc_routeAfterHop = {
+	params ["_g"];
+	if !(CFG("resilience")) exitWith {};
+	_g setVariable ["SWLC_orderLegsOf", []];
+	[_g, 0] call SWLC_fnc_adApplyOrder;
+};
+
 SWLC_fnc_routeLandReachable = {
 	params ["_from", "_to"];
 	private _key = format ["%1:%2:%3:%4", round ((_from # 0) / 25), round ((_from # 1) / 25), round ((_to # 0) / 25), round ((_to # 1) / 25)];
@@ -315,7 +324,7 @@ SWLC_fnc_routePlan = {
 	private _leader = leader _g;
 	private _veh = vehicle _leader;
 	// A LAMBS garrison's waypoint is inside a building on purpose.
-	private _exempt = isNull _leader || {!CFG("resilience")} || {([_g] call SWLC_fnc_adGroupHasPlayer)} || {([_g] call SWLC_fnc_state) == "Borrowed"}
+	private _exempt = isNull _leader || {!CFG("resilience")} || {([_g] call SWLC_fnc_adGroupHasPlayer)} || {([_g] call SWLC_fnc_state) in ["Borrowed", "Pickup"]}
 		|| {(_g getVariable ["SWLC_lambsTask", ""]) != ""} || {_veh isKindOf "Air"} || {_veh isKindOf "Ship"};
 	if (_exempt) exitWith {
 		_g setVariable ["SWLC_orderLegs", _wps];
