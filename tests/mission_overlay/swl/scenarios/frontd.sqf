@@ -167,7 +167,7 @@ private _spot = [];
 	for "_b" from 0 to 345 step 15 do {
 		private _p = _mid getPos [_ring, _b];
 		private _e = _p getPos [240, _b];
-		if ([_p] call SWLD_ok && {[_e] call SWLD_ok}) exitWith {_spot = [_p, _e]};
+		if ([_p] call SWLD_ok && {[_e] call SWLD_ok} && {(_p distance2D (_op get "tpos")) >= 900}) exitWith {_spot = [_p, _e]};
 	};
 	if (_spot isNotEqualTo []) exitWith {};
 } forEach [900, 1200, 1600, 2000];

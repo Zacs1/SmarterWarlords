@@ -126,6 +126,9 @@ def not_interfered(data) -> tuple[bool, str]:
     hits = []
     for kind, rows in (("ladder", data.of("C_LADDER")), ("watchdog", data.of("C_WD"))):
         for e in rows:
+            # This one re-issues the order after a fight, and the watchdog only does it for a group that isn't fighting.
+            if e.get("action") == "post_contact_reset":
+                continue
             for start, end in windows.get((e.get("side", "?"), e.get("group", "?")), []):
                 if start <= _t(e) <= end:
                     hits.append(f"{kind} {e.get('side')} {e.get('group')} at {int(_t(e))}: {e.get('rung') or e.get('action')}")
