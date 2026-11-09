@@ -452,6 +452,160 @@ The gate share is `(at_x + corridor) / all kills in fall windows`. It passes at 
 - The stored baseline (`2026-11-08_19-26-56_baseline`) has no `C_KILL` lines and only one side-to-side capture, so it can't supply a baseline share. A vanilla round with kill logging is needed for that.
 - Engaged contacts are counted from `event=start`. Every start is treated as in transit, because Engaged is a transit state.
 
+## Defence
+
+Built in the run of 2026-11-09, from the user's addition (`docs/runs/2026-11-09-front-line/prompt-defence.md`). Code: `stance.sqf`, `alert.sqf`, `fortify.sqf`, with hooks in `defence.sqf`, `pickets.sqf`, `raids.sqf`, `rules.sqf`, `front.sqf`, `upkeep.sqf` and `squads.sqf`. Each behaviour has its own switch in `settings.sqf`, default on.
+
+**Rules variant.** None of this depends on it. Stance, alert and fortify stay on with the lobby parameter off, like resilience. What goes away with it is what they lean on: pickets, raids, probes, holdouts, the commitment timer, and the capability and price rules for statics.
+
+**Sides with humans.** The commander works the same way on a side with players, using its own groups only.
+
+- It never orders a player, a group with a player in it, or a group that had one within `playerGroupGrace` 120 s (`resMayTouch`), which also covers a player's own AI. Gun crews and AT men are never players.
+- Statics are paid for by AI warlords only, because `adSideCP` and `adDebit` only read their funds. A player's CP is never spent.
+- The players' vote stays theirs (`voteOnPlayerSide` false). A human side never gets a commit-timer rebuild, because its vote is reopened instead. The AI doesn't buy raids there (`raidAIOnPlayerSide` false).
+- In hold or rebuild, the AI groups don't follow the voted target. Players pushing a sector get no AI waves, and only the panel and radio say why.
+
+Status when this was written: the `stance` and `alert` scenarios passed (`stance1`, `alert1`), with the enemy numbers scripted in `stance1`. `progress.md` records no `fortify` scenario result yet.
+
+### Stance: attack, hold, rebuild
+
+`stance.sqf`, switch `stanceEnabled`. Logged as `C_STANCE`. Works per side from the side's own numbers and its intel board, never true enemy numbers.
+
+Every `stanceTickSeconds` 20:
+
+- **Own strength**: men alive, plus CP as men (`CP / stanceCPPerMan` 150, at most `stanceCPMaxMen` 15), plus `stanceArmourWeight` 6 per own combat vehicle, less those the known enemy AT cancels (`planAtPerArmour` 2 launchers each).
+- **Known enemy**: from the board, infantry + `stanceLightWeight` 3 per light vehicle or aircraft + 6 per armoured vehicle, less what own AT cancels. Enemy statics and CP aren't counted.
+- **Memory**: the known figure is a peak that halves every `stanceMemoryHalfLife` 240 s, so a side at home doesn't "recover" because its board went stale.
+- **Ratio**: own / (known peak x `stanceIntelFactor` 1.1) x outcome factor. The factor is 1, plus `stanceOutcomeStep` 0.15 per capture, minus the same per failed push, within `stanceOutcomeWindow` 420 s, kept between `stanceOutcomeMin` 0.7 and `stanceOutcomeMax` 1.2.
+
+| From | To | When |
+| --- | --- | --- |
+| Attack | Hold | Ratio below `stanceHoldBelow` 0.9 |
+| Hold | Rebuild | Ratio below `stanceRebuildBelow` 0.55 |
+| Rebuild | Hold | Ratio at least `stanceHoldAbove` 0.8 |
+| Hold or rebuild | Attack | Ratio at least `stanceAttackAbove` 1.25, or known peak under `stanceMinKnown` 12 |
+| Hold | Attack | The quiet breaker, below |
+| Any | Rebuild | The commitment rule's rebuild is running (`reason=commit`, ignores the minimum time) |
+
+Hysteresis is the gap between those thresholds plus `stanceMinSeconds` 180 between switches. On the balance alone, a side passes through hold on the way to rebuild.
+
+**Quiet breaker** (`stanceQuietSeconds` 420): a side in hold whose groups haven't fought for that long, and hasn't changed stance in that time, goes back to attack. Otherwise it stands idle for good, and two sides in hold stall the round. It applies to hold only, not rebuild.
+
+**Attack** is the normal game.
+
+**Hold**:
+
+- No new wave (`SWLC_fnc_stanceNoWave`, the gate on `cmdNewPlan` and the idle-cap replan). For a wave already out, nothing new goes in, groups not in a fight go back, and the op ends once nobody is in contact. A group in a fight is never touched.
+- The whole side stands in the reserve (`stanceHoldReserveFraction` 1). Pickets, defence responses, raids and probes draw on it. Pickets stay out rather than returning to an attack.
+- Raids and probes (rules variant only) keep `stanceHoldRaidKeep` 3 groups back. AI raids send `stanceHoldRaidGroups` 1 at a sector with at most `stanceHoldRaidMaxDefenders` 3 known strength. A probe takes one group.
+- With no wave out, the reserve is topped up with infantry at the central sector, with `stanceAtPerGroup` 1 AT launcher per group plus `planAtPerArmour` per known armour. No vehicles are bought.
+
+**Rebuild** is the existing rebuild (`SWLC_fnc_rebuilding` is true): everyone in the reserve at `defCentralSector`, infantry bought there, no raids or probes. Pickets go back under the existing short-attack rule. Going back to attack is the counterattack.
+
+Votes, holdouts and the commitment timer:
+
+- Hold and rebuild sides vote normally through `voteChoose`. The target is nominal until the side is back in attack. While no wave can start, the commitment timer and the deadlock revote are reset every tick.
+- Holdouts' "hold" goal continues in any stance: with X as the target a wave to X is allowed (`stanceHoldoutJob`). "Counter" waits for attack, and the reserve isn't emptied for it.
+- A commit-timer rebuild puts the side in the rebuild stance for its full `rebuildSeconds` 240. The balance then decides, so a weak side stays in rebuild longer. The commitment rule's voting pause covers those 240 s only.
+
+Other tunable: `stanceLogSeconds` 60.
+
+### Defence starts when the enemy picks the target
+
+`alert.sqf`, switch `alertEnabled` (also needs `defenceEnabled`). Logged as `C_ALERT`.
+
+**Trigger.** An alert starts when the enemy's Warlords target is one of the side's sectors. It clears when that target changes (`target_changed`) or the sector changes owner (`owner_changed`). One alert at a time per side.
+
+**Predicted approach.** The `alertApproachCandidates` 3 nearest enemy sectors are compared by road length through the route network, and the shortest route is walked out from the sector. Bearing and point are read where the route is `alertApproachSample` 500 m out. Road points are route nodes within `alertRoadRange` 700, thinned by `alertRoadSpacing` 60, at most `alertRoadMax` 8. With no route it uses the straight line to the nearest enemy sector, and roads within `alertRoadSearch` 40 of the points at `alertRoadLineMetres` 200, 400 and 600.
+
+**Groups sent**, from `alertLayers`:
+
+| Stance | Main | Screen | Counter | Most of the side's groups all three may take |
+| --- | --- | --- | --- | --- |
+| Attack | 1 | 1 | 0 | 0.34 |
+| Hold | 2 | 1 | 1 | 0.6 |
+| Rebuild | 3 | 1 | 2 | 0.8 |
+
+A sector worth at least `alertValueHigh` 60 (a base or a muster always is) gets one more main group. The share caps the total: main first, then screen, then counter, and at least one group.
+
+**Main position.** The alert writes a threat record, so `defRespond` sends the groups through its usual order and fast travel rules. `alertNeed` is a floor on its need. A record with only the warning (`alertOnly`) takes up to the peel cap, never pulls attackers in contact, doesn't stop a muster and is dropped when the alert clears. A real sighting, an engaged fallback or a counter hit clears `alertOnly`.
+
+**Spots.** `holdCover` around a point `alertCoverBias` 0.6 of the half-width out on the approach side, within `alertCoverRadius` 120. A spot must be within `alertCoverArc` 100 degrees of the bearing, at least `alertCoverMinFraction` 0.25 of the half-width from the centre, and no more than `alertCoverOutside` 50 m outside the square. No spot means `defSpots`.
+
+**LAMBS.** With LAMBS loaded, `lambsHold` centres its garrison on the group's spot (`SWLC_alertCover`), so it garrisons the approach side and not the middle. It uses LAMBS' defend task when the buildings don't have room for the whole group.
+
+**Facing.** Groups at their spots turn to the bearing every `alertFaceSeconds` 30, except AT men on the road.
+
+### Statics from Warlords' defences
+
+`fortify.sqf`, switch `fortifyEnabled`. Logged as `C_FORT`, with a `C_BUY` line per purchase. Reads the alert record only, so no alert means no spending.
+
+Classes, from Warlords' Defences list (read from its config, not a running game). AT is on offer for both sides in this preset. Without it the mix moves on.
+
+| Kind | WEST | EAST | Cost |
+| --- | --- | --- | --- |
+| MG | `B_HMG_01_F`, `B_HMG_01_high_F` | `O_HMG_01_F`, `O_HMG_01_high_F` | 250 |
+| GL | `B_GMG_01_F`, `B_GMG_01_high_F` | `O_GMG_01_F`, `O_GMG_01_high_F` | 250 |
+| AT | `B_static_AT_F` | `O_static_AT_F` | 500 |
+
+`fortifyMix` is MG, AT, GL, MG, walked from the gun's slot, so a kind that isn't on offer, allowed or affordable gives way to the next. `fortifyPreferHigh` true takes the raised tripods for MG and GL. Capability rules and prices go through `econAssetAllowed` and `econPriceMult` on every purchase.
+
+| Tunable | Attack | Hold | Rebuild |
+| --- | --- | --- | --- |
+| `fortifyStatics<Stance>`, guns per sector | 2 | 4 | 4 |
+| `fortifyCpFraction<Stance>`, most one gun may cost as a share of free CP | 0.25 | 0.6 | 0.6 |
+
+`fortifyMaxPerSector` 4 is a hard cap over those, and `fortifyBuyPerTick` 1 limits the rate. Free CP is `cpFree`, so the reserve holds. A destroyed gun counts against the cap for `fortifyReplaceSeconds` 240.
+
+**No purchase** unless a man who could crew it is within `fortifyCrewReach` 300 m of the point the guns go to, and no hostile is within `ftEnemyCheckRadius` 200 m of that point (`fortifyRespectEnemyNear` true). Warlords' own rule refuses a player placing a defence in that case.
+
+**Placement.** On the approach at `fortifyEdgeFraction` 0.4 of the sector's width, trying 20, 40 and 60 degrees either side and 30 m in or out. A spot must be inside the square, at least `fortifyMinCentreDist` 40 from the centre, at least `fortifyRoadClear` 8 from a road, gradient under `fortifyMaxGradient` 0.4, at least `fortifySpacing` 30 from other guns, and clear of men. The first spot with open terrain along `fortifyCoverRange` 200 wins, otherwise the first valid one. `fortifyNoSpotRetry` 60 before a sector with no valid ground is looked at again.
+
+**Crew.** From the alert's main groups, each passing `resMayTouch`: alive, not a player, on foot, not the leader, not an AT soldier, not on a kit errand, able to move. So a LAMBS-garrisoned man isn't taken. Riflemen first, nearest first, at most `fortifyMaxCrewPerGroup` 2 per group. He stays in his group and gets `fortifyCrewWalkSeconds` 30 plus the distance at `fortifyCrewWalkSpeed` 2.5 m/s. If he is within `fortifyCrewSeatDist` 12 m when time runs out he is seated directly, otherwise another is picked. A dead gunner is replaced every tick.
+
+**AT soldiers on roads.** Up to `fortifyATMen` 2 non-leader AT soldiers go to a spot `fortifyATRoadOffset` 12 m off a road point within `fortifyATReachFraction` 0.75 of the width, furthest forward first, on opposite sides of the road in turn. They kneel and watch up the road (`fortifyATLookRange` 150). With no road points, the same on the line of the approach. Pushed more than `fortifyATDrift` 25 off the spot, a man is sent back up to `fortifyATDriftMax` 2 times, then released. A LAMBS task on his group ends the job at once.
+
+**Alert end.** Guns stay. Gunners and AT men go back to their groups.
+
+### Defence in depth
+
+All in `alert.sqf`, fitted to the existing pickets, reserve and proportionate response. Groups for the screen and counter come from `alertPool`, in order: a picket on this sector, the reserve, free groups and a muster at this sector, then the attack only if the stance isn't attack. Never a group in a fight or under a LAMBS task. While reinforcing holdouts outranks everything and this sector has no real fighting, only pickets and the reserve can be used.
+
+- **Screen** (`alertScreen`): one small foot group `alertScreenBeyond` 250 m beyond the sector edge on the approach, at cover within `alertScreenCover` 60 if there is any. State Defending, not on the threat record.
+- **Main position**: the defenders and the statics, above.
+- **Counterattack reserve** (`alertCounter`): state Reserve, waiting `alertCounterBack` 150 m behind the sector edge. On a break-in (the seize countdown, or `alertBreakInMen` 2 enemy known inside the square plus `alertInsideMargin` 0) each group goes straight to a search and destroy on the sector centre and joins the threat record. It is protected from ordinary defence orders for `alertCounterHitSeconds` 300.
+
+Counter groups count towards the reserve's size but aren't rotated, shrunk or moved, and pickets, raids, hunts and engaged joins skip them.
+
+### Measuring the steamroll
+
+`tools/gates_steamroll.py`, also `--gate steamroll` in `tools/analyse_round.py`. An analyser with no in-game switch, so the rules variant doesn't affect it. There is no pass threshold: it reports numbers.
+
+```
+python tools/gates_steamroll.py <rpt> [<rpt> ...]
+python tools/gates_steamroll.py --compare <baseline rpts> --variant <variant rpts>
+```
+
+It reports the first clash and who won it, whether that side won the round, the time after it, sectors lost by each side after it, and whether a comeback happened. The first clash is the earliest decided clash on a sector both sides had a stake in. A comeback is the loser retaking a sector from the winner, or holding off an attack lasting at least 300 s on a sector of its own. The full definitions print with every report.
+
+Four logs are too few to say anything. On those so far, two had no first clash, and neither of the other two had a comeback.
+
+### Player-visible text
+
+Radio (`%1` is the sector name, `%2` the compass direction of the approach), cooldown in seconds:
+
+- `stance_attack` (20): "Balance has swung back our way. We're going on the attack." / "We've got the strength now. Back on the offensive." / "All units, we're attacking again."
+- `stance_hold` (20): "They're stronger than we thought. Hold what we have, no big attacks." / "We're going on the defensive. Hold the line." / "Enemy has the edge for now. Dig in and hold."
+- `stance_rebuild` (20): "We're too weak to stay out there. Pull back and rebuild." / "Falling back to rebuild. Everyone to the central sector." / "We need men before we can fight. Pull back, we're rebuilding."
+- `alert` (30): "Enemy has picked %1. Expect them from the %2, get set up." / "Warning order: %1 is next, approach from the %2. Take positions." / "They're coming for %1, likely from the %2. Defenders move."
+- `alertcounter` (30): "They're in %1. Reserve, hit them now." / "Break-in at %1, counterattack go." / "%1 is breached. Reserve, clear them out."
+- `fortbuilt` (30, the default), once per alert when the first gun goes in: "Guns going in at %1, facing their approach." / "Setting up static weapons at %1." / "Digging guns in at %1, they're coming that way." / "%1 is getting guns on the approach."
+- `holdvote` (30), from the front line reviews, to a side with players: "Our people are still holding %1. Vote %1 so we can reinforce them." / "%1 has fallen with our men inside. Put your vote on %1 and we'll go get them." / "Holdouts in %1. They need %1 voted as our target to get help."
+
+The other holdout lines are listed under Parts A and C.
+
+Commander panel: "Stance: ATTACK", "Stance: HOLD" or "Stance: REBUILD" on the header line, in front of the holdout goal text. It isn't shown with `stanceEnabled` off. Group rows show the screen and main groups as Defending and the counter as Reserve, through the existing text.
+
 ## Decision log
 
 | Decision | Why |
@@ -502,3 +656,29 @@ The gate share is `(at_x + corridor) / all kills in fall windows`. It passes at 
 | Reserve duty rotates: the least-served group stays, and six minutes with a wave out is the limit (`reserveRotate`) | The reserve always kept the first group in the list, which left one commander waiting for 82% of a soak. The reserve can stand empty for a few minutes, because sustained combat matters more than a spare group. |
 | A lone man seizing a sector doesn't close fast travel (`frontSeizeMinMen` 3) | The spec says a seize closes it and also that a lone infiltrator can never trigger closure. Defenders need to be able to reach that man. |
 | A side with human players is asked by radio to vote for X, and its target is left alone | Their vote is theirs. If they don't vote for X, the hold ends after `holdoutVoteGrace` as `target_moved`. |
+| `stanceIntelFactor` is 1.1, not the 1.25 it was built with | Set during the run, not by the user. Before CP and recent results, equal known numbers gave a ratio of 0.8 at 1.25 and put the side in hold. At 1.1 they give 0.91, above `stanceHoldBelow` 0.9, so they still attack. |
+| Hold goes back to attack after `stanceQuietSeconds` 420 without a fight | Without it, a side in hold stands idle forever if the enemy never comes, and two sides in hold stall the round. Risk: a side still weaker than its known enemy can cycle hold, attack, hold. |
+| Hold and rebuild sides vote normally | Warlords needs a target, and `voteChoose` already marks down known defenders. The target is nominal until the side is back in attack. |
+| The holdouts' "hold" goal continues in any stance | Reinforcing them is a defensive job, so a wave to X is allowed while X is the target. |
+| The holdouts' "counter" goal waits for attack | A counterattack is an attack, which the stance has just ruled out. It comes when the stance returns to attack. |
+| A commit-timer rebuild puts the side in the rebuild stance, and the balance decides when it ends | The user asked that the commitment timer and rebuild feed into the stance, not run alongside it. The timer's 240 s still run in full. |
+| The whole side stands in the reserve during hold, and pickets and raids draw on it | Anyone left Unassigned with no op shows as idle and fails the activity checks. The reserve is the pool those jobs can already use. |
+| Left out: no vehicle re-weighting in hold | No muster shop runs without a wave, so none are bought anyway. |
+| Left out: enemy statics aren't counted in the stance | They don't come for you. |
+| Left out: the screen doesn't fall back and a lost screen isn't replaced | Feeding groups one at a time into the attackers is worse than the warning they give. |
+| Left out: one approach prediction per alert | The threat record's bearing follows real sightings, but cover spots for groups already sent aren't redone. |
+| Left out: walls and treelines aren't scored | Spots are buildings near the approach, with `holdCover`'s fallback to the staging search, which weights houses and trees. The user asked for walls and treelines, so this is less than requested. |
+| The alert uses the enemy's chosen target, which no soldier has seen | The one allowed exception to "only what soldiers have seen", given by the user in the defence addition. The approach comes from enemy sectors on the map. Fortify's enemy-near check also reads real positions, but that is Warlords' own placement rule, not the commander's intel. |
+| A sector with only a warning isn't hot (`frontHot`), not requested | Defenders should land in a sector nobody has reached yet. This branch only runs with the fast travel rule off: with it on, `frontHot` is real fighting only, which a warning never is. |
+| Defence review: `alertCounterHitSeconds` 300, and the defence shuffle leaves screen and counterattack orders alone | The shuffle was overwriting them. A counterattack group keeps hunting for that long before ordinary defence orders apply. |
+| Fortify: guns stay after the alert and gunners return to their groups | The user wants men back on their group's normal orders, and the guns serve the next alert. Risk: a sector that falls leaves its guns for the enemy. |
+| `upkeep.sqf` exempts fort gunners and AT men | Upkeep would otherwise pull them away as stragglers or loose crew. Other paths can still move them. |
+| Defence review: a gun needs a crew member within `fortifyCrewReach` 300 m of where it goes | Fortify was buying guns nobody could reach yet. An unmanned gun wastes CP and is a gift to the enemy. |
+| Fortify refuses to buy with a hostile within 200 m of the gun point | Warlords refuses a player placing a defence in that case. `fortifyRespectEnemyNear` false turns it off. |
+| One gun may cost 0.25 of free CP while attacking, 0.6 in hold or rebuild | The attack needs its CP. A side on the defensive has nothing better to spend it on. |
+| `moveCalm`: a marching foot group with no known enemy within `moveCalmRange` 300 m goes back to its ordered behaviour | The engine puts a group in COMBAT when it knows of any enemy however far, and foot groups then crawl: 0.9 against 3.7 m/s in `fronta2`, 1.4 against 3.5 m/s in `soakfinal`. Not under the rules variant. Added without being asked, for the sustained-combat aim. |
+| Defence review: a holdout goal outside attack empties the reserve only while the wave to X can run | It was emptying the reserve with no wave to go to, leaving the side idle. |
+| Defence review: pickets and raids can't take the counter group | It has to stay near its sector for the break-in. |
+| Defence review: facing the approach leaves AT men on the road alone | It was turning them away from the road. |
+| Defence review: resting groups can join the reserve once a side has left attack | Their rest from reserve duty kept them idle with no wave to join. |
+| The user moved the run's deadline to 21:30-21:45 on 2026-11-09 | Their message at about 19:45. The extra time goes to testing. |
