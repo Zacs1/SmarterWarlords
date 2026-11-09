@@ -298,6 +298,18 @@ _cmd set ["probeNext", 1e9];
 [_pg2, [_raidS] call SWLG_edgeSpot] call SWLG_moveGroup;
 _pg2 setVariable ["SWLC_scoutUntil", time];
 [_cmd, _raidS] call SWLG_scrub;
+// "Nobody home" has to stay true for the whole look: EAST's picket keeps walking back in.
+[_cmd, _raidS] spawn {
+	params ["_cmd", "_s"];
+	while {count (_cmd getOrDefault ["probe", createHashMap]) > 0} do {
+		{
+			private _p = getPosATL _x;
+			_x setPosATL [(_p # 0) + 700, (_p # 1) + 700, 0];
+		} forEach (allUnits select {side group _x == east && {!isPlayer _x} && {[_s, getPosATL _x, 250] call SWLC_fnc_adInSquare}});
+		[_cmd, _s] call SWLG_scrub;
+		sleep 2;
+	};
+};
 _end = time + 80;
 waitUntil {sleep 1; (count (_cmd getOrDefault ["probe", createHashMap]) == 0) || {time > _end}};
 private _rp = [_cmd] call SWLC_fnc_raidOf;
@@ -309,7 +321,8 @@ _end = time + 50;
 waitUntil {sleep 1; count ([_cmd] call SWLC_fnc_raidOf) == 0 || {time > _end}};
 
 // ---- T2: the AI buys a raid and captures ----
-SWLC_settings set ["raidExpirySeconds", 480];
+// Long enough that the capture can't lose a race with the clock while the raiders are held up.
+SWLC_settings set ["raidExpirySeconds", 900];
 SWLC_settings set ["raidExpiryTravelSeconds", 360];
 SWLC_settings set ["raidCooldownSeconds", 600];
 [west, 3000] call SWLG_fund;
@@ -336,6 +349,7 @@ private _nominal2 = [_S2] call SWLC_fnc_capNominal;
 	round _cpBefore, round ([west] call SWLC_fnc_adSideCP), SWLC_settings get "raidCostCP", _S2 in _front, missionNamespace getVariable ["SWLC_raid_WEST", []], _S2 getVariable ["SWLC_capMult_WEST", -1], round (time - _startAt)]]] call SWLG_emit;
 
 // The raiders must get there: this tests the raid, not a firefight with whoever is passing.
+{[_x, [_S2] call SWLG_edgeSpot] call SWLG_moveGroup} forEach (_rec2 get "groups");
 SWLG_guardRaid = true;
 [_rec2, _S2] spawn {
 	params ["_rec", "_s"];
