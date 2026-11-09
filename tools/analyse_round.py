@@ -50,7 +50,7 @@ def check(name: str, gate: str | None = None) -> Callable[[CheckFn], CheckFn]:
 def _load_gate_modules() -> None:
     """Gate checks kept in their own files, one per rules part."""
     import importlib
-    for name in ("gates_d", "gates_e", "gates_f", "gates_g", "gates_h", "gates_activity", "gates_r"):
+    for name in ("gates_d", "gates_e", "gates_f", "gates_g", "gates_h", "gates_activity", "gates_r", "gates_front"):
         try:
             importlib.import_module(name).register(check)
         except ModuleNotFoundError:
@@ -900,8 +900,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("log", type=Path, help="Path to the server RPT")
     parser.add_argument("--gate", help="Also run the checks for this gate or scenario, e.g. gate0, phase1")
+    parser.add_argument("--baseline-share", type=float, help="Gate front: the baseline share of kills, as 0.35 or 35")
+    parser.add_argument("--baseline", nargs="+", type=Path, help="Gate front: baseline RPT files to read the share from")
     _load_gate_modules()
     args = parser.parse_args()
+    if args.gate == "front":
+        import gates_front
+        gates_front.configure(args.baseline_share, args.baseline)
 
     data = parse_log(args.log)
     print_header(data)
