@@ -231,6 +231,8 @@ SWLC_fnc_waveVehicleLegs = {
 	{
 		private _g = _x;
 		[_cmd, _g, "waveLegs", {
+			// Fighting on the way: the legs carry on when the fight is over.
+			if (([_g] call SWLC_fnc_state) == "Engaged") exitWith {};
 			switch (_g getVariable ["SWLC_leg", ""]) do {
 				case "LATE": {
 					[_cmd, _g] call SWLC_fnc_vehMountGroup;

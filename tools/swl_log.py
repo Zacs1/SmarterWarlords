@@ -41,6 +41,7 @@ class Sample:
     warlord: bool
     state: str = "-"
     wave: str = "-"
+    fighting: bool = False  # fired or fired on inside the commander's fightingWindow; has its own 90 s cap
 
 
 @dataclass
@@ -285,6 +286,7 @@ def parse_log(path: str | Path) -> Round:
                         warlord=fields.get("warlord") == "1",
                         state=fields.get("state", "-"),
                         wave=fields.get("wave", "-"),
+                        fighting=fields.get("fighting") == "1",
                     )
                 )
             elif kind in ("SECTORINIT", "SEC"):
@@ -366,7 +368,7 @@ def idle_stretches(group: Group) -> list[Stretch]:
         seconds = samples[j].t - samples[i].t
         if seconds >= IDLE_MIN_SECONDS:
             window = samples[i : j + 1]
-            combat = sum(1 for s in window if s.combat) / len(window)
+            combat = sum(1 for s in window if s.combat or s.fighting) / len(window)
             out.append(Stretch(samples[i].t, samples[j].t, samples[i].x, samples[i].y, combat))
             i = j + 1
         else:

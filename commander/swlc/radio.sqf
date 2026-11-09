@@ -138,7 +138,11 @@ SWLC_radioLines = createHashMapFromArray [
 	["commitswitch", ["We're getting nowhere at %1. New target: %2.", "Break off from %1. We're going for %2.", "%1 isn't working. Switching to %2.", "Leave %1. All units, %2 is next."]],
 	["commitrebuild", ["Pull back from %1. We rebuild, then go again.", "Break off from %1, regroup and refit.", "We can't take %1 like this. Fall back and rebuild.", "All units, leave %1 and reorganise."]],
 	["commitvote", ["The attack on %1 has stalled. Vote for a new target. %1 is off the table for %2 minutes.", "%1 has held us too long. Target vote is open, %1 is out for %2 minutes.", "No progress on %1. Pick another target, %1 is locked out for %2 minutes."]],
-	["failed", ["Pull back to the rally and regroup.", "That's enough. Fall back to the rally.", "Attack's failed. Regroup at the rally.", "Break off, get back to the rally."]]
+	["engaged", ["Contact on the way, %1 near %2. Stopping to fight.", "Enemy on our route, %1 near %2. We're fighting here.", "Hit on the move near %2, %1. Engaging.", "%1 near %2, on our road. Stopping to deal with them."]],
+	["engagedjoin", ["Moving to help at %1.", "We're closest to %1, going in.", "On our way to the fight at %1.", "Joining the contact at %1."]],
+	["engagedclear", ["Contact's dealt with, carrying on.", "Clear here, moving on.", "That's done, back on the road.", "All quiet, resuming."]],
+	["engagedfall", ["Too many, %1. Falling back to %2.", "Can't hold this, %1. Back to %2.", "Outnumbered, %1. Pulling back to %2.", "%1, more than we can take. Heading for %2."]],
+	["failed", ["Pull back to the rally and regroup.","That's enough. Fall back to the rally.", "Attack's failed. Regroup at the rally.", "Break off, get back to the rally."]]
 ];
 
 SWLC_fnc_radioCatName = {

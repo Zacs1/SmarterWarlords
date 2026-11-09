@@ -72,6 +72,11 @@ SWLC_fnc_statusRow = {
 			private _leg = _g getVariable ["SWLC_leg", ""];
 			_reason = format ["%1, %2 m out", ["on foot", "driving"] select (_leg in ["DRIVE", "FOLLOW"]), _dist];
 		};
+		case "Engaged": {
+			_job = "Fighting";
+			_place = "on the way";
+			_reason = ["moving to help", "in contact"] select ([_g] call SWLC_fnc_groupFighting);
+		};
 		case "Waiting": {
 			_job = "Waiting";
 			_place = "rally point";

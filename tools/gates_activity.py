@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from swl_log import Group, fmt_time, idle_stretches
 
 WAITING_JOBS = ("Mustering", "Waiting", "Picket", "Reserve")
-WORKING_JOBS = ("Travelling", "Mounting", "Advancing", "Assaulting", "Regrouping", "Defending", "Raiding", "Probing", "Recon", "Borrowed", "Pickup", "Hunting")
+WORKING_JOBS = ("Travelling", "Mounting", "Advancing", "Assaulting", "Regrouping", "Defending", "Raiding", "Probing", "Recon", "Borrowed", "Pickup", "Hunting", "Engaged")
 
 MAX_IDLE_STRETCH = 300        # seconds; one stretch longer than this fails the commander
 MAX_STILL_IN_COMBAT = 480     # standing still with the group in combat mode this long isn't a fight any more
@@ -76,7 +76,7 @@ def measure(group: Group, changes: int = 0, commander_round: bool = False) -> Ac
             out.jobs[previous.state] = out.jobs.get(previous.state, 0) + step
             if previous.state in WAITING_JOBS:
                 out.waiting += step
-            if previous.combat:
+            if previous.combat or previous.fighting:
                 out.combat += step
         if sample.units > 0:
             if anchor is None:

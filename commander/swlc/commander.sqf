@@ -136,6 +136,7 @@ SWLC_cmdSlices = [
 	["waveTail"],
 	["picketTick", "defenceTick"],
 	["smartTick", "squadTick"],
+	["contactAttachAll", "engagedTick"],
 	"upkeepSlices",
 	["raidTick", "probeTick", "menuTick"],
 	"cmdAssignSlices",

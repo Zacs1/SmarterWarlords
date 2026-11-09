@@ -172,7 +172,7 @@ SWLC_fnc_vehStuckCheck = {
 		};
 	};
 
-	if (_moved >= CFG("vehStuckMinMetres") || {(behaviour leader _g) == "COMBAT"}) exitWith {};
+	if (_moved >= CFG("vehStuckMinMetres") || {(behaviour leader _g) == "COMBAT"} || {[_g] call SWLC_fnc_groupFighting}) exitWith {};
 	private _n = (_r get "stuck") + 1;
 	_r set ["stuck", _n];
 	["C_VEH", [["side", _cmd get "side"], ["id", _r get "id"], ["event", "stuck"], ["count", _n], ["group", groupId _g], ["x", round (_p # 0)], ["y", round (_p # 1)]]] call SWLC_fnc_log;
