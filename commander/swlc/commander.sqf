@@ -61,6 +61,7 @@ SWLC_fnc_commanderGuard = {
 				if (!isNull _g && {[_g] call SWLC_fnc_adGuardOrder}) then {
 					["C_GUARD", [["side", _side], ["group", groupId _g]]] call SWLC_fnc_log;
 				};
+				if (!isNull _g) then {[_cmd, _g] call SWLC_fnc_squadLight};
 			};
 			_spent = _spent + (diag_tickTime - _t0) * 1000;
 			sleep 0.01;
@@ -92,7 +93,7 @@ SWLC_fnc_cmdLogCost = {
 	};
 };
 
-SWLC_cmdStages = ["refreshGroups", "cmdTarget", "intelSummarise", "logInit", "vehTick", "watchdogTick", "waveTick", "defenceTick", "smartTick", "cmdAssign", "planPublish", "statusPublish"];
+SWLC_cmdStages = ["refreshGroups", "cmdTarget", "econTick", "commitTick", "rebuildTick", "intelSummarise", "logInit", "vehTick", "watchdogTick", "waveTick", "picketTick", "defenceTick", "smartTick", "squadTick", "raidTick", "probeTick", "menuTick", "cmdAssign", "planPublish", "statusPublish"];
 
 SWLC_fnc_cmdTick = {
 	params ["_cmd"];
@@ -124,12 +125,18 @@ SWLC_fnc_cmdTarget = {
 		if (!isNull _t) then {
 			[_side] call SWLC_fnc_adClearVotes;
 			[_side, _t] call SWLC_fnc_adBlockVanillaScan;
-			[_cmd] call SWLC_fnc_cmdNewPlan;
+			[_cmd] call SWLC_fnc_commitNew;
+			_cmd deleteAt "preferredTarget";
+			if !([_cmd] call SWLC_fnc_rebuilding) then {[_cmd] call SWLC_fnc_cmdNewPlan};
 		};
 	};
 
+	// A target that arrived during a rebuild gets its plan once the rebuild is over.
+	if (!isNull _t && {isNil {_cmd get "op"}} && {([_t] call SWLC_fnc_adOwner) != _side} && {!([_cmd] call SWLC_fnc_rebuilding)}) then {[_cmd] call SWLC_fnc_cmdNewPlan};
+
 	// Deadlock breaker: no capture for too long, force a new vote on an all-AI side.
 	if (!isNull _t
+		&& {!([] call SWLC_fnc_commitOn)}
 		&& {(time - (_cmd get "targetSince")) >= CFG("deadlockSeconds")}
 		&& {!([_side] call SWLC_fnc_adSideHasPlayers)}) then {
 		["C_DECISION", [["side", _side], ["decision", "deadlock_revote"], ["target", [_t] call SWLC_fnc_adName]]] call SWLC_fnc_log;
@@ -160,10 +167,31 @@ SWLC_fnc_cmdAssign = {
 SWLC_fnc_voteCast = {
 	params ["_cmd"];
 	private _side = _cmd get "side";
-	if (([_side] call SWLC_fnc_adSideHasPlayers) && {!CFG("voteOnPlayerSide")}) exitWith {};
+	if (([_side] call SWLC_fnc_adSideHasPlayers) && {!CFG("voteOnPlayerSide")}) exitWith {
+		// Warlords' AI may vote on a human side. A banned sector doesn't get to come back that way.
+		private _ais = [_side] call SWLC_fnc_adAIWarlords;
+		if (_ais findIf {
+			private _s = _x getVariable ["BIS_WL_selectedSector", objNull];
+			!isNull _s && {[_cmd, _s] call SWLC_fnc_commitBanned}
+		} < 0) exitWith {};
+		private _choice = [_cmd] call SWLC_fnc_voteChoose;
+		if (isNull _choice) exitWith {};
+		{
+			private _s = _x getVariable ["BIS_WL_selectedSector", objNull];
+			if (!isNull _s && {[_cmd, _s] call SWLC_fnc_commitBanned}) then {_x setVariable ["BIS_WL_selectedSector", _choice, true]};
+		} forEach _ais;
+	};
+	// While rebuilding, nobody votes. If a respawning warlord has voted anyway, Warlords' timer is running and an
+	// empty vote would hand the side its first sector in the list, so the vote gets a real answer. The rebuild still holds the groups back.
+	if ([_cmd] call SWLC_fnc_rebuilding) exitWith {
+		if (([_side] call SWLC_fnc_adAIWarlords) findIf {!isNull (_x getVariable ["BIS_WL_selectedSector", objNull])} < 0) exitWith {};
+		private _choice = [_cmd] call SWLC_fnc_voteChoose;
+		if (!isNull _choice) then {[_side, _choice, true] call SWLC_fnc_adCastVotes};
+	};
 	private _choice = [_cmd] call SWLC_fnc_voteChoose;
 	if (!isNull _choice) then {
-		[_side, _choice] call SWLC_fnc_adCastVotes;
+		// Warlords' own AI votes at random, so a choice made for a reason has to replace it.
+		[_side, _choice, [] call SWLC_fnc_commitOn] call SWLC_fnc_adCastVotes;
 	};
 };
 
@@ -172,6 +200,11 @@ SWLC_fnc_voteChoose = {
 	private _side = _cmd get "side";
 	private _avail = [_side] call SWLC_fnc_adAvailable;
 	if (_avail isEqualTo []) exitWith {objNull};
+	private _raiding = missionNamespace getVariable [format ["SWLC_raidSector_%1", _side], objNull];
+	private _open = _avail select {!([_cmd, _x] call SWLC_fnc_commitBanned) && {_x isNotEqualTo _raiding}};
+	if (_open isNotEqualTo []) then {_avail = _open};
+	private _preferred = _cmd getOrDefault ["preferredTarget", objNull];
+	if (!isNull _preferred && {_preferred in _avail}) exitWith {_preferred};
 	private _owned = [_side] call SWLC_fnc_adOwned;
 	private _enemyBase = [[_side] call SWLC_fnc_adEnemySide] call SWLC_fnc_adBase;
 	private _best = objNull;
@@ -184,6 +217,7 @@ SWLC_fnc_voteChoose = {
 	if ((_cmd getOrDefault ["lastVote", objNull]) isNotEqualTo _best) then {
 		_cmd set ["lastVote", _best];
 		["C_VOTE", [["side", _side], ["sector", [_best] call SWLC_fnc_adName], ["score", _bestScore toFixed 1]]] call SWLC_fnc_log;
+		[_cmd, _best, _avail] call SWLC_fnc_stratLogChoice;
 	};
 	_best
 };
@@ -203,7 +237,7 @@ SWLC_fnc_voteScore = {
 	private _threat = [_cmd, _s] call SWLC_fnc_threatOf;
 	private _defence = (_threat get "infantry") * CFG("voteDefenderWeight") + (_threat get "armour") * CFG("voteArmourWeight");
 	if !(_threat get "scouted") then {_defence = _defence * CFG("voteUnscoutedFactor")};
-	_score = _score - _defence;
+	_score = _score - _defence + ([_cmd get "side", _s] call SWLC_fnc_stratWorth) - ([_cmd, _s, _enemyBase] call SWLC_fnc_stratBasePenalty);
 	private _failed = (_cmd get "sectorFailures") getOrDefault [[_s] call SWLC_fnc_adName, -1];
 	if (_failed >= 0 && {(time - _failed) < CFG("voteRecentFailSeconds")}) then {
 		_score = _score - CFG("voteRecentFailPenalty");

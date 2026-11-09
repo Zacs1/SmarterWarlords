@@ -124,3 +124,9 @@ Gates (scenario tests, vanilla and again with CBA + LAMBS stable): squads use th
 - docs/design/rules-variant.md complete, with the decision log.
 - Hand-off doc in the run folder: per part, what was built, gates PASS or FAIL with evidence, known issues, deferred items and red flags; the Tanoa sector classification; the list of player-visible text.
 - Final message: per-part gate results; what changed for us as players; what to test in a hosted round (especially the commander menu, raids with borrowed groups, squad behaviour up close, and the final base fight); decisions to review; anything that needs me.
+
+## Addition from the user, during the run
+
+"Will you also make sure you do fairly rigirous testing, to ensure that commanders are actively doing stuff during the rounds?"
+
+Treat this as a gate on every soak round: measured per commander, pass or fail, reported per round in the hand-off and final message.

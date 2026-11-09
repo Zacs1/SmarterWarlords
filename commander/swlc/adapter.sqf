@@ -22,6 +22,7 @@ SWLC_fnc_adInit = {
 		_x setVariable ["SWLC_value", _x getVariable ["BIS_WL_value", 1]];
 		_x setVariable ["SWLC_isBase", typeOf _x == "ModuleWLBase_F"];
 		_x setVariable ["SWLC_links", _x getVariable ["BIS_WL_connectedSectors", []]];
+		_x setVariable ["SWLC_timeoutT", _x getVariable ["BIS_WL_timeoutBase", 60]];
 	} forEach BIS_WL_sectors;
 	SWLC_sectors = +BIS_WL_sectors;
 };
@@ -139,6 +140,19 @@ SWLC_fnc_adSetOrder = {
 };
 
 // Writes the remembered order to the group, resuming at waypoint _from.
+// Behaviour, speed, formation and combat mode wait while LAMBS has the group.
+SWLC_fnc_adApplyStance = {
+	params ["_g"];
+	private _order = _g getVariable ["SWLC_order", []];
+	if (_order isEqualTo []) exitWith {};
+	if ([_g] call SWLC_fnc_lambsBusy) exitWith {_g setVariable ["SWLC_stanceDirty", true]};
+	_g setVariable ["SWLC_stanceDirty", false];
+	_g setBehaviour (_order # 1);
+	_g setSpeedMode (_order # 2);
+	_g setFormation (_order # 3);
+	_g setCombatMode (_order # 4);
+};
+
 SWLC_fnc_adApplyOrder = {
 	params ["_g", ["_from", 0]];
 	private _order = _g getVariable ["SWLC_order", []];
@@ -155,10 +169,7 @@ SWLC_fnc_adApplyOrder = {
 		private _first = (count waypoints _g) - count _wps;
 		_g setVariable ["SWLC_wpBase", _first];
 		_g setCurrentWaypoint [_g, (_first + _from) min (count waypoints _g - 1)];
-		_g setBehaviour _behaviour;
-		_g setSpeedMode _speed;
-		_g setFormation _formation;
-		_g setCombatMode _combat;
+		[_g] call SWLC_fnc_adApplyStance;
 		_g setVariable ["SWLC_wpProgress", _from];
 	};
 };
@@ -202,6 +213,7 @@ SWLC_fnc_adGuardOrder = {
 		} forEach _wps;
 	};
 	if (_intact) exitWith {
+		if (_g getVariable ["SWLC_stanceDirty", false]) then {[_g] call SWLC_fnc_adApplyStance};
 		_g setVariable ["SWLC_wpProgress", (((currentWaypoint _g) - _base) max 0) min (count _wps)];
 		false
 	};
@@ -264,6 +276,7 @@ SWLC_fnc_adCanFTTo = {
 	if (([_s] call SWLC_fnc_adOwner) != _side) exitWith {false};
 	if (_s getVariable ["FastTravelEnabled", true] isEqualTo false) exitWith {false};
 	if (_s == ([_side] call SWLC_fnc_adBase) && {[_side] call SWLC_fnc_adBaseThreatened}) exitWith {false};
+	if (CFG("rulesVariant") && {CFG("ruleNoRespawnSeized")} && {[_side, _s] call SWLC_fnc_capBeingSeized}) exitWith {false};
 	true
 };
 
@@ -325,9 +338,10 @@ SWLC_fnc_adFastTravel = {
 // Votes. Writing BIS_WL_selectedSector on the side's AI warlords before they vote is exactly how
 // Warlords' AI votes; a real player's vote is never touched.
 SWLC_fnc_adCastVotes = {
-	params ["_side", "_sector"];
+	params ["_side", "_sector", ["_overwrite", false]];
 	{
-		if (isNull (_x getVariable ["BIS_WL_selectedSector", objNull])) then {
+		private _have = _x getVariable ["BIS_WL_selectedSector", objNull];
+		if (isNull _have || {_overwrite && {_have isNotEqualTo _sector}}) then {
 			_x setVariable ["BIS_WL_selectedSector", _sector, true];
 		};
 	} forEach ([_side] call SWLC_fnc_adAIWarlords);
@@ -343,9 +357,22 @@ SWLC_fnc_adClearVotes = {
 };
 
 // Force a new vote (breaks deadlocks). Free when done by the server.
+// Set while the target is empty, the flag would instantly cancel the next target, so it needs a target.
+// The name is what Warlords' popup shows on human clients as who reset the vote.
 SWLC_fnc_adForceRevote = {
 	params ["_side"];
+	if (isNull ([_side] call SWLC_fnc_adTarget)) exitWith {};
+	missionNamespace setVariable [format ["BIS_WL_sectorVotingResetName_%1", _side], "the Commander", true];
 	missionNamespace setVariable [format ["BIS_WL_sectorVotingReset_%1", _side], true, true];
+	// Warlords clears this flag on the server only, so a client joining later would act on the old value.
+	[_side] spawn {
+		params ["_side"];
+		private _flag = format ["BIS_WL_sectorVotingReset_%1", _side];
+		private _until = time + 60;
+		waitUntil {sleep 1; !(missionNamespace getVariable [_flag, false]) || {time > _until}};
+		sleep 5;
+		if !(missionNamespace getVariable [_flag, false]) then {publicVariable _flag};
+	};
 };
 
 // Purchases. classes = array of class names. Returns the spawned objects, or [] on failure.
@@ -488,7 +515,7 @@ SWLC_fnc_adCanScan = {
 SWLC_fnc_adScan = {
 	params ["_side", "_s", "_onDone"];
 	if !([_side, _s] call SWLC_fnc_adCanScan) exitWith {false};
-	private _cost = [] call SWLC_fnc_adScanCost;
+	private _cost = [_side] call SWLC_fnc_econScanCost;
 	if !([_side, _cost] call SWLC_fnc_adDebit) exitWith {false};
 	private _now = call BIS_fnc_WLSyncedTime;
 	_s setVariable [format ["BIS_WL_sectorScanActiveSince_%1", _side], _now, true];

@@ -65,7 +65,7 @@ SWLC_fnc_vehShop = {
 	private _plan = _w get "plan";
 	private _buys = 0;
 	private _radius = CFG("vehReuseRadius");
-	private _catalog = _cmd get "catalog";
+	private _catalog = (_cmd get "catalog") select {[_side, _x # 0, _musterPos] call SWLC_fnc_econAssetAllowed};
 
 	private _candidates = _staged select {count ([_x] call SWLC_fnc_vehRecOf) == 0 && {leader _x call SWLC_fnc_adIsWarlordUnit}};
 

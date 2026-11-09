@@ -33,6 +33,7 @@ SWLC_fnc_cpFree = {
 SWLC_fnc_logBuy = {
 	params ["_cmd", "_buyer", "_classes", "_cost", "_what"];
 	private _side = _cmd get "side";
+	_cost = ceil (_cost * ([_side, _classes # 0, getPosATL _buyer] call SWLC_fnc_econPriceMult));
 	private _reserve = [_side] call SWLC_fnc_cpReserve;
 	private _cp = [_side] call SWLC_fnc_adSideCP;
 	if ((_cp - _cost) < _reserve) exitWith {[]};
@@ -61,7 +62,7 @@ SWLC_fnc_shopTick = {
 			if (_pick isNotEqualTo [] && {count ([_x] call SWLC_fnc_vehRecOf) == 0}) then {_transportCost = _transportCost + (_pick # 1)};
 		} forEach _staged;
 	};
-	if (_scanWanted && {([_side] call SWLC_fnc_cpFree) >= ([] call SWLC_fnc_adScanCost) + _transportCost}) then {
+	if (_scanWanted && {([_side] call SWLC_fnc_cpFree) >= ([_side] call SWLC_fnc_econScanCost) + _transportCost}) then {
 		[_cmd, _w] call SWLC_fnc_shopScan;
 		_scanWanted = false;
 	};
@@ -69,7 +70,7 @@ SWLC_fnc_shopTick = {
 	[_cmd, _w, _staged] call SWLC_fnc_shopInfantry;
 	[_cmd, _w, _staged, _musterPos] call SWLC_fnc_vehShop;
 
-	if (_scanWanted && {([_side] call SWLC_fnc_cpFree) >= ([] call SWLC_fnc_adScanCost)}) then {
+	if (_scanWanted && {([_side] call SWLC_fnc_cpFree) >= ([_side] call SWLC_fnc_econScanCost)}) then {
 		[_cmd, _w] call SWLC_fnc_shopScan;
 	};
 
@@ -103,7 +104,7 @@ SWLC_fnc_shopInfantry = {
 		private _men = [_g] call SWLC_fnc_groupMen;
 		private _rec = [_g] call SWLC_fnc_vehRecOf;
 		private _room = if (count _rec > 0) then {(_rec get "seats") - _men} else {1e6};
-		private _missing = (CFG("shopGroupSize") - _men) min _room;
+		private _missing = (([_cmd get "side"] call SWLC_fnc_econSquadCap) - _men) min _room;
 		if (_missing > 0 && {alive _leader} && {[_leader] call SWLC_fnc_adIsWarlord} && {!isPlayer _leader}) then {
 			for "_i" from 1 to _missing do {
 				if (_bought >= CFG("shopMaxInfantryPerTick")) exitWith {};
@@ -128,6 +129,7 @@ SWLC_fnc_kitTick = {
 	if (_units isEqualTo []) exitWith {};
 
 	private _table = _cmd get "kitTable";
+	private _kitOk = [_cmd get "side", getPosATL (_units # 0)] call SWLC_fnc_econKitAllowed;
 	private _haveAT = {([secondaryWeapon _x] call SWLC_fnc_adLauncherKind) == "AT"} count _units;
 	private _haveAA = {([secondaryWeapon _x] call SWLC_fnc_adLauncherKind) == "AA"} count _units;
 	private _wantAT = _plan get "atWanted";
@@ -138,14 +140,14 @@ SWLC_fnc_kitTick = {
 	_free = [_free, [], {[1, 0] select (_x == leader group _x)}, "DESCEND"] call BIS_fnc_sortBy;
 
 	private _needAT = (_wantAT - _haveAT - _pendingAT) min ((count _free) max 0);
-	if (_needAT > 0 && {"AT" in _table}) then {
+	if (_needAT > 0 && {_kitOk} && {"AT" in _table}) then {
 		for "_i" from 1 to _needAT do {
 			private _u = _free deleteAt 0;
 			[_cmd, _w, _u, "AT"] call SWLC_fnc_kitAssign;
 		};
 		[_cmd get "side", "kit"] call SWLC_fnc_radio;
 	};
-	if ((_wantAA - _haveAA - _pendingAA) > 0 && {"AA" in _table} && {_free isNotEqualTo []}) then {
+	if ((_wantAA - _haveAA - _pendingAA) > 0 && {_kitOk} && {"AA" in _table} && {_free isNotEqualTo []}) then {
 		[_cmd, _w, _free deleteAt 0, "AA"] call SWLC_fnc_kitAssign;
 	};
 

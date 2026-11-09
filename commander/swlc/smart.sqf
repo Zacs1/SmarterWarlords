@@ -68,6 +68,7 @@ SWLC_fnc_smartBreakTick = {
 			private _big = [_other, _g] select (([_g] call SWLC_fnc_groupMen) >= ([_other] call SWLC_fnc_groupMen));
 			private _small = [_g, _other] select (_big isEqualTo _g);
 			private _movers = (units _small) select {alive _x && {!isPlayer _x} && {!([_x] call SWLC_fnc_adIsWarlord)}};
+			[_small, false] call SWLC_fnc_lambsRelease;
 			if (_movers isNotEqualTo []) then {_movers joinSilent _big};
 			_g setVariable ["SWLC_broke", false];
 			[_cmd, "break", "merge", [["group", groupId _g], ["with", groupId _other], ["moved", count _movers]]] call SWLC_fnc_smartLog;
@@ -235,7 +236,7 @@ SWLC_fnc_smartMomentum = {
 			private _t = [_cmd, _x] call SWLC_fnc_threatOf;
 			private _known = (_t get "infantry") + 3 * (_t get "light");
 			// A neighbour nobody has seen can stand in only when no scouted weak one exists.
-			private _rank = _known + ([1000, 0] select (_t get "scouted"));
+			private _rank = _known + ([1000, 0] select (_t get "scouted")) - ([_side, _x] call SWLC_fnc_stratWorth) * CFG("stratMomentumWeight");
 			if ((_t get "armour") == 0 && {_known <= CFG("momentumWeakMen")} && {_rank < _bestMen}) then {
 				_best = _x;
 				_bestMen = _rank;
@@ -250,13 +251,44 @@ SWLC_fnc_smartMomentum = {
 	[_side, "momentum", [[_best] call SWLC_fnc_adName]] call SWLC_fnc_radio;
 };
 
+// Sends a group ahead to look at a spot, in a bought light vehicle when the side can spare the money.
+// Returns true if it's waiting for a vehicle. The Recon handling below takes it from there.
+SWLC_fnc_scoutDispatch = {
+	params ["_cmd", "_g", "_spot"];
+	private _side = _cmd get "side";
+	[_g, "Recon", _spot, "scout"] call SWLC_fnc_setState;
+	private _limit = ((leader _g distance2D _spot) / CFG("footSpeedEstimate")) max CFG("scoutMaxSeconds") min CFG("scoutCapSeconds");
+	_g setVariable ["SWLC_scoutUntil", time + _limit];
+	_g setVariable ["SWLC_scoutVeh", objNull];
+	_g setVariable ["SWLC_scoutSpot", _spot];
+	private _men = [_g] call SWLC_fnc_groupMen;
+	private _entry = [_cmd, _men] call SWLC_fnc_vehCheapestTransport;
+	private _rode = false;
+	if (_entry isNotEqualTo [] && {([_side] call SWLC_fnc_cpFree) >= (_entry # 1) + CFG("scoutVehicleSpareCP")} && {alive leader _g} && {[leader _g] call SWLC_fnc_adIsWarlord}) then {
+		private _items = [_cmd, leader _g, [_entry # 0], _entry # 1, "scout"] call SWLC_fnc_logBuy;
+		if (_items isNotEqualTo []) then {
+			private _v = _items # 0;
+			_v removeAllEventHandlers "GetIn";
+			_v setVariable ["SWLC_side", _side];
+			_g setVariable ["SWLC_scoutVeh", _v];
+			private _bought = _cmd getOrDefault ["scoutVehicles", []];
+			_bought pushBack [_v, _entry, _g];
+			_cmd set ["scoutVehicles", _bought];
+			_g setVariable ["SWLC_scoutUntil", time + _limit + CFG("scoutVehicleWait")];
+			_rode = true;
+		};
+	};
+	if (!_rode) then {[_g, [[_spot, "MOVE", 40]], "AWARE", "FULL", "WEDGE", "GREEN"] call SWLC_fnc_adSetOrder};
+	_g setVariable ["SWLC_scoutMoving", !_rode];
+	_rode
+};
+
 // 7. Scout first: a small group goes ahead while the others muster. Never holds up the go.
 SWLC_fnc_smartScoutTick = {
 	params ["_cmd"];
-	if !(CFG("smartScout")) exitWith {};
 	private _side = _cmd get "side";
 	private _w = _cmd get "op";
-	if (!isNil "_w" && {!(_w getOrDefault ["scoutSent", false])}) then {
+	if (CFG("smartScout") && {!isNil "_w"} && {!(_w getOrDefault ["scoutSent", false])}) then {
 		private _target = _w get "target";
 		private _groups = [_w] call SWLC_fnc_waveLive;
 		if !(([_cmd, _target] call SWLC_fnc_threatOf) get "scouted") then {
@@ -269,30 +301,7 @@ SWLC_fnc_smartScoutTick = {
 					private _tpos = [_target] call SWLC_fnc_adPos;
 					private _spot = [_side, _tpos, _w get "bearing", CFG("scoutDist")] call SWLC_fnc_validHoldPoint;
 					[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
-					[_g, "Recon", _spot, "scout"] call SWLC_fnc_setState;
-					private _limit = ((leader _g distance2D _spot) / CFG("footSpeedEstimate")) max CFG("scoutMaxSeconds") min CFG("scoutCapSeconds");
-					_g setVariable ["SWLC_scoutUntil", time + _limit];
-					_g setVariable ["SWLC_scoutVeh", objNull];
-					_g setVariable ["SWLC_scoutSpot", _spot];
-					private _men = [_g] call SWLC_fnc_groupMen;
-					private _entry = [_cmd, _men] call SWLC_fnc_vehCheapestTransport;
-					private _rode = false;
-					if (_entry isNotEqualTo [] && {([_side] call SWLC_fnc_cpFree) >= (_entry # 1) + CFG("scoutVehicleSpareCP")} && {alive leader _g} && {[leader _g] call SWLC_fnc_adIsWarlord}) then {
-						private _items = [_cmd, leader _g, [_entry # 0], _entry # 1, "scout"] call SWLC_fnc_logBuy;
-						if (_items isNotEqualTo []) then {
-							private _v = _items # 0;
-							_v removeAllEventHandlers "GetIn";
-							_v setVariable ["SWLC_side", _side];
-							_g setVariable ["SWLC_scoutVeh", _v];
-							private _bought = _cmd getOrDefault ["scoutVehicles", []];
-							_bought pushBack [_v, _entry, _g];
-							_cmd set ["scoutVehicles", _bought];
-							_g setVariable ["SWLC_scoutUntil", time + _limit + CFG("scoutVehicleWait")];
-							_rode = true;
-						};
-					};
-					if (!_rode) then {[_g, [[_spot, "MOVE", 40]], "AWARE", "FULL", "WEDGE", "GREEN"] call SWLC_fnc_adSetOrder};
-					_g setVariable ["SWLC_scoutMoving", !_rode];
+					private _rode = [_cmd, _g, _spot] call SWLC_fnc_scoutDispatch;
 					[_cmd, "scout", "sent", [["group", groupId _g], ["wave", _w get "id"], ["target", [_target] call SWLC_fnc_adName], ["vehicle", _rode]]] call SWLC_fnc_smartLog;
 					[_side, "scout", [[_target] call SWLC_fnc_adName], _g] call SWLC_fnc_radio;
 				};

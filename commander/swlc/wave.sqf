@@ -7,7 +7,7 @@ SWLC_fnc_opBearing = {
 	params ["_cmd", "_target"];
 	private _side = _cmd get "side";
 	private _tpos = [_target] call SWLC_fnc_adPos;
-	private _groups = (_cmd get "groups") select {!(([_x] call SWLC_fnc_state) in ["Reserve", "Defending"])};
+	private _groups = (_cmd get "groups") select {!(([_x] call SWLC_fnc_state) in ["Reserve", "Defending", "Raiding", "Probing", "Picket", "Borrowed", "Pickup"])};
 	private _sx = 0;
 	private _sy = 0;
 	{
@@ -108,6 +108,7 @@ SWLC_fnc_wavePlan = {
 		["scan", !(_threat get "scouted")],
 		["ammo", (_threat get "infantry") >= CFG("kitHeavyInfantryFactor") * (([[_w] call SWLC_fnc_waveLive] call SWLC_fnc_groupsMen) max 1)]
 	];
+	[_w, _plan] call SWLC_fnc_stratPlan;
 	private _sig = [_plan get "atWanted", _plan get "combatVehicle", _plan get "aa", _plan get "smoke", _plan get "scan"];
 	if (_sig isNotEqualTo (_w getOrDefault ["planSig", []])) then {
 		_w set ["planSig", _sig];
@@ -301,6 +302,26 @@ SWLC_fnc_playersFighting = {
 
 // The go rule. Two groups ready go together; with friends already fighting, a group goes in on its own;
 // a lone group with nobody to join waits, then goes anyway.
+// Groups peeled off to answer a raid can leave too few to attack. The wave then waits at the rally for them,
+// for a limited time. A push already in progress carries on.
+SWLC_fnc_rallyPeelHold = {
+	params ["_cmd", "_op", "_live"];
+	if !([] call SWLC_fnc_propOn) exitWith {false};
+	if ((_op get "phase") == "ASSAULT") exitWith {false};
+	private _away = {
+		((_x getVariable ["SWLC_peeledOp", -1]) == (_op get "id") && {([_x] call SWLC_fnc_state) == "Defending"})
+		|| {(time - (_x getVariable ["SWLC_peeledBackAt", -1e6])) < CFG("peelReturnGrace") && {!(_x in _live)}}
+	} count (_cmd get "groups");
+	if (_away == 0 || {(count _live) >= CFG("peelWorkableGroups")}) exitWith {false};
+	private _max = CFG("peelHoldMaxSeconds");
+	if ((time - (_op getOrDefault ["peelHoldSince", -1e6])) >= 3 * _max) then {
+		_op set ["peelHoldSince", time];
+		["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "peel_hold"], ["away", _away], ["live", count _live]]] call SWLC_fnc_log;
+		[_cmd get "side", "peelhold", [[_op get "target"] call SWLC_fnc_adName]] call SWLC_fnc_radio;
+	};
+	(time - (_op get "peelHoldSince")) < _max
+};
+
 SWLC_fnc_rallyTick = {
 	params ["_cmd", "_op", "_live"];
 	private _side = _cmd get "side";
@@ -315,6 +336,9 @@ SWLC_fnc_rallyTick = {
 		};
 	};
 
+	if (_op getOrDefault ["holdGo", false]) exitWith {};
+	if (time < (_op getOrDefault ["playerHoldUntil", -1])) exitWith {};
+	if ([_cmd, _op, _live] call SWLC_fnc_rallyPeelHold) exitWith {};
 	private _ready = _waiting select {time >= (_x getVariable ["SWLC_restUntil", -1])};
 	if (_ready isEqualTo []) exitWith {
 		if (_waiting isEqualTo []) then {_op set ["firstAtRally", -1]};
@@ -333,7 +357,7 @@ SWLC_fnc_rallyTick = {
 	if ((_op get "firstAtRally") < 0) then {_op set ["firstAtRally", time]};
 	private _waited = time - (_op get "firstAtRally");
 	private _forced = _op getOrDefault ["forceGo", false];
-	private _byCount = (count _ready) >= CFG("goMinGroups");
+	private _byCount = (count _ready) >= ([_cmd, _op] call SWLC_fnc_stratGoCount);
 	private _byTimer = _waited >= ([_cmd, _op] call SWLC_fnc_rallyLoneWait);
 	if !(_byCount || {_byTimer} || {_forced}) exitWith {};
 	if ([_cmd, _op] call SWLC_fnc_smartPrepFire) exitWith {};
@@ -353,7 +377,8 @@ SWLC_fnc_rallyLoneWait = {
 	params ["_cmd", "_op"];
 	private _momentum = _cmd getOrDefault ["momentum", []];
 	if (_momentum isNotEqualTo [] && {(_momentum # 0) isEqualTo (_op get "target")} && {time < (_momentum # 1) + CFG("momentumGoWindow")}) exitWith {CFG("momentumGoWait")};
-	CFG("rallyLoneWait") * ([_cmd, "goWait"] call SWLC_fnc_persona)
+	private _base = ([] call SWLC_fnc_stratFortressOn) && {[_op get "target"] call SWLC_fnc_adIsBase};
+	CFG("rallyLoneWait") * ([_cmd, "goWait"] call SWLC_fnc_persona) * ([1, CFG("stratBaseLoneWaitMult")] select _base)
 };
 
 SWLC_fnc_pushStart = {
@@ -420,6 +445,7 @@ SWLC_fnc_pushOver = {
 	["C_WAVE", [["side", _side], ["wave", _op get "id"], ["event", "push_over"], ["result", _result], ["men_left", [_attackers] call SWLC_fnc_groupsMen], ["men_launched", _op get "launchStrength"],
 		["duration", round (time - (_op getOrDefault ["assaultStart", time]))]]] call SWLC_fnc_log;
 	_cmd set ["lastResult", _result];
+	if (_result in ["wiped", "attrition", "no_progress"]) then {_op set ["pushFails", (_op getOrDefault ["pushFails", 0]) + 1]};
 	if (_result in ["attrition", "no_progress"]) then {[_side, "failed"] call SWLC_fnc_radio};
 	_op set ["phase", "RALLY"];
 	_op set ["launchStrength", 0];

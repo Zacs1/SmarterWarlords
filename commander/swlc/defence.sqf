@@ -9,6 +9,8 @@ SWLC_fnc_defCompass = {
 
 SWLC_fnc_defReserveSize = {
 	params ["_side"];
+	private _rebuildCmd = missionNamespace getVariable [format ["SWLC_cmd_%1", _side], createHashMap];
+	if (count _rebuildCmd > 0 && {[_rebuildCmd] call SWLC_fnc_rebuilding}) exitWith {1000};
 	private _n = count ([_side] call SWLC_fnc_adOwned);
 	private _size = 1;
 	{
@@ -82,14 +84,36 @@ SWLC_fnc_defSpots = {
 	_spots
 };
 
+// Where a responder should fast travel to. Never into a sector under attack: the nearest safe owned sector instead.
+SWLC_fnc_defHop = {
+	params ["_g", "_s"];
+	private _side = side _g;
+	if !([] call SWLC_fnc_propOn) exitWith {_s};
+	private _cmd = missionNamespace getVariable [format ["SWLC_cmd_%1", _side], createHashMap];
+	private _threats = _cmd getOrDefault ["threats", createHashMap];
+	private _hot = {
+		params ["_x1"];
+		([_x1] call SWLC_fnc_adName) in _threats || {[_side, _x1] call SWLC_fnc_capBeingSeized}
+	};
+	if !([_s] call _hot) exitWith {_s};
+	private _safe = ([_side] call SWLC_fnc_adOwned) select {!([_x] call _hot) && {[_side, _x] call SWLC_fnc_adCanFTTo}};
+	if (_safe isEqualTo []) exitWith {objNull};
+	private _c = [_s] call SWLC_fnc_adPos;
+	([_safe, [], {([_x] call SWLC_fnc_adPos) distance2D _c}, "ASCEND"] call BIS_fnc_sortBy) # 0
+};
+
 // Fast travels the group when it's far, then walks it to the spot.
 SWLC_fnc_defMoveTo = {
 	params ["_g", "_s", "_spot", "_awayBearing"];
 	if ((leader _g distance2D _spot) > CFG("stagingFarThreshold")) then {
-		private _sp = [_s] call SWLC_fnc_adPos;
-		private _landing = [_sp, _awayBearing + (random 80 - 40), 30 + random 30] call SWLC_fnc_offset;
+		private _hop = [_g, _s] call SWLC_fnc_defHop;
+		if (isNull _hop) exitWith {};
+		if (((([_hop] call SWLC_fnc_adPos) distance2D _spot) + CFG("defHopMinGain")) > (leader _g distance2D _spot)) exitWith {};
+		private _sp = [_hop] call SWLC_fnc_adPos;
+		private _away = if (_hop isEqualTo _s) then {_awayBearing + (random 80 - 40)} else {[_sp, [_s] call SWLC_fnc_adPos] call SWLC_fnc_bearing};
+		private _landing = [_sp, _away, 30 + random 30] call SWLC_fnc_offset;
 		if (surfaceIsWater _landing) then {_landing = _sp};
-		[_g, _s, _landing] call SWLC_fnc_adFastTravel;
+		[_g, _hop, _landing] call SWLC_fnc_adFastTravel;
 	};
 };
 
@@ -118,7 +142,7 @@ SWLC_fnc_defSectorValue = {
 	private _rec = (_cmd get "musters") getOrDefault [[_s] call SWLC_fnc_adName, createHashMap];
 	if (count _rec > 0 && {(_rec get "groups") isNotEqualTo [] || {(_rec get "batch") isNotEqualTo []}}) then {_v = _v + CFG("defenceValueStaging")};
 	if ([_s] call SWLC_fnc_adIsBase) then {_v = _v + CFG("defenceValueBase")};
-	_v
+	_v + ([_cmd get "side", _s] call SWLC_fnc_stratWorth) + ([_cmd, _s] call SWLC_fnc_menuDefendBonus)
 };
 
 SWLC_fnc_defRespond = {
@@ -127,12 +151,33 @@ SWLC_fnc_defRespond = {
 	private _s = _rec get "sector";
 	private _groups = (_rec get "groups") select {({alive _x} count units _x) > 0 && {([_x] call SWLC_fnc_state) == "Defending"}};
 	_rec set ["groups", _groups];
-	private _need = ((ceil ((_rec get "strength") / CFG("defenceMenPerGroup"))) max 1) min CFG("defenceMaxGroups");
+	private _prop = [] call SWLC_fnc_propOn;
+	private _margin = [1, CFG("responseMargin")] select _prop;
+	private _need = ((ceil (((_rec get "strength") * _margin) / CFG("defenceMenPerGroup"))) max 1) min CFG("defenceMaxGroups");
+	private _peak = _rec getOrDefault ["needPeak", _need];
+	if (_prop && {_need > _peak} && {_groups isNotEqualTo []}) then {
+		["C_DEF", [["side", _side], ["event", "escalate"], ["sector", [_s] call SWLC_fnc_adName], ["need", _need], ["was", _peak], ["strength", _rec get "strength"]]] call SWLC_fnc_log;
+		[_side, "escalate", [[_s] call SWLC_fnc_adName], _groups # 0] call SWLC_fnc_radio;
+	};
+	_rec set ["needPeak", _peak max _need];
+	_rec set ["need", _need];
 	private _c = [_s] call SWLC_fnc_adPos;
 	private _nearest = {
 		params ["_list"];
 		[_list, [], {leader _x distance2D _c}, "ASCEND"] call BIS_fnc_sortBy
 	};
+
+	private _big = (_rec get "strength") >= CFG("responseCounterattackMen");
+	private _attack = _cmd get "target";
+	private _worth = isNull _attack || {([_cmd, _s] call SWLC_fnc_defSectorValue) > (([_attack] call SWLC_fnc_adValue) + ([_side, _attack] call SWLC_fnc_stratWorth))};
+	private _opNow = _cmd get "op";
+
+	// A picket on this sector is already there.
+	{
+		if ((count (_rec get "groups")) >= _need) exitWith {};
+		_x setVariable ["SWLC_picketSector", nil];
+		[_cmd, _rec, _x, "picket"] call SWLC_fnc_defSend;
+	} forEach ((_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Picket" && {(_x getVariable ["SWLC_picketSector", objNull]) isEqualTo _s}});
 
 	// 1. Reserve first.
 	private _reserve = [(_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Reserve"}] call _nearest;
@@ -145,18 +190,40 @@ SWLC_fnc_defRespond = {
 	private _muster = (_cmd get "musters") getOrDefault [[_s] call SWLC_fnc_adName, createHashMap];
 	if (count _muster > 0) then {
 		private _staged = ((_muster get "groups") + (_muster get "batch")) select {([_x] call SWLC_fnc_state) in ["Mustering", "Travelling", "Mounting"]};
+		if (_prop && {!_big}) then {
+			_staged = ([_staged] call _nearest) select [0, (_need - (count (_rec get "groups"))) max 0];
+		};
 		if (_staged isNotEqualTo []) then {
-			{[_cmd, _rec, _x, "staging_abort"] call SWLC_fnc_defSend} forEach _staged;
+			{
+				if (_prop && {!isNil "_opNow"}) then {_x setVariable ["SWLC_peeledOp", _opNow get "id"]};
+				[_cmd, _rec, _x, "staging_abort"] call SWLC_fnc_defSend;
+			} forEach _staged;
 			_muster set ["firstArrive", -1];
 			["C_DEF", [["side", _side], ["event", "staging_abort"], ["sector", [_s] call SWLC_fnc_adName], ["groups", count _staged]]] call SWLC_fnc_log;
 			[_side, "stagingattack"] call SWLC_fnc_radio;
 		};
 	};
 
-	// 3. Still short: pull attackers only if this sector is worth more than the attack.
+	// 3. A raid-sized threat: the attack's least-engaged groups, never ones in a fight, up to a third of the attack.
+	// A bigger force is a counterattack and falls through to the full defence rules below.
+	if (_prop && {!_big || {!_worth}} && {(count (_rec get "groups")) < _need}) exitWith {
+		private _op = _cmd get "op";
+		if (isNil "_op") exitWith {};
+		private _live = [_op] call SWLC_fnc_waveLive;
+		private _cap = floor ((count _live) * CFG("responseCapFraction"));
+		private _peeled = {(_x getVariable ["SWLC_peeledOp", -1]) == (_op get "id") && {([_x] call SWLC_fnc_state) == "Defending"}} count (_cmd get "groups");
+		private _pool = _live select {([_x] call SWLC_fnc_state) in ["Mustering", "Travelling", "Waiting", "Advancing"] && {(behaviour leader _x) != "COMBAT"}};
+		{
+			if ((count (_rec get "groups")) >= _need || {_peeled >= _cap}) exitWith {};
+			_x setVariable ["SWLC_peeledOp", _op get "id"];
+			[_cmd, _rec, _x, "peeled"] call SWLC_fnc_defSend;
+			_peeled = _peeled + 1;
+			["C_DEF", [["side", _side], ["event", "peel"], ["sector", [_s] call SWLC_fnc_adName], ["group", groupId _x], ["peeled", _peeled], ["cap", _cap], ["need", _need]]] call SWLC_fnc_log;
+		} forEach ([_pool] call _nearest);
+	};
+
+	// 4. Still short: pull attackers only if this sector is worth more than the attack.
 	if ((count (_rec get "groups")) < _need) then {
-		private _attack = _cmd get "target";
-		private _worth = isNull _attack || {([_cmd, _s] call SWLC_fnc_defSectorValue) > ([_attack] call SWLC_fnc_adValue)};
 		if !(_worth) then {
 			if !(_rec getOrDefault ["shortLogged", false]) then {
 				_rec set ["shortLogged", true];
@@ -167,6 +234,7 @@ SWLC_fnc_defRespond = {
 			private _pool = if (isNil "_op") then {[]} else {([_op] call SWLC_fnc_waveLive) select {([_x] call SWLC_fnc_state) in ["Mustering", "Travelling", "Mounting", "Advancing"]}};
 			{
 				if ((count (_rec get "groups")) >= _need) exitWith {};
+				if (_prop) then {_x setVariable ["SWLC_peeledOp", _op get "id"]};
 				[_cmd, _rec, _x, "pulled"] call SWLC_fnc_defSend;
 			} forEach ([_pool] call _nearest);
 		};
@@ -175,12 +243,19 @@ SWLC_fnc_defRespond = {
 
 SWLC_fnc_defStandDown = {
 	params ["_cmd", "_name", "_rec", "_why"];
+	private _returned = false;
 	{
 		if (({alive _x} count units _x) > 0 && {([_x] call SWLC_fnc_state) == "Defending"}) then {
+			if ((_x getVariable ["SWLC_peeledOp", -1]) >= 0) then {
+				_x setVariable ["SWLC_peeledOp", -1];
+				_x setVariable ["SWLC_peeledBackAt", time];
+				_returned = true;
+			};
 			[_x] call SWLC_fnc_adClearOrder;
 			[_x, "Unassigned", [], "stand_down"] call SWLC_fnc_setState;
 		};
 	} forEach (_rec get "groups");
+	if (_returned && {_why == "clear"}) then {[_cmd get "side", "defreturn", [_name]] call SWLC_fnc_radio};
 	["C_DEF", [["side", _cmd get "side"], ["event", "stand_down"], ["sector", _name], ["why", _why], ["groups", count (_rec get "groups")], ["duration", round (time - (_rec get "first"))]]] call SWLC_fnc_log;
 	if (_why == "clear") then {[_cmd get "side", "standdown", [_name]] call SWLC_fnc_radio};
 	(_cmd get "threats") deleteAt _name;
@@ -244,12 +319,12 @@ SWLC_fnc_defReserveTick = {
 	// Defenders holding a spot shuffle as well.
 	{
 		private _g = _x;
-		if (([_g] call SWLC_fnc_state) == "Defending" && {(time - (_g getVariable ["SWLC_patrolAt", -1e6])) >= CFG("reservePatrolSeconds")}) then {
+		if (([_g] call SWLC_fnc_state) == "Defending" && {(_g getVariable ["SWLC_lambsTask", ""]) == ""} && {(time - (_g getVariable ["SWLC_patrolAt", -1e6])) >= CFG("reservePatrolSeconds")}) then {
 			_g setVariable ["SWLC_patrolAt", time];
 			private _goal = _g getVariable ["SWLC_goal", []];
 			if (_goal isNotEqualTo []) then {
-				private _spot = [_goal, random 360, 5 + random 10] call SWLC_fnc_offset;
-				[_g, [[_spot, "MOVE", 15]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
+				private _spot = [_goal, _g] call SWLC_fnc_shuffleSpot;
+				[_g, [[_spot, "MOVE", 8]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
 			};
 		};
 	} forEach (_cmd get "groups");
@@ -284,6 +359,11 @@ SWLC_fnc_defenceTick = {
 				["C_DEF", [["side", _side], ["event", "detect"], ["sector", _name], ["inf", _inf], ["arm", _arm], ["light", _light], ["seizing", _seizing], ["bearing", round _bearing]]] call SWLC_fnc_log;
 				[_side, "defend", [_name, _what, [_bearing] call SWLC_fnc_defCompass]] call SWLC_fnc_radio;
 			};
+			if (_seizing && {!(_rec getOrDefault ["seizeCalled", false])} && {[] call SWLC_fnc_propOn}) then {
+				_rec set ["seizeCalled", true];
+				["C_DEF", [["side", _side], ["event", "seizing"], ["sector", _name]]] call SWLC_fnc_log;
+				[_side, "seizing", [_name]] call SWLC_fnc_radio;
+			};
 		};
 	} forEach _owned;
 
@@ -304,84 +384,6 @@ SWLC_fnc_defenceTick = {
 	} forEach (keys _threats);
 
 	[_cmd] call SWLC_fnc_defReserveTick;
-};
-
-// ---- Player messages. Every function here is called only when a human uses a scroll action. ----
-
-SWLC_fnc_playerMsg = {
-	params ["_kind", "_player", "_data"];
-	if (isNull _player || {!isPlayer _player}) exitWith {};
-	// A request can only speak for its sender. Owner 0 means the host's own local call, which is fine.
-	if (isRemoteExecuted && {remoteExecutedOwner != 0} && {remoteExecutedOwner != owner _player}) exitWith {};
-	private _side = side group _player;
-	private _cmd = missionNamespace getVariable [format ["SWLC_cmd_%1", _side], createHashMap];
-	if (count _cmd == 0) exitWith {};
-	switch (_kind) do {
-		case "report": {[_cmd, _player, _data] call SWLC_fnc_playerReport};
-		case "attack": {[_cmd, _player] call SWLC_fnc_playerAttack};
-		case "defend": {[_cmd, _player] call SWLC_fnc_playerDefend};
-	};
-};
-
-SWLC_fnc_playerReport = {
-	params ["_cmd", "_player", "_items"];
-	private _g = group _player;
-	private _sightings = [];
-	{
-		_x params ["_cls", "_pos"];
-		if (isClass (configFile >> "CfgVehicles" >> _cls) && {(_player distance2D _pos) <= CFG("playerReportRange")}) then {
-			private _cat = [_cls] call SWLC_fnc_intelCategory;
-			if (_cat != "") then {_sightings pushBack [_cat, [_pos # 0, _pos # 1, 0], objNull, CFG("playerReportConf"), _g, 4]};
-		};
-	} forEach (_items select [0, CFG("playerReportMax")]);
-	["C_REQ", [["side", _cmd get "side"], ["kind", "report"], ["player", name _player], ["items", count _sightings]]] call SWLC_fnc_log;
-	if (_sightings isEqualTo []) exitWith {};
-	[_cmd, _sightings, "player"] call SWLC_fnc_intelPost;
-	[_cmd get "side", "report", [], _g] call SWLC_fnc_radio;
-};
-
-SWLC_fnc_playerAttack = {
-	params ["_cmd", "_player"];
-	private _side = _cmd get "side";
-	private _w = _cmd get "op";
-	private _ok = false;
-	if (!isNil "_w") then {
-		private _staged = ([_w] call SWLC_fnc_waveLive) select {([_x] call SWLC_fnc_state) in ["Mustering", "Waiting"]};
-		if ((count _staged) >= CFG("requestGoMinGroups")) then {
-			_w set ["forceGo", true];
-			_ok = true;
-		};
-	};
-	["C_REQ", [["side", _side], ["kind", "attack"], ["player", name _player], ["ok", _ok]]] call SWLC_fnc_log;
-	[_side, ["reqno", "reqok"] select _ok] call SWLC_fnc_radio;
-};
-
-SWLC_fnc_playerDefend = {
-	params ["_cmd", "_player"];
-	private _side = _cmd get "side";
-	private _owned = ([_side] call SWLC_fnc_adOwned) select {(_player distance2D ([_x] call SWLC_fnc_adPos)) <= CFG("requestDefendRange")};
-	private _ok = false;
-	private _name = "-";
-	if (_owned isNotEqualTo []) then {
-		private _s = ([_owned, [], {_player distance2D ([_x] call SWLC_fnc_adPos)}, "ASCEND"] call BIS_fnc_sortBy) # 0;
-		_name = [_s] call SWLC_fnc_adName;
-		private _free = {([_x] call SWLC_fnc_state) == "Reserve"} count (_cmd get "groups");
-		private _threats = _cmd get "threats";
-		if (_free > 0 || {_name in _threats}) then {
-			private _rec = _threats getOrDefault [_name, createHashMap];
-			if (count _rec == 0) then {
-				private _bearing = [[_s] call SWLC_fnc_adPos, [[_side] call SWLC_fnc_adBase] call SWLC_fnc_adPos] call SWLC_fnc_bearing;
-				_rec = createHashMapFromArray [["sector", _s], ["first", time], ["last", time], ["groups", []], ["slot", 0], ["strength", CFG("defenceMenPerGroup")], ["bearing", _bearing + 180]];
-				_rec set ["spots", [_cmd, _s, _bearing + 180] call SWLC_fnc_defSpots];
-				_threats set [_name, _rec];
-			};
-			_rec set ["requestedUntil", time + CFG("requestDefendSeconds")];
-			[_cmd, _rec] call SWLC_fnc_defRespond;
-			_ok = true;
-		};
-	};
-	["C_REQ", [["side", _side], ["kind", "defend"], ["player", name _player], ["sector", _name], ["ok", _ok]]] call SWLC_fnc_log;
-	[_side, ["reqno", "reqok"] select _ok] call SWLC_fnc_radio;
 };
 
 // What players on a side see of the plan, as public data their client draws as local markers.

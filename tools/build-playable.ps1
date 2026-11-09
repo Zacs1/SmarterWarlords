@@ -52,6 +52,21 @@ class SWLC_Difficulty
 	texts[] = {"Easy", "Normal", "Hard"};
 	default = 1;
 };
+
+class SWLC_RoundTimeLimit
+{
+	title = "Round time limit";
+	values[] = {0, 30, 45, 60, 90, 120};
+	texts[] = {"Off", "30 minutes", "45 minutes", "60 minutes", "90 minutes", "120 minutes"};
+	default = 0;
+};
+class SWLC_RulesVariant
+{
+	title = "Rules variant";
+	values[] = {1, 0};
+	texts[] = {"On", "Off"};
+	default = 1;
+};
 '@
 
 $descPath = Join-Path $out 'description.ext'

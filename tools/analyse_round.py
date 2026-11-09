@@ -47,6 +47,16 @@ def check(name: str, gate: str | None = None) -> Callable[[CheckFn], CheckFn]:
     return register
 
 
+def _load_gate_modules() -> None:
+    """Gate checks kept in their own files, one per rules part."""
+    import importlib
+    for name in ("gates_d", "gates_e", "gates_f", "gates_g", "gates_h", "gates_activity"):
+        try:
+            importlib.import_module(name).register(check)
+        except ModuleNotFoundError:
+            pass
+
+
 @check("AI groups spawned on both sides")
 def check_spawned(data: Round) -> tuple[bool, str]:
     counts = {side: sum(1 for g in data.groups_on(side) if g.is_ai) for side in SIDES}
@@ -488,7 +498,7 @@ def check_reserve_posted(data: Round) -> tuple[bool, str]:
 @check("Player request code runs without errors and no players connected", gate="phase4")
 def check_player_paths(data: Round) -> tuple[bool, str]:
     done = g4(data, "player_paths_done")
-    kinds = sorted({e.get("kind") for e in data.of("C_REQ")})
+    kinds = sorted({e.get("kind") for e in data.of("C_MENU")})
     return bool(done) and not data.script_errors, f"paths done={bool(done)}, requests logged {kinds}, script errors {len(data.script_errors)}"
 
 
@@ -797,10 +807,98 @@ def run_checks(data: Round, gate: str | None) -> bool:
     return all_passed
 
 
+def gb(data: Round, event: str) -> list[dict[str, str]]:
+    return [e for e in data.of("GB") if e.get("event") == event]
+
+
+def cap_events(data: Round, event: str) -> list[dict[str, str]]:
+    return [e for e in data.of("C_CAP") if e.get("event") == event]
+
+
+@check("B Capture countdown found on Warlords' trigger", gate="partb")
+def check_b_setup(data: Round) -> tuple[bool, str]:
+    setup = gb(data, "setup")
+    if not setup:
+        return False, "scenario never reached setup"
+    return setup[0].get("have_trigger", "").lower() == "true" and bool(cap_events(data, "start")), f"{setup[0]}, {len(cap_events(data, 'start'))} countdowns"
+
+
+@check("B Progress holds for the hold period when men leave", gate="partb")
+def check_b_hold(data: Round) -> tuple[bool, str]:
+    off, held = gb(data, "pushed_off"), gb(data, "held")
+    if not off or not held:
+        return False, "scenario did not reach it"
+    a, b = float(off[0]["left"]), float(held[0]["left"])
+    return abs(b - a) <= 2.0 and held[0].get("counting", "").lower() == "false", f"left {a} when pushed off, {b} after 15 s"
+
+
+@check("B Progress decays slowly after the hold", gate="partb")
+def check_b_decay(data: Round) -> tuple[bool, str]:
+    held, dec = gb(data, "held"), gb(data, "decayed")
+    if not held or not dec:
+        return False, "scenario did not reach it"
+    a, b = float(held[0]["left"]), float(dec[0]["left"])
+    return 2.0 <= b - a <= 6.0, f"{a} at 15 s, {b} at 45 s, expected about +3.75"
+
+
+@check("B Returning resumes from what is left, not from the start", gate="partb")
+def check_b_resume(data: Round) -> tuple[bool, str]:
+    done, off = gb(data, "capture_after_back"), gb(data, "pushed_off")
+    if not done or not off:
+        return False, "scenario did not reach it"
+    seconds, expected, nominal = float(done[0]["seconds"]), float(done[0]["expected"]), float(off[0]["nominal"])
+    ok = done[0].get("owner") == "WEST" and seconds <= expected + 6 and seconds < nominal * 0.9
+    return ok, f"captured {seconds} s after returning, {expected} s were left, a full countdown is {nominal} s"
+
+
+@check("B No respawn inside a sector being seized", gate="partb")
+def check_b_respawn(data: Round) -> tuple[bool, str]:
+    after = gb(data, "respawn_after")
+    if not after:
+        return False, "scenario did not reach it"
+    e = after[0]
+    if e.get("respawned", "").lower() != "true":
+        return False, f"the warlord did not respawn in time: {e}"
+    return e.get("in_square", "").lower() == "false", f"{e}, {len(data.of('C_RESPAWN'))} moved"
+
+
+@check("B Deadlock gets a decision within the timer plus one tick", gate="partb")
+def check_b_deadlock(data: Round) -> tuple[bool, str]:
+    start = gb(data, "deadlock_start")
+    if not start:
+        return False, "scenario did not reach it"
+    due, begun = int(start[0]["due"]), int(start[0]["t"])
+    late = [e for e in data.of("C_COMMIT") if int(float(e["t"])) >= begun and e.get("side") == "WEST"]
+    if not late:
+        return False, "no decision was logged"
+    t = int(float(late[0]["t"]))
+    return t <= due + 10 + 5, f"due at {due}, decided at {t}: {late[0].get('decision')}"
+
+
+@check("B Abandoned target is banned and not picked again", gate="partb")
+def check_b_ban(data: Round) -> tuple[bool, str]:
+    after = gb(data, "deadlock_after")
+    if not after:
+        return False, "scenario did not reach it"
+    e = after[0]
+    return e.get("banned", "").lower() == "true" and e.get("banned_is_old", "").lower() == "false" and e.get("new_target") != "-", str(e)
+
+
+@check("B Losing side pulls back and rebuilds, then picks a target", gate="partb")
+def check_b_rebuild(data: Round) -> tuple[bool, str]:
+    mid, over = gb(data, "rebuild_mid"), gb(data, "rebuild_over")
+    rebuilds = [e for e in data.of("C_COMMIT") if e.get("decision") == "rebuild"]
+    if not mid or not over:
+        return False, f"scenario did not reach it, {len(rebuilds)} rebuild decisions"
+    ok = bool(rebuilds) and mid[0].get("rebuilding", "").lower() == "true" and mid[0].get("target") == "-" and over[0].get("target") != "-"
+    return ok, f"{mid[0]}, then {over[0]}"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("log", type=Path, help="Path to the server RPT")
     parser.add_argument("--gate", help="Also run the checks for this gate or scenario, e.g. gate0, phase1")
+    _load_gate_modules()
     args = parser.parse_args()
 
     data = parse_log(args.log)

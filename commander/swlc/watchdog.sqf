@@ -21,14 +21,14 @@ SWLC_fnc_watchdogGroup = {
 	} else {
 		if ((_g getVariable ["SWLC_wasCombat", false]) && {(time - (_g getVariable ["SWLC_lastCombat", 0])) >= CFG("postContactQuietSeconds")}) then {
 			_g setVariable ["SWLC_wasCombat", false];
-			if (_state in ["Travelling", "Advancing", "Regrouping", "Assaulting", "Recon", "Defending"]) then {
+			if (_state in ["Travelling", "Advancing", "Regrouping", "Assaulting", "Recon", "Defending", "Raiding", "Picket"]) then {
 				[_g, _g getVariable ["SWLC_wpProgress", 0]] call SWLC_fnc_adApplyOrder;
 				["C_WD", [["side", side _g], ["group", groupId _g], ["action", "post_contact_reset"], ["state", _state]]] call SWLC_fnc_log;
 			};
 		};
 	};
 
-	if !(_state in ["Travelling", "Advancing", "Regrouping", "Assaulting", "Recon"]) exitWith {};
+	if !(_state in ["Travelling", "Advancing", "Regrouping", "Assaulting", "Recon", "Raiding"]) exitWith {};
 	if ((_g getVariable ["SWLC_leg", ""]) in ["DRIVE", "FOLLOW", "LATE"]) exitWith {};
 
 	private _goal = _g getVariable ["SWLC_goal", []];
@@ -38,6 +38,13 @@ SWLC_fnc_watchdogGroup = {
 	if (_state == "Assaulting") then {
 		private _op = _cmd get "op";
 		if (!isNil "_op" && {[_op get "target", getPosATL _leader] call SWLC_fnc_adInSquare}) then {
+			_g setVariable ["SWLC_progress", []];
+			_goal = [];
+		};
+	};
+	if (_state == "Raiding") then {
+		private _raid = [_cmd] call SWLC_fnc_raidOf;
+		if (count _raid > 0 && {[_raid get "sector", getPosATL _leader] call SWLC_fnc_adInSquare}) then {
 			_g setVariable ["SWLC_progress", []];
 			_goal = [];
 		};

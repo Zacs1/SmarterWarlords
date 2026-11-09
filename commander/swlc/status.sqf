@@ -80,7 +80,7 @@ SWLC_fnc_statusRow = {
 					_reason = "regrouping after falling back";
 				} else {
 					private _ready = {([_x] call SWLC_fnc_state) == "Waiting" && {time >= (_x getVariable ["SWLC_restUntil", -1])}} count ([_op] call SWLC_fnc_waveLive);
-					private _need = (CFG("goMinGroups") - _ready) max 0;
+					private _need = (([_cmd, _op] call SWLC_fnc_stratGoCount) - _ready) max 0;
 					private _first = _op get "firstAtRally";
 					private _left = if (_first < 0) then {0} else {(_first + ([_cmd, _op] call SWLC_fnc_rallyLoneWait)) - time};
 					_reason = if (_need > 0) then {format ["needs %1 more group to go, or alone in %2", _need, [_left] call SWLC_fnc_statusClock]} else {"going in now"};
@@ -117,6 +117,32 @@ SWLC_fnc_statusRow = {
 			private _dig = _g getVariable ["SWLC_digUntil", -1];
 			_reason = if (_dig >= time) then {"dug in, watching for a counterattack"} else {"responding to enemy near this sector"};
 		};
+		case "Borrowed": {
+			_job = "With player";
+			private _by = _g getVariable ["SWLC_borrowedBy", objNull];
+			_place = if (isNull _by) then {"-"} else {name _by};
+			_reason = "on loan to a player until released";
+		};
+		case "Pickup": {
+			_job = "Pickup";
+			_place = [_goal] call SWLC_fnc_statusPlace;
+			_reason = "bringing a vehicle to a player";
+		};
+		case "Picket": {
+			_job = "Picket";
+			_place = [_goal] call SWLC_fnc_statusPlace;
+			_reason = "watching the front line, will report and delay";
+		};
+		case "Raiding": {
+			_job = "Raiding";
+			_place = [_goal] call SWLC_fnc_statusPlace;
+			_reason = "raid order, seizing it quietly";
+		};
+		case "Probing": {
+			_job = "Scouting";
+			_place = [_goal] call SWLC_fnc_statusPlace;
+			_reason = "probing an enemy sector";
+		};
 		case "Recon": {
 			_job = "Scouting";
 			_place = _tName;
@@ -144,5 +170,5 @@ SWLC_fnc_statusPublish = {
 	_cmd set ["statusAt", time];
 	private _target = _cmd get "target";
 	private _rows = (_cmd get "groups") apply {[_cmd, _x] call SWLC_fnc_statusRow};
-	missionNamespace setVariable [format ["SWLC_status_%1", _side], [time, if (isNull _target) then {"none"} else {[_target] call SWLC_fnc_adName}, _rows], true];
+	missionNamespace setVariable [format ["SWLC_status_%1", _side], [time, if (isNull _target) then {"none"} else {[_target] call SWLC_fnc_adName}, _rows, [_target, _side] call SWLC_fnc_capStatusText], true];
 };

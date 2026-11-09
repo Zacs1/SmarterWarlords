@@ -13,3 +13,27 @@ Mapping decision: this prompt says "staging", "holding points" and "wave". It wa
 - Prompt saved. Helper agents started to read Warlords' seize, respawn, vote-reset and income code, and LAMBS' task and danger code. Notes go in `docs/runs/2026-11-08-rules-variant/notes/`.
 - Muster + rally + single direction + commander panel written: staging.sqf and wave.sqf rewritten, status.sqf new, patches across commander, defence, vehicles, logistics, smart, watchdog, settings, radio, debug, client. Analyser and gate4/gate6 updated to the new model. memoryAvoidDegrees cut from 40 to 25 because there's now only one direction and the user asked not to get "too extra".
 - Warlords and LAMBS research notes are in notes/. Worth remembering for later parts: clearing a target with attackers still inside exposes them to the server kill loop within 20 s (part B); under LAMBS skip the set* commands while a group reacts (part H); LAMBS' information sharing inflates knowsAbout (part H, needs a deliberate choice).
+
+- Part B written and patched: rules.sqf (capture pause and decay, respawn fix, commitment timer, rebuild), gateb.sqf scenario, analyser checks --gate partb, lobby param Rules variant, panel capture text. Spec started in docs/design/rules-variant.md.
+
+## Parts C, D, E, H wiring (23:55)
+
+- Part D (raids.sqf) and Part E (pickets.sqf plus defence and wave hooks) written and wired. Not yet tested live.
+- Part C (economy) and Part H (squads) drafted by helpers and now wired per their integration notes in notes/. Not yet tested live. Skipped the suggested filter on vehCheapestTransport: only armour is gated and the cheapest transport is never armour.
+- gateb first attempt stalled because Warlords' garrison outweighed the placed men, who hold fire. Scenario now clears the garrison. Rerun as gateb2.
+- Helpers working on gated, gatee scenarios and the Commander menu (Part F).
+
+## Part B gate PASS, F and G wired (00:10)
+
+- gateb2 (`tests/server/runs/2026-11-08_23-48-07_gateb2/`): all 8 Part B checks PASS, 0 script errors.
+- Part F menu drafted by a helper and wired. Old scroll actions, player* functions and C_REQ removed. Part G in strategy.sqf, wired.
+
+## New requirement: commander activity gate (user request)
+
+Every soak must measure each AI commander's activity and pass or fail on it. See prompt.md addition. Menu round gatef showed 56 script errors, mostly in the scenario; still to triage.
+
+- Activity gate built: `tools/gates_activity.py`, gate name `activity`, plus a per-commander table (`python tools/gates_activity.py <rpt>`). Vanilla baseline scores 10 of 16 commanders passing, so it can tell the difference. Run on every soak.
+- Part B review fixed: human side can't be locked out of voting by a ban, expired bans are withdrawn, a rebuilding AI side answers a running vote instead of getting the first sector, a pending switch is tied to its target, banned sectors can't return via AI votes on a mixed side, raid timeout restored with the pause rule off, withdrawal checks every man, the reset flag is cleared for late joiners. Needs a gateb rerun.
+- gatef's 56 errors were the scenario starting before the WEST commander existed. Fixed; rerunning as gatef2.
+
+- Reviews fixed (lint clean, not yet retested live): Part G (cut counting, denial value, native services, momentum uses worth, base lone wait longer, defence pull compares both sides, gates G tightened), Part E (need-limited muster response, cap rounds down, pickets only face the enemy, pickets rotate and answer attacks on their own sector, attack comes first, shuffle really moves the leader, hold lasts until responders are back and can't chain, fast travel must help), Part D (raid sector can't be voted for or merges cleanly, raiders and broken probes walk home, travel checks on probes, sector-size aware expiry and vantage).

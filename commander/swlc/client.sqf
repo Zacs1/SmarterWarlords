@@ -2,41 +2,8 @@
 // Plain SQF with no server functions, because a client never compiles the commander.
 if (!hasInterface) exitWith {};
 
-SWLC_clSend = {
-	params ["_kind", ["_data", []]];
-	[_kind, player, _data] remoteExecCall ["SWLC_fnc_playerMsg", 2];
-};
-
-// Reports what's under the crosshair, or else the enemies this player's unit knows about close by.
-SWLC_clReport = {
-	private _side = side group player;
-	private _items = [];
-	private _isEnemy = {
-		params ["_o"];
-		!isNull _o && {alive _o} && {(side group _o) in [west, east, resistance]} && {(_side getFriend (side group _o)) < 0.6}
-	};
-	private _c = cursorTarget;
-	if ([_c] call _isEnemy) then {
-		private _p = getPosATL _c;
-		_items pushBack [typeOf _c, [_p # 0, _p # 1]];
-	} else {
-		{
-			_x params ["_pos", "_type", "_tSide", "_cost", "_obj"];
-			if ([_obj] call _isEnemy && {(player knowsAbout _obj) >= 1}) then {
-				_items pushBack [typeOf _obj, [_pos # 0, _pos # 1]];
-			};
-		} forEach (player nearTargets 800);
-	};
-	if (_items isEqualTo []) exitWith {hint "No enemy to report."};
-	["report", _items] call SWLC_clSend;
-};
-
 SWLC_clAddActions = {
-	private _cond = "alive _target && {_this == _target}";
-	player addAction ["<t color='#66ccff'>AI commanders (Insert)</t>", {call SWLC_clPanelToggle}, nil, 0.21, false, false, "", _cond];
-	player addAction ["<t color='#ffcc66'>Report contact to commander</t>", {[] call SWLC_clReport}, nil, 0.2, false, true, "", _cond];
-	player addAction ["<t color='#ffcc66'>Attack with me</t>", {["attack"] call SWLC_clSend}, nil, 0.19, false, true, "", _cond];
-	player addAction ["<t color='#ffcc66'>Defend this sector</t>", {["defend"] call SWLC_clSend}, nil, 0.18, false, true, "", _cond];
+	player addAction ["<t color='#ffcc66'>Commander...</t>", {call SWLC_menuOpen}, nil, 0.2, false, true, "", "alive _target && {_this == _target} && {missionNamespace getVariable ['SWLC_menuOn', true]}"];
 };
 
 SWLC_clMarkers = [];
@@ -67,6 +34,20 @@ SWLC_clDrawPlan = {
 		_x params ["_pos", "_name"];
 		[format ["SWLC_pm_m%1", _forEachIndex], _pos, "mil_flag", "ColorBlue", format ["Muster: %1", _name]] call SWLC_clMarker;
 	} forEach _musters;
+};
+
+// A raid is marked on its own side's map only, so the marker is drawn from that side's data.
+SWLC_clDrawRaid = {
+	params ["_raid"];
+	if (_raid isEqualTo []) exitWith {
+		if ((markerType "SWLC_pm_raid") != "") then {deleteMarkerLocal "SWLC_pm_raid"};
+	};
+	_raid params ["_name", "_pos", "_expires"];
+	if ((markerType "SWLC_pm_raid") == "") then {createMarkerLocal ["SWLC_pm_raid", _pos]};
+	"SWLC_pm_raid" setMarkerPosLocal _pos;
+	"SWLC_pm_raid" setMarkerTypeLocal "mil_warning";
+	"SWLC_pm_raid" setMarkerColorLocal "ColorOrange";
+	"SWLC_pm_raid" setMarkerTextLocal format ["Raid: %1 (%2)", _name, [_expires - time] call SWLC_clClock];
 };
 
 SWLC_clClock = {
@@ -111,14 +92,14 @@ SWLC_clPanelSide = {
 	params ["_side"];
 	private _data = missionNamespace getVariable [format ["SWLC_status_%1", _side], []];
 	if (_data isEqualTo []) exitWith {format ["<t color='#aaaaaa'>AI COMMANDERS - %1: no data yet</t><br/>", _side]};
-	_data params ["_stamp", "_target", "_rows"];
+	_data params ["_stamp", "_target", "_rows", ["_capture", ""]];
 	private _seen = SWLC_clPanelSeen getOrDefault [str _side, [-1, 0]];
 	if ((_seen # 0) != _stamp) then {
 		_seen = [_stamp, time];
 		SWLC_clPanelSeen set [str _side, _seen];
 	};
 	private _age = time - (_seen # 1);
-	private _text = format ["<t color='#ffffff'>AI COMMANDERS - %1</t>&#160;&#160;&#160;<t color='#ffcc66'>target: %2</t><br/>", _side, [_target] call SWLC_clEsc];
+	private _text = format ["<t color='#ffffff'>AI COMMANDERS - %1</t>&#160;&#160;&#160;<t color='#ffcc66'>target: %2</t>&#160;&#160;&#160;<t color='#99ee99'>%3</t><br/>", _side, [_target] call SWLC_clEsc, _capture];
 	{
 		_x params ["_name", "_job", "_place", "_reason", "_since"];
 		_text = _text + format ["%1<t color='%2'>%3</t>%4<t color='#bbbbbb'>%5</t><br/>&#160;&#160;<t color='#aaaaaa'>%6</t><br/>",
@@ -176,6 +157,25 @@ SWLC_clKeyDown = {
 	while {true} do {
 		sleep 1;
 		if (SWLC_clPanelOpen && {!isNull player}) then {call SWLC_clPanelDraw};
+		if (!isNull player && {(missionNamespace getVariable ["BIS_WL_currentSelection", ""]) == "voting"}) then {
+			private _banned = missionNamespace getVariable [format ["SWLC_banned_%1", side group player], []];
+			private _nameOf = {
+				private _name = _this getVariable ["Name", ""];
+				if (_name == "") then {_name = format ["grid %1", mapGridPosition _this]};
+				_name
+			};
+			private _clickable = (missionNamespace getVariable ["BIS_WL_sectors", []]) select {
+				!isNull (_x getVariable ["BIS_WL_pointer", objNull]) && {(group (_x getVariable "BIS_WL_pointer")) getVariable ["BIS_WL_available", false]}
+			};
+			// A ban never takes away the last sector there is to vote for.
+			if (({!((_x call _nameOf) in _banned)} count _clickable) > 0) then {
+				{
+					if ((_x call _nameOf) in _banned) then {
+						(group (_x getVariable "BIS_WL_pointer")) setVariable ["BIS_WL_available", false];
+					};
+				} forEach _clickable;
+			};
+		};
 	};
 };
 
@@ -201,6 +201,7 @@ SWLC_clKeyDown = {
 			_last = _plan;
 			[_plan] call SWLC_clDrawPlan;
 		};
+		[missionNamespace getVariable [format ["SWLC_raid_%1", side group player], []]] call SWLC_clDrawRaid;
 		sleep 5;
 	};
 };

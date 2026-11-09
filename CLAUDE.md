@@ -12,3 +12,4 @@ SmarterWarlords is a rule-based AI commander layered on top of Arma 3's Warlords
 - Commit locally at sensible points; never push.
 - Every run saves its prompt and a progress log under `docs/runs/<date>-<name>/` and ends with a brief hand-off doc there: how it went, next steps, and any red flags.
 - Anything needing the user's action or approval goes in the run's final message, not just in a file.
+- Rules variant spec and decision log: `docs/design/rules-variant.md`.
