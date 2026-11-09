@@ -87,7 +87,9 @@ SWLC_fnc_picketTick = {
 	private _attackers = {!(([_x] call SWLC_fnc_state) in ["Picket", "Reserve", "Defending", "Raiding", "Probing", "Borrowed", "Pickup"])} count _groups;
 
 	// The attack comes first: if it has shrunk, the least exposed pickets go back to it.
-	private _short = CFG("picketKeepAttackers") - _attackers;
+	// In hold there is no attack to go back to: everyone is in the reserve and the pickets stay out.
+	private _held = ([_cmd] call SWLC_fnc_stanceOf) == "hold";
+	private _short = [CFG("picketKeepAttackers") - _attackers, 0] select _held;
 	if (_short > 0 && {_pickets isNotEqualTo []}) then {
 		private _order = [_pickets, [], {_front find (_x getVariable ["SWLC_picketSector", objNull])}, "DESCEND"] call BIS_fnc_sortBy;
 		{
@@ -112,15 +114,15 @@ SWLC_fnc_picketTick = {
 	} forEach +_pickets;
 
 	private _roomFromCap = (floor ((count _groups) * CFG("picketMaxFraction"))) - (count _pickets);
-	private _roomFromAttack = _attackers - CFG("picketKeepAttackers");
+	private _roomFromAttack = [_attackers - CFG("picketKeepAttackers"), 1e6] select _held;
 	private _room = _roomFromCap min _roomFromAttack;
-	if ([_cmd] call SWLC_fnc_holdPriority) then {_room = 0};
+	if ([_cmd] call SWLC_fnc_stanceHoldPriority) then {_room = 0};
 
 	{
 		if (_room <= 0) exitWith {};
 		private _s = _x;
 		if ((_pickets findIf {(_x getVariable ["SWLC_picketSector", objNull]) isEqualTo _s}) < 0) then {
-			private _pool = _groups select {([_x] call SWLC_fnc_state) in ["Unassigned", "Mustering", "Travelling"] && {vehicle leader _x == leader _x} && {(behaviour leader _x) != "COMBAT"} && {time >= (_x getVariable ["SWLC_picketRestUntil", -1])}};
+			private _pool = _groups select {([_x] call SWLC_fnc_state) in (["Unassigned", "Mustering", "Travelling"] + ([[], ["Reserve"]] select _held)) && {vehicle leader _x == leader _x} && {(behaviour leader _x) != "COMBAT"} && {time >= (_x getVariable ["SWLC_picketRestUntil", -1])}};
 			if (_pool isNotEqualTo []) then {
 				private _c = [_s] call SWLC_fnc_adPos;
 				private _picked = ([_pool, [], {([_x] call SWLC_fnc_groupMen) * 150 + (leader _x distance2D _c)}, "ASCEND"] call BIS_fnc_sortBy) # 0;

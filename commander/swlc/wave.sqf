@@ -467,6 +467,7 @@ SWLC_fnc_pushOver = {
 	["C_WAVE", [["side", _side], ["wave", _op get "id"], ["event", "push_over"], ["result", _result], ["men_left", [_attackers] call SWLC_fnc_groupsMen], ["men_launched", _op get "launchStrength"],
 		["duration", round (time - (_op getOrDefault ["assaultStart", time]))]]] call SWLC_fnc_log;
 	_cmd set ["lastResult", _result];
+	[_cmd, _result] call SWLC_fnc_stanceOutcome;
 	if (_result in ["wiped", "attrition", "no_progress"]) then {_op set ["pushFails", (_op getOrDefault ["pushFails", 0]) + 1]};
 	if (_result in ["attrition", "no_progress"]) then {[_side, "failed"] call SWLC_fnc_radio};
 	_op set ["phase", "RALLY"];
@@ -494,6 +495,7 @@ SWLC_fnc_waveResolve = {
 	["C_WAVE", [["side", _side], ["wave", _op get "id"], ["event", "resolved"], ["result", _result], ["men_left", [_near] call SWLC_fnc_groupsMen], ["men_launched", _op get "launchStrength"],
 		["duration", round (time - ((_op get "launched") max (_op get "created")))]]] call SWLC_fnc_log;
 	_cmd set ["lastResult", _result];
+	[_cmd, _result] call SWLC_fnc_stanceOutcome;
 	if (_result == "seized") then {
 		_cmd set ["lastCaptureAt", time];
 		[_side, "seized", [[_op get "target"] call SWLC_fnc_adName]] call SWLC_fnc_radio;

@@ -423,16 +423,24 @@ SWLC_fnc_commitTick = {
 
 // ---- Rebuilding ----
 
-SWLC_fnc_rebuilding = {
+// The commitment rule's rebuild on its own: it runs its full length, and nobody votes during it.
+SWLC_fnc_commitRebuilding = {
 	params ["_cmd"];
 	time < (_cmd getOrDefault ["rebuildUntil", -1])
+};
+
+// Either way of being in a rebuild. The stance holds it for as long as the balance is bad; see stance.sqf.
+SWLC_fnc_rebuilding = {
+	params ["_cmd"];
+	([_cmd] call SWLC_fnc_commitRebuilding) || {[_cmd] call SWLC_fnc_stanceRebuilding}
 };
 
 // Top the reserve up while the side rebuilds, using the normal infantry shop and its own drop point.
 SWLC_fnc_rebuildTick = {
 	params ["_cmd"];
-	if !([_cmd] call SWLC_fnc_rebuilding) exitWith {};
-	if (isNil {_cmd get "catalog"}) exitWith {};
+	if !(([_cmd] call SWLC_fnc_rebuilding) || {([_cmd] call SWLC_fnc_stanceOf) == "hold"}) exitWith {};
+	// A wave still finishing in hold has the crate and the musters. The fake op below would take them over.
+	if (isNil {_cmd get "catalog"} || {!isNil {_cmd get "op"}}) exitWith {};
 	private _post = [_cmd] call SWLC_fnc_defCentralSector;
 	if (isNull _post) exitWith {};
 	private _op = createHashMapFromArray [["id", -2], ["tpos", [_post] call SWLC_fnc_adPos]];
@@ -441,4 +449,5 @@ SWLC_fnc_rebuildTick = {
 	_cmd set ["dropHelper", _rec get "helper"];
 	private _staged = (_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Reserve" && {(leader _x distance2D ([_post] call SWLC_fnc_adPos)) <= CFG("defenceRadius")}};
 	[_cmd, _op, _staged] call SWLC_fnc_shopInfantry;
+	[_cmd, _op, _staged] call SWLC_fnc_stanceKit;
 };

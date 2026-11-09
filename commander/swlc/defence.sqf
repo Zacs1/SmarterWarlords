@@ -16,6 +16,10 @@ SWLC_fnc_defReserveSize = {
 	{
 		if (_n <= (_x # 0)) exitWith {_size = _x # 1};
 	} forEach CFG("reserveBySectors");
+	// Hold: nobody is waiting for a wave, so the reserve takes them. Pickets and raids draw on it. Under 1000, which means a rebuild.
+	if (count _rebuildCmd > 0 && {([_rebuildCmd] call SWLC_fnc_stanceOf) == "hold"}) then {
+		_size = _size max ((ceil ((count (_rebuildCmd get "groups")) * CFG("stanceHoldReserveFraction"))) min 999);
+	};
 	_size
 };
 
@@ -299,7 +303,7 @@ SWLC_fnc_defReserveTick = {
 
 	// Everyone is in the reserve during a rebuild, so that time doesn't count as anyone's turn.
 	private _rebuilding = _size >= 1000;
-	if (!_rebuilding && {[_cmd] call SWLC_fnc_holdPriority}) then {_size = 0};
+	if (!_rebuilding && {[_cmd] call SWLC_fnc_stanceHoldPriority}) then {_size = 0};
 	if (CFG("reserveRotate")) then {
 		private _since = time - (_cmd getOrDefault ["reserveTickAt", time]);
 		_cmd set ["reserveTickAt", time];
@@ -320,7 +324,7 @@ SWLC_fnc_defReserveTick = {
 	};
 
 	// A wave is out and this group has done its turn: it goes to the fight, and a group coming back takes over.
-	if (CFG("reserveRotate") && {!_rebuilding} && {!isNil {_cmd get "op"}}) then {
+	if (CFG("reserveRotate") && {!_rebuilding} && {!isNil {_cmd get "op"}} && {([_cmd] call SWLC_fnc_stanceOf) != "hold"}) then {
 		{
 			private _g = _x;
 			if ((time - (_g getVariable ["SWLC_stateSince", time])) >= CFG("reserveStintSeconds")) then {
