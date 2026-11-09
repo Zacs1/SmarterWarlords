@@ -88,3 +88,7 @@ Every soak must measure each AI commander's activity and pass or fail on it. See
 - gated9: refusals, expiry, garrison turn-back, AI raid purchase and clean finish PASS. Second probe judged the sector held because EAST's picket walked back in; raiders pinned outside for 380 s then lost the expiry race by 14 s (a test timing issue). Warning check counted only sightings after the raid started, though EAST had seen the probe at t=219. Test and gate adjusted; rerun as gated10 after gatee10.
 
 - gatee10: Part E all PASS, 0 script errors (tests/server/runs/*_gatee10). Tagged rules-e-done.
+
+## Parallel rounds (user approved, 2026-11-09)
+- The user allowed up to 3 servers at once for scenario rounds; the final soak stays solo. `tools/run-round.ps1` now takes a free slot (ports 2402/2412/2422, own mission folder `SWL_Test[_N].Tanoa`), held by an exclusive lock file; `-Solo` needs an empty machine and holds every slot.
+- gateh4l (LAMBS) and gatec2 started alongside gated10.

@@ -2,15 +2,16 @@
 # That folder is the only part of the server install this project may write to.
 
 param(
-    [string]$ServerDir = 'C:\Program Files (x86)\Steam\steamapps\common\Arma 3 Server'
+    [string]$ServerDir = 'C:\Program Files (x86)\Steam\steamapps\common\Arma 3 Server',
+    [string]$MissionName = 'SWL_Test.Tanoa'
 )
 
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
-$src = Join-Path $root 'tests\missions\SWL_Test.Tanoa'
+$src = Join-Path $root "tests\missions\$MissionName"
 $mpm = Join-Path $ServerDir 'mpmissions'
-$dest = Join-Path $mpm 'SWL_Test.Tanoa'
+$dest = Join-Path $mpm $MissionName
 
 if (-not (Test-Path (Join-Path $src 'mission.sqm'))) { throw "Build the mission first: $src is missing." }
 if (-not (Test-Path $mpm)) { throw "MPMissions folder not found at $mpm." }
