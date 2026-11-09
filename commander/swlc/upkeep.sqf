@@ -299,29 +299,31 @@ SWLC_fnc_upkeepLooseRide = {
 // Men sitting in a vehicle the commander has no plan for: asked to get out, then put out.
 SWLC_fnc_upkeepLooseCrew = {
 	params ["_cmd", "_g"];
-	// A man on a gun in a fight is doing his job, whoever put him there.
-	if ((behaviour leader _g) == "COMBAT") exitWith {};
+	private _combat = (behaviour leader _g) == "COMBAT";
 	private _wait = CFG("leftoverSeconds");
 	private _reissue = false;
 	{
 		private _u = _x;
 		private _v = objectParent _u;
 		if (alive _u && {!isNull _v} && {[_g, _v] call SWLC_fnc_upkeepLooseRide}) then {
-			private _at = _u getVariable ["SWLC_loAt", -1];
-			if (_at < 0) then {
-				_u setVariable ["SWLC_loAt", time];
-			} else {
-				if ((time - _at) >= _wait) then {
-					private _tries = _u getVariable ["SWLC_loTries", 0];
-					private _kind = ["crew", "gunner"] select ((gunner _v) isEqualTo _u);
-					_g leaveVehicle _v;
-					unassignVehicle _u;
-					[_u] orderGetIn false;
-					if (_tries == 0) then {doGetOut _u} else {moveOut _u};
+			// A crew with a working gun in a fight is doing its job, whoever put it there. Men sitting in a truck under fire are not.
+			if !(_combat && {canFire _v} && {alive gunner _v}) then {
+				private _at = _u getVariable ["SWLC_loAt", -1];
+				if (_at < 0) then {
 					_u setVariable ["SWLC_loAt", time];
-					_u setVariable ["SWLC_loTries", _tries + 1];
-					if (_u isEqualTo leader _g) then {_reissue = true};
-					["C_LEFTOVER", [["group", groupId _g], ["kind", _kind], ["action", ["getout", "moveout"] select (_tries > 0)]]] call SWLC_fnc_log;
+				} else {
+					if ((time - _at) >= _wait) then {
+						private _tries = _u getVariable ["SWLC_loTries", 0];
+						private _kind = ["crew", "gunner"] select ((gunner _v) isEqualTo _u);
+						_g leaveVehicle _v;
+						unassignVehicle _u;
+						[_u] orderGetIn false;
+						if (_tries == 0) then {doGetOut _u} else {moveOut _u};
+						_u setVariable ["SWLC_loAt", time];
+						_u setVariable ["SWLC_loTries", _tries + 1];
+						if (_u isEqualTo leader _g) then {_reissue = true};
+						["C_LEFTOVER", [["group", groupId _g], ["kind", _kind], ["action", ["getout", "moveout"] select (_tries > 0)]]] call SWLC_fnc_log;
+					};
 				};
 			};
 		} else {

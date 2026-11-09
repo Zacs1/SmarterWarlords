@@ -97,7 +97,7 @@ SWLC_fnc_watchdogGroup = {
 // As a rung of the ladder (_ladder true) it only reports whether it moved: the ladder decides what comes next, and it
 // tries the next few sectors too, since the nearest can be refused (too close, or the group's own).
 SWLC_fnc_watchdogEscalate = {
-	params ["_cmd", "_g", "_state", "_goal", ["_ladder", false]];
+	params ["_cmd", "_g", "_state", "_goal", ["_ladder", false], ["_anyDistance", false]];
 	private _side = _cmd get "side";
 	_g setVariable ["SWLC_stuck", 0];
 	private _toward = if (_goal isEqualTo []) then {getPosATL leader _g} else {_goal};
@@ -106,7 +106,8 @@ SWLC_fnc_watchdogEscalate = {
 	_owned = [_owned, [], {([_x] call SWLC_fnc_adPos) distance2D _toward}, "ASCEND"] call BIS_fnc_sortBy;
 	if (_ladder) then {
 		// Only sectors with a way on to the goal: landing somewhere cut off from it just moves the problem.
-		_owned = _owned select {([_x] call SWLC_fnc_adPos) distance2D (leader _g) >= CFG("ftMinDistance")};
+		// A group in the water takes any sector, however close: it can't swim there in reasonable time.
+		if (!_anyDistance) then {_owned = _owned select {([_x] call SWLC_fnc_adPos) distance2D (leader _g) >= CFG("ftMinDistance")}};
 		_owned = (_owned select {[[_x] call SWLC_fnc_adPos, _toward] call SWLC_fnc_ladderWalkable}) select [0, CFG("ladderFTCandidates")];
 	} else {
 		_owned = _owned select [0, 1];

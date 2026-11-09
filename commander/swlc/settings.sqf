@@ -115,6 +115,9 @@ SWLC_settings = createHashMapFromArray [
 	["resLostScanSeconds", 30],       // how often to look for groups the commander has lost track of
 	["resFixWindowSeconds", 120],
 	["resFixesToLadder", 3],          // this many fixes inside the window and the group goes to the ladder
+	["resWaterRescue", true],         // a group swimming in deep water is fast travelled out instead of swimming for minutes
+	["waterRescueSeconds", 20],       // in deep water this long before the rescue
+	["waterRescueDepth", 1.5],        // metres of water under the leader that count as deep
 
 	// The ladder: re-issue, another route, dismount, fast travel, respawn at base
 	["resLadder", true],

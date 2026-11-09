@@ -52,9 +52,13 @@ SWLC_fnc_resInstall = {
 	if (!isNil "SWLC_resInstalled") exitWith {};
 	SWLC_resInstalled = true;
 	addMissionEventHandler ["ScriptError", {
-		params [["_text", ""]];
+		params [["_text", ""], ["_file", ""]];
 		// Kept to one log field: no separators or line breaks.
 		SWLC_lastScriptError = ((_text splitString (toString [10, 13, 124])) joinString " ") select [0, 200];
+		// Ours only, so an error inside a Bohemia or mod function doesn't get one of our groups set aside.
+		if (((toLower _file) find "swlc") >= 0) then {
+			SWLC_scriptErrors = (missionNamespace getVariable ["SWLC_scriptErrors", 0]) + 1;
+		};
 	}];
 };
 
@@ -74,7 +78,8 @@ SWLC_fnc_resSabotage = {
 //   - the sentinel names the group and stage before the work and is cleared after it;
 //   - if the error ends only the isNil, control comes back here with the reached flag still false: the group is
 //     quarantined and the tick carries on;
-//   - if the error kills the whole script, the sentinel is left standing and the supervisor reads it.
+//   - if the error kills the whole script, the sentinel is left standing and the supervisor reads it;
+//   - if the error ends only an inner call and the rest carries on, the error count from the ScriptError event shows it.
 // _slot keeps the guard script's sentinel apart from the main loop's.
 SWLC_fnc_resGuarded = {
 	params ["_cmd", "_g", "_stage", "_code", ["_slot", "cur"]];
@@ -84,6 +89,7 @@ SWLC_fnc_resGuarded = {
 	};
 	if (_g in (_cmd getOrDefault ["quarantine", []])) exitWith {true};
 	private _resReached = false;
+	private _resErrors = missionNamespace getVariable ["SWLC_scriptErrors", 0];
 	isNil {
 		_cmd set [_slot + "Group", _g];
 		_cmd set [_slot + "Stage", _stage];
@@ -93,7 +99,8 @@ SWLC_fnc_resGuarded = {
 		_cmd set [_slot + "Group", grpNull];
 		_cmd set [_slot + "Stage", ""];
 	};
-	if (!_resReached) then {
+	if (!_resReached || {(missionNamespace getVariable ["SWLC_scriptErrors", 0]) > _resErrors}) then {
+		_resReached = false;
 		_cmd set [_slot + "Group", grpNull];
 		_cmd set [_slot + "Stage", ""];
 		[_cmd, _g, _stage] call SWLC_fnc_resGroupFault;
@@ -148,7 +155,8 @@ SWLC_fnc_resStageBlame = {
 SWLC_fnc_resGroupFault = {
 	params ["_cmd", "_g", "_stage"];
 	if (isNull _g) exitWith {};
-	["C_GROUPERR", [["side", _cmd get "side"], ["group", groupId _g], ["stage", _stage]]] call SWLC_fnc_log;
+	["C_GROUPERR", [["side", _cmd get "side"], ["group", groupId _g], ["stage", _stage],
+		["error", missionNamespace getVariable ["SWLC_lastScriptError", "unknown"]]]] call SWLC_fnc_log;
 	if ([_cmd, _g, _stage] call SWLC_fnc_resStageBlame) exitWith {};
 
 	private _q = _cmd getOrDefault ["quarantine", []];
@@ -451,7 +459,7 @@ SWLC_fnc_ladderApply = {
 			};
 		};
 		case "fasttravel": {
-			if ([_cmd, _g, _state, _goal, true] call SWLC_fnc_watchdogEscalate) then {call _log} else {_why = "ft_refused"};
+			if ([_cmd, _g, _state, _goal, true, _reason == "in_water"] call SWLC_fnc_watchdogEscalate) then {call _log} else {_why = "ft_refused"};
 		};
 		case "respawn": {
 			_why = [_cmd, _g, _reason] call SWLC_fnc_ladderRespawn;
@@ -660,11 +668,36 @@ SWLC_fnc_resLocality = {
 	};
 };
 
+// Men swim so slowly that a group in deep water can spend minutes getting out, and the move toward its goal reads as
+// progress the whole time. So it goes straight to the fast travel rung. Returns true if the group was taken out.
+SWLC_fnc_resWaterCheck = {
+	params ["_cmd", "_g"];
+	if !(["resWaterRescue"] call SWLC_fnc_resItem) exitWith {false};
+	if !(["resLadder"] call SWLC_fnc_resItem) exitWith {false};
+	private _l = leader _g;
+	if (!isNull objectParent _l || {(getTerrainHeightASL (getPosASL _l)) >= -CFG("waterRescueDepth")}) exitWith {
+		_g setVariable ["SWLC_wetAt", -1];
+		false
+	};
+	private _at = _g getVariable ["SWLC_wetAt", -1];
+	if (_at < 0) exitWith {
+		_g setVariable ["SWLC_wetAt", time];
+		false
+	};
+	if ((time - _at) < CFG("waterRescueSeconds")) exitWith {false};
+	_g setVariable ["SWLC_wetAt", time];
+	private _rung = [_cmd, _g, "in_water", "fasttravel"] call SWLC_fnc_ladderStep;
+	// It's out of the water, so the climb is over. Left on, the next rung would be the last one.
+	if (_rung == "fasttravel") then {[_g] call SWLC_fnc_ladderReset};
+	_rung != ""
+};
+
 SWLC_fnc_resCheckGroup = {
 	params ["_cmd", "_g"];
 	if !([_g] call SWLC_fnc_resMayTouch) exitWith {};
 	if (isNull leader _g) exitWith {};
 	[_cmd, _g] call SWLC_fnc_resLocality;
+	if ([_cmd, _g] call SWLC_fnc_resWaterCheck) exitWith {};
 	if !(["resSweep"] call SWLC_fnc_resItem) exitWith {};
 
 	private _state = [_g] call SWLC_fnc_state;

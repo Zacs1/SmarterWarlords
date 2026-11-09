@@ -108,7 +108,7 @@ No commander group can get lost or give up. `resilience.sqf`, `routes.sqf`, `upk
 - **Last rung** (`ladderRespawn`): the group's bought men are deleted and their price refunded, the slot warlord is killed through Warlords' own forced respawn, and the men come back through the shop as fresh reinforcements. It waits at least `ladderMinClimbSeconds` after the first rung. At most `ladderRespawnMax` per side per `ladderRespawnWindowSeconds`; past that the group gets a job it can reach.
 - **Idle cap** (`resIdleCap`): more than `idleCapShare` of a side's groups idle at once drops the plan and re-plans. Logged as `C_IDLECAP`.
 - **Route network** (`routeNetwork`): a per-map network of road and track points connecting every sector, in `commander/swlc/maps/<world>_routes.sqf`. A map without a file builds one at mission start over several frames, and `tools/extract_routes.py` turns that round's log into the file. Moves over `routeMinMetres` follow it in hops of about `routeHopMetres`.
-- **Water** (`noWaterMoves`): a destination that can't be reached on land goes by fast travel.
+- **Water** (`noWaterMoves`): a destination that can't be reached on land goes by fast travel. A group found swimming in deep water for `waterRescueSeconds` goes straight to the fast travel rung (`resWaterRescue`).
 - **Destinations** (`validateDestinations`): every order is snapped to the nearest open, reachable ground.
 - **Stragglers** (`upkeepStragglers`): further than `stragglerMetres` from the leader for `stragglerGraceSeconds` gets a recall, or joins another commander group if one is closer.
 - **Remnants and leaders** (`upkeepRemnants`, `upkeepLeader`): groups of one or two merge into a suitable nearby group while their warlord is dead. A dead leader is replaced and the orders are given again.
@@ -153,6 +153,8 @@ No commander group can get lost or give up. `resilience.sqf`, `routes.sqf`, `upk
 | The last rung brings men back through the shop instead of creating them | A respawned group then costs and arrives exactly like any other reinforcement, and a refund covers what was deleted. The refund leaves out dying warlords, whose price was paid before the kill. |
 | The last rung waits at least 75 seconds after the first | Fast-failing rungs could otherwise reach it in seconds, for a problem one more re-issue would have solved. |
 | The last rung is capped per side | A bad map area can't turn into a side deleting its own army. Past the cap, a group gets a job it can reach and isn't sent back for `ladderJobHoldSeconds`. |
+| Swimmers skip the lower rungs | The sabotage round showed men swimming about 70 m in 200 seconds. Their slow drift towards the goal counted as progress, so the ladder never started. |
+| Men in a broken or unarmed vehicle are pulled out even in a fight | The sabotage round kept a crew in a dead truck for 3 minutes because the leftover rule waited out combat. Only a crew with a working gun stays. |
 | Resilience is outside the rules variant switch | It keeps groups working and changes no rule of the game, so it also protects a round with the rules variant off. |
 | Hops are a chain of real waypoints, and the caller's order stays as it was | Everything that reads a group's order still sees the real goal. The expanded list is kept apart in `SWLC_orderLegs`. |
 | Water moves wait for the route network to be ready | Before then a land route can't be judged, and a wrong answer costs a group 50 CP or a swim. |
