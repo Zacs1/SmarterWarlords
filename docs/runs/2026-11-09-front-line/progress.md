@@ -34,3 +34,7 @@ Four worktree helpers from e7d218d: stance (item 1), alert (items 2 and 4), fort
 
 - smokefront (`2026-11-09_19-01-02_smokefront`, merged build): 0 script errors.
 - fronta1 (`2026-11-09_19-01-20_fronta1`): holdouts form, target stays on X (99%), reinforcements leave within 60 s, Part C switches to Y and back. FAILs were the scenario's fault: X was flipped at 34 s when groups were 1 man each, and the "harmless" EAST garrison shot them dead by 76 s. Scenario fixed (full groups, garrison disarmed), rerun as fronta2.
+
+## Deadline moved (user message, about 19:45)
+
+"instead of needing to be done by 8:20 it'll be more like 9:30-9:45 instead, so you've got some more time". New target 21:30-21:45; the extra time goes to testing.

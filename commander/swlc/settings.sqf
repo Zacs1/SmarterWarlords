@@ -42,7 +42,8 @@ SWLC_settings = createHashMapFromArray [
 	["stanceHoldAbove", 0.8],          // rebuild to hold at this or more
 	["stanceAttackAbove", 1.25],       // hold or rebuild back to attack at this or more
 	["stanceMinKnown", 12],            // less known enemy strength than this is too little to judge: attack
-	["stanceIntelFactor", 1.25],       // the board is a partial picture, so the known enemy counts for a bit more
+	["stanceIntelFactor", 1.1],        // the board is a partial picture, so the known enemy counts for a bit more; equal known numbers still attack
+	["stanceQuietSeconds", 420],       // in hold with nobody on this side fighting for this long, go back to attack so two waiting sides cannot stall the round
 	["stanceMemoryHalfLife", 240],     // seconds for the remembered peak of known enemy strength to halve
 	["stanceArmourWeight", 6],         // men one tank or APC counts as, after enough AT cancels it (planAtPerArmour launchers each)
 	["stanceLightWeight", 3],          // men one light vehicle or aircraft counts as
