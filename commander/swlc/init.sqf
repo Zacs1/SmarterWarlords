@@ -36,6 +36,19 @@ if (!isServer) exitWith {};
 	SWLC_ready = true;
 	["C_READY", [["world", worldName], ["sectors", count SWLC_sectors], ["warlords", count BIS_WL_allWarlords], ["ftparam", missionNamespace getVariable ["BIS_WL_FTEnabled", -1]], ["difficulty", SWLC_settings get "difficulty"]]] call SWLC_fnc_log;
 
+	// Where the fighting happens, for the analyser. Before the commander check so a commander-off round has it too.
+	if (SWLC_settings get "killLog") then {
+		addMissionEventHandler ["EntityKilled", {
+			params ["_unit", "_killer", "_instigator"];
+			if !(_unit isKindOf "CAManBase") exitWith {};
+			private _who = if (isNull _instigator) then {_killer} else {_instigator};
+			private _p = getPosATL _unit;
+			["C_KILL", [["side", [typeOf _unit] call SWLC_fnc_econCfgSide], ["by", if (isNull _who) then {"-"} else {side group _who}],
+				["x", round (_p # 0)], ["y", round (_p # 1)], ["byx", if (isNull _who) then {-1} else {round ((getPosATL _who) # 0)}],
+				["byy", if (isNull _who) then {-1} else {round ((getPosATL _who) # 1)}]]] call SWLC_fnc_log;
+		}];
+	};
+
 	if (SWLC_settings get "commanderEnabled") then {
 		[] call SWLC_fnc_intelInstallHandlers;
 		if (SWLC_settings get "rulesVariant") then {[] call SWLC_fnc_rulesInstall};

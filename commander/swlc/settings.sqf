@@ -5,6 +5,7 @@
 SWLC_settings = createHashMapFromArray [
 	// Master switch
 	["commanderEnabled", true],
+	["killLog", true],                // one C_KILL line per man killed, with position and sides, for the front-line analysis
 
 	// A group a human was in within this many seconds is never ordered
 	["playerGroupGrace", 120],
