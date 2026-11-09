@@ -881,6 +881,9 @@ SWLC_fnc_lambsHold = {
 	params ["_cmd", "_g", "_s"];
 	if (!SWLC_lambs || {!CFG("squadLambs")} || {!local _g} || {(_g getVariable ["SWLC_lambsTask", ""]) != ""}) exitWith {false};
 	private _c = [_s] call SWLC_fnc_adPos;
+	// An alert's main position garrisons the cover it was sent to, on the approach side, not the middle of the sector.
+	private _cover = _g getVariable ["SWLC_alertCover", []];
+	if (_cover isNotEqualTo [] && {(_cover # 0) isEqualTo _s}) then {_c = _cover # 1};
 	private _r = CFG("lambsHoldRadius");
 	private _spots = [_c, _r, true, false] call lambs_main_fnc_findBuildings;
 	private _men = [_g] call SWLC_fnc_groupMen;

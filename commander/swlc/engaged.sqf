@@ -276,6 +276,7 @@ SWLC_fnc_engagedJoinTick = {
 				&& {(behaviour leader _x) != "COMBAT"}
 				&& {(leader _x distance2D _c) <= _radius}
 				&& {(_x getVariable ["SWLC_lambsTask", ""]) == ""}
+				&& {isNull (_x getVariable ["SWLC_counterFor", objNull])}
 				&& {time >= (_x getVariable ["SWLC_engagedNext", -1])}
 				&& {!([_x] call SWLC_fnc_groupFighting)}
 				&& {[_x] call SWLC_fnc_resMayTouch}
@@ -372,6 +373,7 @@ SWLC_fnc_engagedFallback = {
 		_threats set [_name, _threat];
 		["C_DEF", [["side", _side], ["event", "detect"], ["sector", _name], ["inf", _c # 0], ["arm", _c # 1], ["light", _c # 2], ["seizing", false], ["bearing", round _bearing], ["source", "engaged_fallback"]]] call SWLC_fnc_log;
 	} else {
+		_threat set ["alertOnly", false];
 		_threat set ["strength", (_threat get "strength") max _strength];
 		_threat set ["requestedUntil", (_threat get "requestedUntil") max _until];
 		_threat set ["last", time];

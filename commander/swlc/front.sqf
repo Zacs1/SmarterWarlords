@@ -27,7 +27,9 @@ SWLC_fnc_frontFTOpen = {
 SWLC_fnc_frontHot = {
 	params ["_threats", "_s"];
 	if ([] call SWLC_fnc_frontOn) exitWith {[_s] call SWLC_fnc_frontFighting};
-	([_s] call SWLC_fnc_adName) in _threats
+	// A warning with nothing seen yet isn't hot: that's when defenders should still be landing there.
+	private _rec = _threats getOrDefault [[_s] call SWLC_fnc_adName, createHashMap];
+	count _rec > 0 && {!(_rec getOrDefault ["alertOnly", false])}
 };
 
 SWLC_fnc_frontSetState = {
