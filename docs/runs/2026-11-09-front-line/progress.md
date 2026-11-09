@@ -67,3 +67,6 @@ The C-E reviewer read the merged defence code (c1e733e). Fixed: a holdout goal o
 - Deadline moved by the user again: "Looking more like 10-10:15 that I'll need the PC". Plan: final soak 70 min from about 20:42, finished and no server running by 22:00.
 
 - smokeoff3 (`2026-11-09_20-21-38_smokeoff3`, build 92dffac, rules off, vanilla): 0 script errors, 2 captures, both sides moved. Marching groups in AWARE at 3.5 m/s; no marching group sat in COMBAT with no fight, so the calm path itself wasn't exercised here. Playable regenerated from 92dffac and PLAYABLE.md rewritten.
+
+- sabotage3 (`2026-11-09_20-19-15_sabotage3`, build 92dffac): all 11 cases PASS; the single script error is the injected one (the generic "no script errors" line FAILs on it, as always). Ladder: reissue 3, reroute 1, fasttravel 1, respawn 0.
+- Final soak `soakfront` started at about 20:41 on build 1f3be02 (code as 92dffac), 70 minutes, solo, CBA + LAMBS.
