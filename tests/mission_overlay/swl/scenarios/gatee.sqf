@@ -171,7 +171,8 @@ SWLC_settings set ["reserveBySectors", [[999, 1]]];
 
 // ---- Setup: WEST and EAST sectors touching, so WEST has a front line to picket ----
 private _deadline = time + 300;
-while {(([west] call SWLC_fnc_raidFront) isEqualTo []) && {time < _deadline}} do {
+// The picket front is what this test needs. The raid front leaves out the side's own target, which can be the only enemy neighbour.
+while {(([west] call SWLC_fnc_picketFront) isEqualTo []) && {time < _deadline}} do {
 	private _route = [] call SWLG_path;
 	private _lastOne = if (count _route == 1) then {_route # 0} else {objNull};
 	if (_route isNotEqualTo []) then {
@@ -187,7 +188,7 @@ while {(([west] call SWLC_fnc_raidFront) isEqualTo []) && {time < _deadline}} do
 	} forEach [west, east];
 	sleep 8;
 };
-if (([west] call SWLC_fnc_raidFront) isEqualTo []) exitWith {[["event=fail_no_front"]] call SWLG_emit};
+if (([west] call SWLC_fnc_picketFront) isEqualTo []) exitWith {[["event=fail_no_front"]] call SWLG_emit};
 [[format ["event=front|enemy_front=%1|picket_front=%2|owned=%3", [[west] call SWLC_fnc_raidFront] call SWLG_nameOf, [[west] call SWLC_fnc_picketFront] call SWLG_nameOf, [[west] call SWLC_fnc_adOwned] call SWLG_nameOf]]] call SWLG_emit;
 
 [_cmd] spawn SWLG_guard;
