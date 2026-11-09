@@ -327,7 +327,7 @@ SWLC_fnc_holdReinforce = {
 		private _g = _x;
 		if !(_g getVariable ["SWLC_holdout", false]) then {
 			if ((_g getVariable ["SWLC_holdLeft", -1]) != _id) then {
-				if (([_g] call SWLC_fnc_state) in ["Mustering", "Travelling", "Advancing", "Waiting", "Assaulting"]) then {
+				if (([_g] call SWLC_fnc_state) in ["Travelling", "Advancing", "Assaulting"]) then {
 					_g setVariable ["SWLC_holdLeft", _id];
 					[_cmd, "reinforce_left", [["group", groupId _g], ["state", [_g] call SWLC_fnc_state], ["after", round (time - (_rec get "formed"))],
 						["dist", round (leader _g distance2D ([_s] call SWLC_fnc_adPos))]]] call SWLC_fnc_holdLog;
@@ -380,6 +380,7 @@ SWLC_fnc_holdDefendGroup = {
 	private _yPos = [_y] call SWLC_fnc_adPos;
 	private _hop = [_from, _yPos] call SWLC_fnc_adNearest;
 	private _hp = [_hop] call SWLC_fnc_adPos;
+	if (((_hp distance2D _yPos) + CFG("defHopMinGain")) > (leader _g distance2D _yPos)) exitWith {};
 	private _land = [_hp, [_hp, _yPos] call SWLC_fnc_bearing, 40 + random 30] call SWLC_fnc_offset;
 	if (surfaceIsWater _land) then {_land = _hp};
 	if ([_g, _hop, _land] call SWLC_fnc_adFastTravel) then {
@@ -404,7 +405,7 @@ SWLC_fnc_holdDefendTick = {
 			private _p = getPosATL leader _g;
 			if ((_p distance2D _xPos) > _nearX || {!([_g] call SWLC_fnc_holdFighting)}) then {
 				private _atY = (_p distance2D _yPos) <= _near && {_state in ["Unassigned", "Mustering", "Travelling", "Advancing", "Waiting", "Regrouping", "Assaulting"]};
-				if (_atY || {_state in ["Unassigned", "Mustering", "Travelling"]}) then {[_cmd, _rec, _g, _y, _atY] call SWLC_fnc_holdDefendGroup};
+				if (_atY || {_state in ["Unassigned", "Mustering", "Travelling"] && {!([_g] call SWLC_fnc_holdFighting)}}) then {[_cmd, _rec, _g, _y, _atY] call SWLC_fnc_holdDefendGroup};
 			};
 		}] call SWLC_fnc_resGuarded;
 	} forEach ((_cmd get "groups") select {

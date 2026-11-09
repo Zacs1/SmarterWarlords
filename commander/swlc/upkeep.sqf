@@ -150,7 +150,7 @@ SWLC_fnc_upkeepStragglers = {
 	if !(CFG("upkeepStragglers")) exitWith {};
 	// A group with a vehicle is the vehicle code's to manage, and its men can be far apart while boarding.
 	if ((count ([_g] call SWLC_fnc_vehRecOf)) > 0 || {(_g getVariable ["SWLC_leg", ""]) in ["DRIVE", "FOLLOW", "LATE"]}) exitWith {};
-	if (([_g] call SWLC_fnc_upkeepBusy) || {[_g] call SWLC_fnc_lambsBusy}) exitWith {};
+	if (([_g] call SWLC_fnc_upkeepBusy) || {[_g] call SWLC_fnc_lambsBusy} || {[_g] call SWLC_fnc_groupFighting}) exitWith {};
 	private _l = leader _g;
 	if (!alive _l || {!isNull objectParent _l}) exitWith {};
 	{

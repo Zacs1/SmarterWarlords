@@ -102,8 +102,11 @@ SWLC_fnc_vehShop = {
 		private _men = [_g] call SWLC_fnc_groupMen;
 		private _parked = (_cmd get "vehicles") select {
 			(_x get "state") == "parked" && {alive (_x get "obj")} && {canMove (_x get "obj")} && {(_x get "seats") >= _men} && {((_x get "obj") distance2D _musterPos) <= _radius}
+			&& {(fuel (_x get "obj")) > 0} && {((vectorUp (_x get "obj")) # 2) >= 0.4} && {(speed (_x get "obj")) < 3}
+			&& {(time - (_x getOrDefault ["abandonedAt", -1e6])) >= CFG("vehReclaimSeconds")}
 		};
 		if (_parked isNotEqualTo []) then {
+			(_parked # 0) set ["lifts", 0];
 			[_cmd, _parked # 0, _g, _w] call SWLC_fnc_vehClaimParked;
 		} else {
 			private _need = if (([_side] call SWLC_fnc_cpFree) >= CFG("vehSeatForFullGroupCP")) then {_men max CFG("shopGroupSize")} else {_men};
@@ -179,7 +182,8 @@ SWLC_fnc_vehStuckRescue = {
 	// A tank that has lost its tracks in a fight is still a gun.
 	if ((_r get "role") == "combat" && {(behaviour leader _g) == "COMBAT"} && {canFire _v} && {!_flipped}) exitWith {false};
 	// It can't drive: nobody sits in it waiting for a timer, under fire or not.
-	if (!canMove _v || {(fuel _v) <= 0} || {_flipped && {!_safe}}) exitWith {
+	if (!canMove _v || {(fuel _v) <= 0} || {_flipped && {!_safe || {(_r getOrDefault ["lifts", 0]) >= CFG("vehUnstickMax")}}}) exitWith {
+		_r set ["abandonedAt", time];
 		_g setVariable ["SWLC_legAbandon", true];
 		["C_VEH", [["side", _cmd get "side"], ["id", _r get "id"], ["event", "wreck"], ["group", groupId _g], ["canmove", canMove _v], ["flipped", _flipped]]] call SWLC_fnc_log;
 		true
@@ -249,6 +253,10 @@ SWLC_fnc_vehStuckCheck = {
 	if (([_g] call SWLC_fnc_state) == "Engaged") exitWith {_r deleteAt "sample"};
 	private _v = _r get "obj";
 	private _p = getPosATL _v;
+	// A combat vehicle only crawls behind the infantry at the objective; on its way there it's a driver like any other.
+	private _driving = _leg == "DRIVE" || {_leg == "FOLLOW" && {([_g] call SWLC_fnc_state) == "Advancing"} && {!([_g] call SWLC_fnc_adOrderDone)}};
+	// It can't drive: no point waiting for the clock.
+	if (_driving && {!canMove _v || {(fuel _v) <= 0} || {((vectorUp _v) # 2) < 0.4}} && {[_cmd, _g, _r, _v] call SWLC_fnc_vehStuckRescue}) exitWith {};
 	private _s = _r getOrDefault ["sample", []];
 	if (_s isEqualTo []) exitWith {_r set ["sample", [time, _p]]};
 	_s params ["_t0", "_p0"];
@@ -257,11 +265,10 @@ SWLC_fnc_vehStuckCheck = {
 	_r set ["sample", [time, _p]];
 	if (_moved >= CFG("vehUnstickResetMetres")) then {_r set ["lifts", 0]};
 	private _rescued = false;
-	// A combat vehicle following the infantry is meant to crawl and stop, so only a driving leg is ever rescued.
-	if (_leg == "DRIVE" && {_moved < CFG("vehStuckMinMetres")}) then {_rescued = [_cmd, _g, _r, _v] call SWLC_fnc_vehStuckRescue};
+	if (_driving && {_moved < CFG("vehStuckMinMetres")}) then {_rescued = [_cmd, _g, _r, _v] call SWLC_fnc_vehStuckRescue};
 	if (_rescued) exitWith {};
 
-	if (_leg == "FOLLOW") exitWith {
+	if (_leg == "FOLLOW" && {!_driving}) exitWith {
 		if (_moved < 1 && {(time - (_r getOrDefault ["nudged", -1000])) >= CFG("combatNudgeSeconds")}) then {
 			_r set ["nudged", time];
 			(driver _v) doMove ((getPosATL _v) getPos [4, random 360]);
@@ -275,6 +282,7 @@ SWLC_fnc_vehStuckCheck = {
 	if (_n < CFG("vehStuckLimit")) exitWith {
 		[_g, _g getVariable ["SWLC_wpProgress", 0]] call SWLC_fnc_adApplyOrder;
 	};
+	_r set ["abandonedAt", time];
 	_g setVariable ["SWLC_legAbandon", true];
 };
 

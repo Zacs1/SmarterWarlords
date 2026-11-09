@@ -143,7 +143,8 @@ SWLC_fnc_engagedNote = {
 // Search and destroy at the contact where the group may go, otherwise stand and fight where it is.
 SWLC_fnc_engagedOrder = {
 	params ["_g", "_pos"];
-	private _open = !(surfaceIsWater _pos) && {!([side _g, _pos, 50] call SWLC_fnc_adRestricted)};
+	// More margin than the search radius, or the search walks them into Warlords' kill zone.
+	private _open = !(surfaceIsWater _pos) && {!([side _g, _pos, 75] call SWLC_fnc_adRestricted)};
 	private _wps = if (_open) then {[[_pos, "SAD", 60]]} else {[[getPosATL leader _g, "HOLD", 20]]};
 	_g setVariable ["SWLC_engagedAim", _pos];
 	[_g, _wps, "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
@@ -235,7 +236,7 @@ SWLC_fnc_engagedDetect = {
 			if (!([_g] call SWLC_fnc_resMayTouch) || {(_g getVariable ["SWLC_lambsTask", ""]) != ""}) exitWith {};
 			private _here = getPosATL leader _g;
 			// Inside the objective is the assault, which has its own rules.
-			if (!isNil "_op" && {[_op get "target", _here] call SWLC_fnc_adInSquare}) exitWith {};
+			if (!isNil "_op" && {[_op get "target", _here, CFG("engagedObjectiveMargin")] call SWLC_fnc_adInSquare}) exitWith {};
 			private _c = [_g, [_close, _range] select ([_g] call SWLC_fnc_groupFighting), _hostile] call SWLC_fnc_engagedContact;
 			if ((_c # 3) isEqualTo []) exitWith {};
 			private _fight = [_cmd, _c # 3] call SWLC_fnc_engagedFightAt;

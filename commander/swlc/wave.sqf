@@ -505,7 +505,7 @@ SWLC_fnc_waveResolve = {
 			[_x] call SWLC_fnc_adClearOrder;
 			[_x, "Unassigned", [], "wave_over"] call SWLC_fnc_setState;
 		}] call SWLC_fnc_resGuarded;
-	} forEach _live;
+	} forEach (_live select {([_x] call SWLC_fnc_state) != "Engaged"}); // a fight on the road finishes first, and ends itself
 	{
 		private _rec = _y;
 		_rec set ["groups", []];

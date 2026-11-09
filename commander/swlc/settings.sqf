@@ -164,6 +164,7 @@ SWLC_settings = createHashMapFromArray [
 	["fightingWindow", 90],           // seconds since a man last fired or was fired on before his group stops counting as fighting
 	["contactAttachSeconds", 5],      // how often new units get the fire-tracking handlers
 	["engagedStates", ["Travelling", "Advancing"]],  // the jobs that count as in transit
+	["engagedObjectiveMargin", 300],  // this close to the objective's square, the wave's own rally and go rules apply instead
 	["engagedRange", 300],            // a group that is fighting stops for enemy known this close
 	["engagedCloseRange", 120],       // any group in transit stops for enemy known this close, shot at or not
 	["engagedContactAge", 60],        // a sighting older than this doesn't count
@@ -335,6 +336,7 @@ SWLC_settings = createHashMapFromArray [
 	["vehUnstickCooldown", 45],
 	["vehUnstickMax", 3],             // lifts before the men get out and walk
 	["vehUnstickResetMetres", 100],   // driving this far in one check counts as recovered, and the lifts are forgotten
+	["vehReclaimSeconds", 180],       // a vehicle men gave up on can't be claimed again for this long
 	["vehDepartGap", 8],              // seconds between vehicles pulling out of the same sector
 	["vehSlowNearby", true],          // slow down near other vehicles and sectors, where the pile-ups happen
 	["vehSlowRadius", 40],            // another vehicle this close ahead
