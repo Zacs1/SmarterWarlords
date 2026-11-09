@@ -311,9 +311,9 @@ SWLG_track = {
 			private _pos = getPosWorld _leader;
 			private _spread = 0;
 			{_spread = _spread max (_x distance2D _leader)} forEach _men;
-			[[format ["event=track|case=%1|group=%2|side=%3|gone=0|men=%4|state=%5|x=%6|y=%7|wp=%8/%9|combat=%10|veh=%11|spread=%12",
+			[[format ["event=track|case=%1|group=%2|side=%3|gone=0|men=%4|state=%5|x=%6|y=%7|wp=%8/%9|combat=%10|veh=%11|spread=%12|wet=%13",
 				_case, _name, _side, count _men, [_g] call SWLC_fnc_state, round (_pos # 0), round (_pos # 1), currentWaypoint _g, count waypoints _g,
-				[0, 1] select ((behaviour _leader) == "COMBAT"), ["-", typeOf vehicle _leader] select (vehicle _leader != _leader), round _spread]]] call SWLG_emit;
+				[0, 1] select ((behaviour _leader) == "COMBAT"), ["-", typeOf vehicle _leader] select (vehicle _leader != _leader), round _spread, [0, 1] select (surfaceIsWater _pos)]]] call SWLG_emit;
 		};
 		sleep 10;
 	};

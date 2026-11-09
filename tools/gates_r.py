@@ -70,6 +70,7 @@ HOLD_LIMITS = {
 SOAK_HOLD_JOBS = tuple(HOLD_LIMITS)
 
 LADDER_RUNGS = ("reissue", "reroute", "dismount", "fasttravel", "respawn")
+RELOCATING_RUNGS = ("fasttravel", "respawn")   # the rungs that take a group out of where it was put
 
 CASES = (
     ("kill_leader", "a squad's leader is killed"),
@@ -118,6 +119,7 @@ class Point:
     spread: float
     gone: bool
     located: bool
+    wet: bool | None = None   # None in a log from before the scenario reported it
 
     @property
     def has_waypoint(self) -> bool:
@@ -137,7 +139,7 @@ def _points(data: Round, case: str, t0: float) -> list[Point]:
     for e in gs(data, "track"):
         if e.get("case") != case or _t(e) < t0:
             continue
-        points.append(Point(_t(e), _num(e, "x"), _num(e, "y"), e.get("state", "-"), int(_num(e, "men")), e.get("wp", "0/0"), _num(e, "spread"), e.get("gone") == "1", "x" in e))
+        points.append(Point(_t(e), _num(e, "x"), _num(e, "y"), e.get("state", "-"), int(_num(e, "men")), e.get("wp", "0/0"), _num(e, "spread"), e.get("gone") == "1", "x" in e, e.get("wet") == "1" if "wet" in e else None))
     return sorted(points, key=lambda p: p.t)
 
 
@@ -197,9 +199,14 @@ def recovery(case: str, info: dict[str, str], points: list[Point], data: Round) 
     for row in states:
         if row.get("to") not in WORKING_JOBS:
             continue
-        follow = next((p for p in points if _t(row) <= p.t <= deadline and p.men > 0 and p.has_waypoint), None)
+        after = [p for p in points if _t(row) <= p.t <= deadline and p.men > 0 and p.located]
+        if not after:
+            continue
+        # A new job on paper isn't a recovery: the group has to go somewhere because of it.
+        start = after[0]
+        follow = next((p for p in after if p.has_waypoint and math.hypot(p.x - start.x, p.y - start.y) >= MOVE_METRES), None)
         if follow is not None:
-            found.append((follow.t - t0, f"new job {row.get('to')} ({row.get('reason', '?')}) with waypoint {follow.wp}"))
+            found.append((follow.t - t0, f"new job {row.get('to')} ({row.get('reason', '?')}), then moved with waypoint {follow.wp}"))
             break
 
     respawned = next((e for e in ladder if e.get("rung") == "respawn"), None)
@@ -215,6 +222,14 @@ def recovery(case: str, info: dict[str, str], points: list[Point], data: Round) 
         last = next((p for p in reversed(points) if p.t <= deadline and p.men > 0), None)
         where = f"last seen as {last.state}, waypoint {last.wp}, {last.men} men" if last else "never seen alive after it"
         return None, where
+    if case == "sea":
+        # Swimming about with a waypoint isn't recovering: it has to reach dry land, or be taken out by a logged move.
+        dry = [p.t for p in points if t0 <= p.t <= deadline and p.men > 0 and p.located and p.wet is False]
+        lifted = [_t(e) for e in ft] + [_t(e) for e in ladder if e.get("rung") in RELOCATING_RUNGS]
+        out_at = min(dry + lifted, default=None)
+        if out_at is None:
+            return None, "still in the water, and no fast travel or relocating rung logged"
+        found = [(max(seconds, out_at - t0), how) for seconds, how in found]
     found.sort(key=lambda f: f[0])
     return found[0]
 
