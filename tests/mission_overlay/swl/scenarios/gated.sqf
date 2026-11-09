@@ -74,10 +74,13 @@ SWLG_fund = {
 // Groups that have reached the rally aren't spare, so a few are sent back to the commander.
 SWLG_free = {
 	params ["_cmd", "_n"];
-	private _pool = (_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Waiting" && {vehicle leader _x == leader _x}};
+	// The wave may have moved on from waiting by now, and a probe needs a group that isn't in a vehicle.
+	private _pool = (_cmd get "groups") select {([_x] call SWLC_fnc_state) in ["Waiting", "Mounting", "Advancing", "Assaulting", "Regrouping"]};
+	_pool = [_pool, [], {[1, 0] select (vehicle leader _x == leader _x)}, "ASCEND"] call BIS_fnc_sortBy;
 	{
 		[_cmd, _x] call SWLC_fnc_waveRemoveGroup;
 		[_x] call SWLC_fnc_adClearOrder;
+		{if (vehicle _x != _x) then {moveOut _x}} forEach units _x;
 		[_x, "Unassigned", [], "test_free"] call SWLC_fnc_setState;
 	} forEach (_pool select [0, _n]);
 };
@@ -254,7 +257,11 @@ private _garrison = [_raidS, 20] call SWLG_placeEast;
 _cmd set ["raidCooldownUntil", -1];
 [_cmd, _raidS] call SWLG_probeOnly;
 _end = time + 60;
-waitUntil {sleep 1; (count (_cmd getOrDefault ["probe", createHashMap]) > 0) || {time > _end}};
+waitUntil {
+	sleep 1;
+	if (([_cmd, [_raidS] call SWLC_fnc_adPos] call SWLC_fnc_raidSpare) isEqualTo []) then {[_cmd, 2] call SWLG_free};
+	(count (_cmd getOrDefault ["probe", createHashMap]) > 0) || {time > _end}
+};
 private _p1 = _cmd getOrDefault ["probe", createHashMap];
 if (count _p1 == 0) exitWith {[["event=fail_no_probe_1"]] call SWLG_emit};
 private _pg = _p1 get "group";
@@ -278,7 +285,11 @@ sleep 12;
 _cmd set ["raidCooldownUntil", -1];
 [_cmd, _raidS] call SWLG_probeOnly;
 _end = time + 60;
-waitUntil {sleep 1; (count (_cmd getOrDefault ["probe", createHashMap]) > 0) || {time > _end}};
+waitUntil {
+	sleep 1;
+	if (([_cmd, [_raidS] call SWLC_fnc_adPos] call SWLC_fnc_raidSpare) isEqualTo []) then {[_cmd, 2] call SWLG_free};
+	(count (_cmd getOrDefault ["probe", createHashMap]) > 0) || {time > _end}
+};
 private _p2 = _cmd getOrDefault ["probe", createHashMap];
 if (count _p2 == 0) exitWith {[["event=fail_no_probe_2"]] call SWLG_emit};
 private _pg2 = _p2 get "group";
