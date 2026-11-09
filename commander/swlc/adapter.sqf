@@ -155,6 +155,7 @@ SWLC_fnc_adIsWarlord = {
 SWLC_fnc_adSetOrder = {
 	params ["_g", "_wps", ["_behaviour", "AWARE"], ["_speed", "FULL"], ["_formation", "WEDGE"], ["_combat", "YELLOW"]];
 	_g setVariable ["SWLC_order", [_wps, _behaviour, _speed, _formation, _combat]];
+	[_g] call SWLC_fnc_routePlan;
 	[_g, 0] call SWLC_fnc_adApplyOrder;
 };
 
@@ -176,7 +177,9 @@ SWLC_fnc_adApplyOrder = {
 	params ["_g", ["_from", 0]];
 	private _order = _g getVariable ["SWLC_order", []];
 	if (_order isEqualTo []) exitWith {};
-	_order params ["_wps", "_behaviour", "_speed", "_formation", "_combat"];
+	// _from counts legs, the hops included. This can replace the legs, so it comes before they're read.
+	_from = [_g, _from] call SWLC_fnc_routeRefresh;
+	private _wps = [_g, _order] call SWLC_fnc_adLegs;
 	isNil {
 		for "_i" from (count waypoints _g - 1) to 0 step -1 do {deleteWaypoint [_g, _i]};
 		// The engine can move a waypoint from where it was asked for, so the guard compares with where it really went.
@@ -201,6 +204,9 @@ SWLC_fnc_adClearOrder = {
 	params ["_g"];
 	_g setVariable ["SWLC_order", []];
 	_g setVariable ["SWLC_wpActual", []];
+	_g setVariable ["SWLC_orderLegs", []];
+	_g setVariable ["SWLC_orderLegsOf", []];
+	_g setVariable ["SWLC_orderBlocked", false];
 };
 
 // Number of the commander's waypoints the group has finished.
@@ -214,9 +220,12 @@ SWLC_fnc_adOrderDone = {
 	params ["_g"];
 	private _order = _g getVariable ["SWLC_order", []];
 	if (_order isEqualTo []) exitWith {true};
+	// A blocked order is a hold standing in for a move that couldn't be made, so it isn't finished.
+	if (_g getVariable ["SWLC_orderBlocked", false]) exitWith {false};
+	private _legs = [_g, _order] call SWLC_fnc_adLegs;
 	// Warlords can append waypoints and jump ahead; only trust progress on an intact order.
-	if ((count waypoints _g) != (_g getVariable ["SWLC_wpBase", 0]) + count (_order # 0)) exitWith {false};
-	([_g] call SWLC_fnc_adOrderProgress) >= count (_order # 0)
+	if ((count waypoints _g) != (_g getVariable ["SWLC_wpBase", 0]) + count _legs) exitWith {false};
+	([_g] call SWLC_fnc_adOrderProgress) >= count _legs
 };
 
 // Guard: true if Warlords (or anything else) changed the group's waypoints since we wrote them.
@@ -226,7 +235,7 @@ SWLC_fnc_adGuardOrder = {
 	private _order = _g getVariable ["SWLC_order", []];
 	if (_order isEqualTo []) exitWith {false};
 	if ([_g] call SWLC_fnc_adGroupHasPlayer) exitWith {false};
-	private _wps = _order # 0;
+	private _wps = [_g, _order] call SWLC_fnc_adLegs;
 	private _base = _g getVariable ["SWLC_wpBase", 0];
 	private _count = count waypoints _g;
 	private _intact = _count == _base + count _wps;
@@ -246,8 +255,13 @@ SWLC_fnc_adGuardOrder = {
 		} forEach _wps;
 	};
 	if (_intact) exitWith {
-		if (_g getVariable ["SWLC_stanceDirty", false]) then {[_g] call SWLC_fnc_adApplyStance};
-		_g setVariable ["SWLC_wpProgress", (((currentWaypoint _g) - _base) max 0) min (count _wps)];
+		// A blocked order keeps trying: the fast travel it needs may have become possible.
+		if ((_g getVariable ["SWLC_orderBlocked", false]) && {time >= (_g getVariable ["SWLC_orderRetryAt", 0])}) then {
+			[_g, 0] call SWLC_fnc_adApplyOrder;
+		} else {
+			if (_g getVariable ["SWLC_stanceDirty", false]) then {[_g] call SWLC_fnc_adApplyStance};
+			_g setVariable ["SWLC_wpProgress", (((currentWaypoint _g) - _base) max 0) min (count _wps)];
+		};
 		false
 	};
 	private _from = (_g getVariable ["SWLC_wpProgress", 0]) min ((count _wps - 1) max 0);

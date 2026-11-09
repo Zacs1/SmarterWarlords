@@ -55,7 +55,8 @@ SWLC_fnc_watchdogGroup = {
 	if (_inCombat) exitWith {_g setVariable ["SWLC_progress", []]};
 
 	private _hist = _g getVariable ["SWLC_progress", []];
-	private _dist = _leader distance2D _goal;
+	// Along the route, not as the crow flies: a road can bend away from the goal without the group being stuck.
+	private _dist = [_g] call SWLC_fnc_routeRemaining;
 	_hist pushBack [time, _dist];
 	_g setVariable ["SWLC_progress", _hist];
 	if (((_hist # 0) # 0) > (time - CFG("progressWindow"))) exitWith {};
