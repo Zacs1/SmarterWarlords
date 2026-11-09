@@ -74,7 +74,10 @@ SWLC_fnc_squadTick = {
 		private _slice = ceil (_n / (CFG("squadSlices") max 1));
 		private _i = (_cmd getOrDefault ["squadIdx", 0]) mod _n;
 		for "_k" from 1 to _slice do {
-			[_cmd, _groups # _i, _contacts] call SWLC_fnc_squadGroup;
+			[_cmd, _groups # _i, "squad", {
+				params ["_cmd", "_g"];
+				[_cmd, _g, _contacts] call SWLC_fnc_squadGroup;
+			}] call SWLC_fnc_resGuarded;
 			_i = (_i + 1) mod _n;
 		};
 		_cmd set ["squadIdx", _i];

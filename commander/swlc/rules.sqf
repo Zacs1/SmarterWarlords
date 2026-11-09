@@ -238,7 +238,8 @@ SWLC_fnc_rulesInstall = {
 		private _deadSide = side group _dead;
 		if !(_deadSide in [west, east]) exitWith {};
 		private _cmd = missionNamespace getVariable [format ["SWLC_cmd_%1", _deadSide], createHashMap];
-		if (count _cmd > 0) then {_cmd set ["losses", (_cmd getOrDefault ["losses", 0]) + 1]};
+		// A warlord the ladder sent to respawn wasn't lost to the enemy, and the commitment decision shouldn't think so.
+		if (count _cmd > 0 && {!(_dead getVariable ["SWLC_forcedRespawn", false])}) then {_cmd set ["losses", (_cmd getOrDefault ["losses", 0]) + 1]};
 		private _by = if (isNull _instigator) then {_killer} else {_instigator};
 		if (isNull _by || {_by == _dead}) exitWith {};
 		private _other = missionNamespace getVariable [format ["SWLC_cmd_%1", side group _by], createHashMap];

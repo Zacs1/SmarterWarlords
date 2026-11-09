@@ -101,7 +101,53 @@ SWLC_settings = createHashMapFromArray [
 	["stuckRegroupSeconds", 180],
 	["stuckReconSeconds", 300],
 	["postContactQuietSeconds", 45],
-	["escalateAfterResets", 2],
+	["escalateAfterResets", 2],       // only used with resLadder off
+
+	// Resilience. Not part of rulesVariant: stays on when that's off.
+	["resilience", true],             // master switch for everything in this section
+	["testHooks", false],             // lets a test sabotage a group's handling. Never on in a real game
+
+	// The sweep: every group has a task, an order and a goal that still makes sense
+	["resSweep", true],
+	["resSweepGraceSeconds", 15],     // a job this new hasn't had time to get its order or settle
+	["resNotAtGoalMetres", 150],      // order finished this far from the goal means it stopped short
+	["resHuntOverdueSeconds", 30],    // past the hunt's end by this long and nothing has ended it
+	["resLostScanSeconds", 30],       // how often to look for groups the commander has lost track of
+	["resFixWindowSeconds", 120],
+	["resFixesToLadder", 3],          // this many fixes inside the window and the group goes to the ladder
+
+	// The ladder: re-issue, another route, dismount, fast travel, respawn at base
+	["resLadder", true],
+	["ladderRungSeconds", 25],        // how long a rung gets to work before the next
+	["ladderProgressMetres", 30],     // closer to the goal by this much since the last rung ends the climb
+	["ladderSameGoalMetres", 100],    // a goal moved further than this is a new job, and the climb starts over
+	["ladderFTCandidates", 3],        // owned sectors to try for the fast travel rung
+	["ladderLandRadius", 30],         // how far to look for safe ground for an order
+	["ladderRespawn", true],          // the last rung
+	["ladderMinClimbSeconds", 75],    // the last rung waits this long after the first, however fast the others fell through
+	["ladderRefundFactor", 1],        // share of the bought men's list price paid back
+	["ladderRespawnVerifySeconds", 15],
+
+	// Idle cap: too much of a side standing about means a new plan
+	["resIdleCap", true],
+	["idleCapShare", 0.20],           // above this share of the side's groups
+	["idleCapMinGroups", 3],          // a side this small isn't judged
+	["idleCapCooldownSeconds", 180],
+	["idleGraceSeconds", 30],         // Unassigned this long counts as idle
+	["idleMusterMargin", 30],         // past musterMaxSeconds by this much
+	["idleWaitingMargin", 60],        // past the rally's lone wait by this much
+
+	// Protecting the commander from one group's script error, and from the loop dying
+	["resGroupGuard", true],
+	["resSupervisor", true],
+	["supervisorPollSeconds", 5],
+	["supervisorStaleSeconds", 45],   // no heartbeat for this long and the loop is restarted. Keep well above tickSeconds
+	["quarantineSeconds", 60],        // a group whose handling failed stays out of the commander's list this long
+	["quarantineRepeatWindow", 600],
+	["quarantineRepeatLimit", 2],     // this many failures inside the window and the group goes straight to the last rung
+
+	// Locality
+	["resLocality", true],
 
 	// Intel board
 	["intelPollSeconds", 5],

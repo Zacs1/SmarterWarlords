@@ -24,26 +24,35 @@ SWLC_fnc_startCommander = {
 	];
 	missionNamespace setVariable [format ["SWLC_cmd_%1", _side], _cmd];
 	[_cmd] call SWLC_fnc_intelStart;
-	[_cmd] spawn SWLC_fnc_commanderLoop;
-	[_cmd] spawn SWLC_fnc_commanderGuard;
+	_cmd set ["heartbeat", time];
+	_cmd set ["loopHandle", [_cmd] spawn SWLC_fnc_commanderLoop];
+	_cmd set ["guardHandle", [_cmd] spawn SWLC_fnc_commanderGuard];
+	if (CFG("resilience")) then {
+		[] call SWLC_fnc_resInstall;
+		_cmd set ["supervisorHandle", [_cmd] spawn SWLC_fnc_supervisor];
+	};
 };
 
+// _restarted: started again by the supervisor on the same state, so it has no reason to wait.
 SWLC_fnc_commanderLoop = {
-	params ["_cmd"];
+	params ["_cmd", ["_restarted", false]];
 	scriptName format ["SWLC commander %1", _cmd get "side"];
 	// The sides work half a tick apart, so their busy frames don't land together.
-	if ((_cmd get "side") == east) then {sleep (CFG("tickSeconds") / 2)};
+	if (!_restarted && {(_cmd get "side") == east}) then {sleep (CFG("tickSeconds") / 2)};
 	while {true} do {
 		private _started = time;
 		_cmd set ["tickSpent", 0];
 		{
+			_cmd set ["heartbeat", time];
 			if (_x isEqualType "") then {
+				_cmd set ["curStage", _x];
 				[_cmd] call (missionNamespace getVariable ("SWLC_fnc_" + _x));
 			} else {
 				[_cmd, _x] call SWLC_fnc_cmdSlice;
 			};
 			sleep CFG("tickYieldSeconds");
 		} forEach SWLC_cmdSlices;
+		_cmd set ["heartbeat", time];
 		[_cmd, _cmd get "tickSpent"] call SWLC_fnc_cmdLogCost;
 		sleep ((CFG("tickSeconds") - (time - _started)) max 1);
 	};
@@ -55,6 +64,7 @@ SWLC_fnc_commanderGuard = {
 	scriptName format ["SWLC guard %1", _cmd get "side"];
 	while {true} do {
 		sleep CFG("guardSeconds");
+		[_cmd] call SWLC_fnc_resWatchSupervisor;
 		private _side = _cmd get "side";
 		private _spent = 0;
 		isNil {
@@ -69,10 +79,7 @@ SWLC_fnc_commanderGuard = {
 			private _g = _x;
 			isNil {
 				private _t0 = diag_tickTime;
-				if (!isNull _g && {[_g] call SWLC_fnc_adGuardOrder}) then {
-					["C_GUARD", [["side", _side], ["group", groupId _g], ["why", _g getVariable ["SWLC_guardWhy", "?"]]]] call SWLC_fnc_log;
-				};
-				if (!isNull _g) then {[_cmd, _g] call SWLC_fnc_squadLight};
+				if (!isNull _g) then {[_cmd, _g, "guard", SWLC_fnc_cmdGuardGroup, "guard"] call SWLC_fnc_resGuarded};
 				_spent = _spent + (diag_tickTime - _t0) * 1000;
 			};
 			sleep 0.01;
@@ -80,6 +87,14 @@ SWLC_fnc_commanderGuard = {
 		_cmd set ["guardCost", (_cmd getOrDefault ["guardCost", 0]) + _spent];
 		_cmd set ["guardCount", (_cmd getOrDefault ["guardCount", 0]) + 1];
 	};
+};
+
+SWLC_fnc_cmdGuardGroup = {
+	params ["_cmd", "_g"];
+	if ([_g] call SWLC_fnc_adGuardOrder) then {
+		["C_GUARD", [["side", _cmd get "side"], ["group", groupId _g], ["why", _g getVariable ["SWLC_guardWhy", "?"]]]] call SWLC_fnc_log;
+	};
+	[_cmd, _g] call SWLC_fnc_squadLight;
 };
 
 SWLC_fnc_cmdLogCost = {
@@ -117,6 +132,7 @@ SWLC_cmdSlices = [
 	["smartTick", "squadTick"],
 	["raidTick", "probeTick", "menuTick"],
 	"cmdAssignSlices",
+	"resSweepSlice",
 	["planPublish", "statusPublish"]
 ];
 
@@ -143,9 +159,17 @@ SWLC_fnc_cmdSlice = {
 		private _t0 = diag_tickTime;
 		[_cmd, (_cmd get "groups") select {(units _x findIf {alive _x}) < 0}] call SWLC_fnc_dropGroups;
 		{
+			private _name = _x;
 			private _s0 = diag_tickTime;
-			[_cmd] call (missionNamespace getVariable ("SWLC_fnc_" + _x));
-			[_cmd, _x, (diag_tickTime - _s0) * 1000] call SWLC_fnc_cmdStageCost;
+			private _stageReached = false;
+			_cmd set ["curStage", _name];
+			// Its own isNil, so where the engine lets an error stop here, the stages after it still run.
+			isNil {
+				[_cmd] call (missionNamespace getVariable ("SWLC_fnc_" + _name));
+				_stageReached = true;
+			};
+			if (!_stageReached) then {[_cmd, _name] call SWLC_fnc_resStageFault};
+			[_cmd, _name, (diag_tickTime - _s0) * 1000] call SWLC_fnc_cmdStageCost;
 		} forEach _names;
 		_spent = (diag_tickTime - _t0) * 1000;
 	};
@@ -187,7 +211,7 @@ SWLC_fnc_cmdAssignSlices = {
 		private _spent = 0;
 		isNil {
 			private _t0 = diag_tickTime;
-			if (!isNil {_cmd get "op"} && {(units _g findIf {alive _x}) >= 0} && {([_g] call SWLC_fnc_state) == "Unassigned"}) then {[_cmd, _g] call SWLC_fnc_musterAssign};
+			if (!isNil {_cmd get "op"} && {(units _g findIf {alive _x}) >= 0} && {([_g] call SWLC_fnc_state) == "Unassigned"}) then {[_cmd, _g, "assign", SWLC_fnc_musterAssign] call SWLC_fnc_resGuarded};
 			_spent = (diag_tickTime - _t0) * 1000;
 		};
 		[_cmd, "cmdAssign", _spent] call SWLC_fnc_cmdStageCost;
