@@ -219,6 +219,20 @@ private _name = [_sector] call SWLC_fnc_adName;
 // EAST mustn't happen to vote for the sector under test.
 private _eastTargets = ([east] call SWLC_fnc_adAvailable) - [_sector];
 if (_eastTargets isNotEqualTo []) then {_cmdE set ["preferredTarget", _eastTargets # 0]};
+// A vote that is already running can still land on it, and a raid on the side's own target stands itself down.
+private _settle = time + 120;
+waitUntil {
+	if ((([east] call SWLC_fnc_adTarget) isEqualTo _sector) && {_eastTargets isNotEqualTo []}) then {
+		_cmdE set ["preferredTarget", _eastTargets # 0];
+		[east] call SWLC_fnc_adForceRevote;
+		[[format ["event=east_revote|from=%1|to=%2", _name, [_eastTargets # 0] call SWLC_fnc_adName]]] call SWLG_emit;
+		sleep 25;
+	};
+	sleep 2;
+	private _after = [east] call SWLC_fnc_adTarget;
+	(!isNull _after && {_after isNotEqualTo _sector}) || {time > _settle}
+};
+[[format ["event=east_settled|target=%1", [[east] call SWLC_fnc_adTarget] call {params ["_t"]; if (isNull _t) then {"-"} else {[_t] call SWLC_fnc_adName}}]]] call SWLG_emit;
 
 // ---- A wave waiting at the rally and a reserve group ----
 _deadline = time + 240;
