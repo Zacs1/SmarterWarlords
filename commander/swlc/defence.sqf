@@ -104,7 +104,7 @@ SWLC_fnc_defHop = {
 	private _threats = _cmd getOrDefault ["threats", createHashMap];
 	private _hot = {
 		params ["_x1"];
-		([_x1] call SWLC_fnc_adName) in _threats || {[_side, _x1] call SWLC_fnc_capBeingSeized}
+		[_threats, _x1] call SWLC_fnc_frontHot || {[_side, _x1] call SWLC_fnc_capBeingSeized}
 	};
 	if !([_s] call _hot) exitWith {_s};
 	private _safe = ([_side] call SWLC_fnc_adOwned) select {!([_x] call _hot) && {[_side, _x] call SWLC_fnc_adCanFTTo}};
