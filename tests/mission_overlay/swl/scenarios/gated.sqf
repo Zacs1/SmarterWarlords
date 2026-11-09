@@ -8,7 +8,7 @@
 // P1: a probe that finds a garrison pulls back. P2: a probe that finds nothing marks the sector weak and buys a raid.
 // T2: the AI buys a raid with its own groups and captures the sector through Warlords' trigger.
 
-waitUntil {sleep 1; !isNil "SWLC_ready"};
+waitUntil {sleep 1; !isNil "SWLC_ready" && {!isNil "SWLC_cmd_WEST"} && {!isNil "SWLC_cmd_EAST"}};
 
 SWLG_emit = {
 	params ["_fields"];
@@ -161,6 +161,16 @@ while {(([west] call SWLC_fnc_raidFront) isEqualTo []) && {time < _deadline}} do
 			[_side, _t] call SWLG_take;
 		};
 	} forEach [west, east];
+	// A side's own target can't be raided. If that is the only enemy sector in reach, WEST votes elsewhere.
+	private _wt = [west] call SWLC_fnc_adTarget;
+	if (!isNull _wt && {([_wt] call SWLC_fnc_adOwner) == east}) then {
+		private _other = ([west] call SWLC_fnc_adAvailable) select {_x isNotEqualTo _wt && {([_x] call SWLC_fnc_adOwner) != west} && {!([_x] call SWLC_fnc_adIsBase)}};
+		if (_other isNotEqualTo []) then {
+			_cmd set ["preferredTarget", _other # 0];
+			[west] call SWLC_fnc_adForceRevote;
+			[[format ["event=revote|from=%1|to=%2", [_wt] call SWLC_fnc_adName, [_other # 0] call SWLC_fnc_adName]]] call SWLG_emit;
+		};
+	};
 	sleep 8;
 };
 private _front = [west] call SWLC_fnc_raidFront;

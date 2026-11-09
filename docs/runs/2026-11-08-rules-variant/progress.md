@@ -45,3 +45,7 @@ Every soak must measure each AI commander's activity and pass or fail on it. See
 - gates_activity: job-change matching and working-job names fixed; on gate6r 14 of 16 pass.
 - Reruns queued: gateh2 (running), gateh with LAMBS, gatef4, gateb, gated, gatee, gatec.
 - Part C and Part F review fixes applied by their reviewers, lint clean, not yet run live. New settings: defencePayoutCooldown, defencePayoutMinEnemies, menuPickupMaxDistance. gatef runs need -Overrides "menuTestAllowAI=true;menuPickupMaxDistance=1000000".
+- 2026-11-09 reruns: gateh3 vanilla PASS (pin and rearm now pass; two earlier rounds had rearm timeouts on the first two trips, cause unknown, timeout now logs distance and command). gateh2l LAMBS: rearm timed out twice then worked, garrison test had no spare group (test fixed, sleep 60 and more states). gatef4: all PASS, 0 errors.
+- gateb3 and gated2 failed in the scenario only: `_cmd` was nil because scenarios started before the commander existed. Every scenario now waits for it. Rerunning.
+
+- gateb5 (after review fixes): all Part B behaviour checks PASS, 0 script errors. Only FAIL was the rebuild check, and the check was wrong: mid-rebuild the groups were 4 Reserve and 4 Defending (answering EAST on own sectors), none attacking. Scenario now logs an `attacking` count and the gate requires it to be 0. The generic "groups moved" line fails by design in this scenario because goMinGroups=99 keeps groups back.

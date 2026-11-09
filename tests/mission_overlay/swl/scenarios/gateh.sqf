@@ -3,7 +3,7 @@
 // in the right place. Run with:
 //   -Scenario gateh -Overrides "scoutMinGroups=99;scanBuying=false"
 
-waitUntil {sleep 1; !isNil "SWLC_ready"};
+waitUntil {sleep 1; !isNil "SWLC_ready" && {!isNil "SWLC_cmd_WEST"}};
 
 SWLG_emit = {
 	params ["_type", "_fields"];
@@ -179,13 +179,13 @@ if (!SWLC_lambs) then {
 // LAMBS: garrison a spare group at an owned sector, let go, then clear the same buildings and let go.
 if (SWLC_lambs) then {
 	[] spawn {
-		sleep 240;
+		sleep 60;
 		private _deadline = time + 420;
 		private _g = grpNull;
 		private _s = objNull;
 		waitUntil {
 			sleep 5;
-			private _spare = (SWLG_west get "groups") select {([_x] call SWLC_fnc_state) in ["Mustering", "Reserve", "Unassigned"] && {!(_x getVariable ["SWLG_big", false])} && {vehicle leader _x == leader _x}};
+			private _spare = (SWLG_west get "groups") select {([_x] call SWLC_fnc_state) in ["Mustering", "Reserve", "Unassigned", "Travelling", "Waiting"] && {!(_x getVariable ["SWLG_big", false])} && {vehicle leader _x == leader _x}};
 			if (_spare isNotEqualTo []) then {
 				_g = _spare # 0;
 				_s = [west] call SWLC_fnc_adBase;

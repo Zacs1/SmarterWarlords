@@ -5,7 +5,7 @@
 // C: a deliberately deadlocked target gets a decision within the timer plus one commander tick.
 // D: a second deadlock with heavy losses makes the side pull back and rebuild.
 
-waitUntil {sleep 1; !isNil "SWLC_ready"};
+waitUntil {sleep 1; !isNil "SWLC_ready" && {!isNil "SWLC_cmd_WEST"}};
 
 SWLG_emit = {
 	params ["_fields"];
@@ -137,10 +137,28 @@ SWLG_keepFake = false;
 deleteVehicle _sub;
 
 // ---- C: deadlocked target ----
-private _tries = time + 120;
-waitUntil {sleep 1; (!isNull ([west] call SWLC_fnc_adTarget) && {([west] call SWLC_fnc_adTarget) isNotEqualTo _s}) || {time > _tries}};
-if (isNull ([west] call SWLC_fnc_adTarget)) exitWith {[["event=fail_no_second_target"]] call SWLG_emit};
-private _t2 = [west] call SWLC_fnc_adTarget;
+// A switch needs somewhere to switch to. With only one way forward, that sector is handed over and the next target is used.
+private _tries = time + 240;
+private _t2 = objNull;
+waitUntil {
+	sleep 1;
+	private _now = [west] call SWLC_fnc_adTarget;
+	if (!isNull _now && {_now isNotEqualTo _s} && {([_now] call SWLC_fnc_adOwner) != west}) then {
+		if (([_cmd, _now] call SWLC_fnc_commitCandidates) isNotEqualTo []) then {
+			_t2 = _now;
+		} else {
+			{
+				if (vehicle _x != _x) then {deleteVehicle vehicle _x};
+				deleteVehicle _x;
+			} forEach (allUnits select {side group _x == resistance && {[_now, getPosATL _x, 150] call SWLC_fnc_adInSquare}});
+			_now setVariable ["BIS_WL_sectorSide", west, true];
+			[[format ["event=handed_over|sector=%1", [_now] call SWLC_fnc_adName]]] call SWLG_emit;
+			sleep 5;
+		};
+	};
+	!isNull _t2 || {time > _tries}
+};
+if (isNull _t2) exitWith {[["event=fail_no_second_target"]] call SWLG_emit};
 private _name2 = [_t2] call SWLC_fnc_adName;
 private _defenders = [east, _t2, 30] call SWLG_place;
 sleep 20;
@@ -164,8 +182,9 @@ _cmd set ["commitUntil", time + 15];
 private _waitD = time + 60;
 waitUntil {sleep 1; [_cmd] call SWLC_fnc_rebuilding || {time > _waitD}};
 sleep 20;
-[[format ["event=rebuild_mid|rebuilding=%1|target=%2|reserve=%3|total=%4", [_cmd] call SWLC_fnc_rebuilding, if (isNull ([west] call SWLC_fnc_adTarget)) then {"-"} else {[[west] call SWLC_fnc_adTarget] call SWLC_fnc_adName},
-	{([_x] call SWLC_fnc_state) == "Reserve"} count (_cmd get "groups"), count (_cmd get "groups")]]] call SWLG_emit;
+[[format ["event=rebuild_mid|rebuilding=%1|target=%2|reserve=%3|total=%4|attacking=%5", [_cmd] call SWLC_fnc_rebuilding, if (isNull ([west] call SWLC_fnc_adTarget)) then {"-"} else {[[west] call SWLC_fnc_adTarget] call SWLC_fnc_adName},
+	{([_x] call SWLC_fnc_state) == "Reserve"} count (_cmd get "groups"), count (_cmd get "groups"),
+	{([_x] call SWLC_fnc_state) in ["Mustering", "Waiting", "Travelling", "Mounting", "Advancing", "Assaulting", "Regrouping"]} count (_cmd get "groups")]]] call SWLG_emit;
 private _waitEnd = time + 150;
 waitUntil {sleep 2; !([_cmd] call SWLC_fnc_rebuilding) && {!isNull ([west] call SWLC_fnc_adTarget)} || {time > _waitEnd}};
 [[format ["event=rebuild_over|target=%1", if (isNull ([west] call SWLC_fnc_adTarget)) then {"-"} else {[[west] call SWLC_fnc_adTarget] call SWLC_fnc_adName}]]] call SWLG_emit;

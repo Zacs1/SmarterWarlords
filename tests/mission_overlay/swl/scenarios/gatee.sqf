@@ -8,7 +8,7 @@
 //          so the sector can't fall while the response is being watched.
 // Stage 2: 8 men and then 8 more, 16 in all, which is a counterattack and has to go to the full defence rules.
 
-waitUntil {sleep 1; !isNil "SWLC_ready"};
+waitUntil {sleep 1; !isNil "SWLC_ready" && {!isNil "SWLC_cmd_WEST"} && {!isNil "SWLC_cmd_EAST"}};
 
 SWLG_emit = {
 	params ["_fields"];

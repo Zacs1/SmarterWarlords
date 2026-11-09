@@ -890,7 +890,7 @@ def check_b_rebuild(data: Round) -> tuple[bool, str]:
     rebuilds = [e for e in data.of("C_COMMIT") if e.get("decision") == "rebuild"]
     if not mid or not over:
         return False, f"scenario did not reach it, {len(rebuilds)} rebuild decisions"
-    ok = bool(rebuilds) and mid[0].get("rebuilding", "").lower() == "true" and mid[0].get("target") == "-" and over[0].get("target") != "-"
+    ok = bool(rebuilds) and mid[0].get("rebuilding", "").lower() == "true" and mid[0].get("attacking", "0") == "0" and over[0].get("target") != "-"
     return ok, f"{mid[0]}, then {over[0]}"
 
 

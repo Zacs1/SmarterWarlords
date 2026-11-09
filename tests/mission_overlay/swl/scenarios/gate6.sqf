@@ -3,7 +3,7 @@
 // lost to nothing visible, and the player stand-in. Run with:
 //   -Scenario gate6 -Overrides "scoutMinGroups=2;scanBuying=false;reinforceStallSeconds=60"
 
-waitUntil {sleep 1; !isNil "SWLC_ready"};
+waitUntil {sleep 1; !isNil "SWLC_ready" && {!isNil "SWLC_cmd_WEST"}};
 
 SWLG_emit = {
 	params ["_type", "_fields"];

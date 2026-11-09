@@ -3,7 +3,7 @@
 // base, which is a muster sector early on, and once at the first other sector WEST captures.
 // Ends by driving the player request code paths with an AI stand-in, since no player is connected.
 
-waitUntil {sleep 1; !isNil "SWLC_ready"};
+waitUntil {sleep 1; !isNil "SWLC_ready" && {!isNil "SWLC_cmd_WEST"}};
 
 SWLG_emit = {
 	params ["_type", "_fields"];

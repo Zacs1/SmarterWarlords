@@ -1,7 +1,7 @@
 // Phase 2 gate: enemy armour at WEST's target reaches the board and radio within 10 s of being seen,
 // the next wave's plan changes, and a tank nobody has seen never appears on the board.
 
-waitUntil {sleep 1; !isNil "SWLC_ready"};
+waitUntil {sleep 1; !isNil "SWLC_ready" && {!isNil "SWLC_cmd_WEST"}};
 
 SWLG_emit = {
 	params ["_type", "_fields"];
