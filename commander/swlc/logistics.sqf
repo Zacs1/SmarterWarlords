@@ -39,6 +39,9 @@ SWLC_fnc_logBuy = {
 	if ((_cp - _cost) < _reserve) exitWith {[]};
 	private _items = [_side, _buyer, _classes, _cost, _cmd get "dropHelper"] call SWLC_fnc_adBuy;
 	if (_items isNotEqualTo []) then {
+		// What each man really cost, price multipliers included. A refund pays back this.
+		private _each = _cost / (count _items);
+		{if (_x isKindOf "Man") then {_x setVariable ["SWLC_paid", _each]}} forEach _items;
 		["C_BUY", [["side", _side], ["what", _what], ["class", _classes # 0], ["cost", _cost], ["cp_before", round _cp], ["cp_after", round ([_side] call SWLC_fnc_adSideCP)], ["reserve", round _reserve], ["buyer", groupId group _buyer]]] call SWLC_fnc_log;
 	};
 	_items

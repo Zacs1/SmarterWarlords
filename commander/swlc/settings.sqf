@@ -127,6 +127,9 @@ SWLC_settings = createHashMapFromArray [
 	["ladderMinClimbSeconds", 75],    // the last rung waits this long after the first, however fast the others fell through
 	["ladderRefundFactor", 1],        // share of the bought men's list price paid back
 	["ladderRespawnVerifySeconds", 15],
+	["ladderRespawnMax", 4],          // most last-rung replacements per side inside the window; past that the group gets a reachable job
+	["ladderRespawnWindowSeconds", 600],
+	["ladderJobHoldSeconds", 180],    // a group sent to hold because it can't reach the operation isn't sent back to it for this long
 
 	// Idle cap: too much of a side standing about means a new plan
 	["resIdleCap", true],
@@ -145,6 +148,8 @@ SWLC_settings = createHashMapFromArray [
 	["quarantineSeconds", 60],        // a group whose handling failed stays out of the commander's list this long
 	["quarantineRepeatWindow", 600],
 	["quarantineRepeatLimit", 2],     // this many failures inside the window and the group goes straight to the last rung
+	["stageFaultGroups", 3],          // this many groups failing in one stage inside the window: the stage is blamed, not the groups
+	["stageFaultWindowSeconds", 30],
 
 	// Locality
 	["resLocality", true],

@@ -212,13 +212,13 @@ SWLC_fnc_cmdAssignSlices = {
 		private _spent = 0;
 		isNil {
 			private _t0 = diag_tickTime;
-			if (!isNil {_cmd get "op"} && {(units _g findIf {alive _x}) >= 0} && {([_g] call SWLC_fnc_state) == "Unassigned"}) then {[_cmd, _g, "assign", SWLC_fnc_musterAssign] call SWLC_fnc_resGuarded};
+			if (!isNil {_cmd get "op"} && {(units _g findIf {alive _x}) >= 0} && {([_g] call SWLC_fnc_state) == "Unassigned"} && {time >= (_g getVariable ["SWLC_noAssignUntil", -1])}) then {[_cmd, _g, "assign", SWLC_fnc_musterAssign] call SWLC_fnc_resGuarded};
 			_spent = (diag_tickTime - _t0) * 1000;
 		};
 		[_cmd, "cmdAssign", _spent] call SWLC_fnc_cmdStageCost;
 		[_cmd, _spent] call SWLC_fnc_cmdSliceDone;
 		sleep CFG("tickYieldSeconds");
-	} forEach ((_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Unassigned"});
+	} forEach ((_cmd get "groups") select {([_x] call SWLC_fnc_state) == "Unassigned" && {time >= (_x getVariable ["SWLC_noAssignUntil", -1])}});
 };
 
 // Tracks the side's target and reacts when it changes.

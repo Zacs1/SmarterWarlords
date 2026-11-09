@@ -114,17 +114,49 @@ SWLC_fnc_resStageFault = {
 	if (!isNull _g) then {[_cmd, _g, _stage] call SWLC_fnc_resGroupFault};
 };
 
+// Several groups failing in one stage within moments: the stage is what's broken, and replacing the groups would
+// throw away a side's men for a bug. Returns true when the stage takes the blame; the groups keep working.
+SWLC_fnc_resStageBlame = {
+	params ["_cmd", "_g", "_stage"];
+	private _all = _cmd getOrDefault ["stageFaults", createHashMap];
+	_cmd set ["stageFaults", _all];
+	private _window = CFG("stageFaultWindowSeconds");
+	private _recent = (_all getOrDefault [_stage, []]) select {(time - (_x # 0)) <= _window};
+	_recent pushBack [time, _g];
+	_all set [_stage, _recent];
+	private _groups = _recent apply {_x # 1};
+	_groups = (_groups arrayIntersect _groups) select {!isNull _x};
+	if ((count _groups) < CFG("stageFaultGroups")) exitWith {false};
+	// The ones that failed first were already set aside. They go back, with nothing held against them.
+	_cmd set ["quarantine", (_cmd getOrDefault ["quarantine", []]) - _groups];
+	{
+		_x setVariable ["SWLC_quarantineUntil", nil];
+		_x setVariable ["SWLC_errCount", 0];
+		[_x] call SWLC_fnc_ladderReset;
+	} forEach _groups;
+	private _logKey = _stage + "#logged";
+	if ((time - (_all getOrDefault [_logKey, -1e6])) >= _window) then {
+		_all set [_logKey, time];
+		["C_SUP", [["side", _cmd get "side"], ["action", "stage_fault"], ["stale_s", 0], ["last_group", groupId _g], ["last_stage", _stage], ["groups", count _groups],
+			["error", missionNamespace getVariable ["SWLC_lastScriptError", "unknown"]]]] call SWLC_fnc_log;
+	};
+	true
+};
+
 // A group's handling failed: log it, put it aside for a while and send it to the ladder. A group that keeps
 // failing goes straight to the last rung, which replaces whatever about it is broken.
 SWLC_fnc_resGroupFault = {
 	params ["_cmd", "_g", "_stage"];
 	if (isNull _g) exitWith {};
 	["C_GROUPERR", [["side", _cmd get "side"], ["group", groupId _g], ["stage", _stage]]] call SWLC_fnc_log;
+	if ([_cmd, _g, _stage] call SWLC_fnc_resStageBlame) exitWith {};
 
 	private _q = _cmd getOrDefault ["quarantine", []];
 	_q pushBackUnique _g;
 	_cmd set ["quarantine", _q];
 	_g setVariable ["SWLC_quarantineUntil", time + CFG("quarantineSeconds")];
+	// It can't do its part while set aside, so the wave shouldn't wait for it. The sweep gives it a job when it's back.
+	[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
 
 	private _last = _g getVariable ["SWLC_errLast", -1e6];
 	private _count = [1, (_g getVariable ["SWLC_errCount", 0]) + 1] select ((time - _last) <= CFG("quarantineRepeatWindow"));
@@ -207,7 +239,7 @@ SWLC_fnc_resWatchSupervisor = {
 // Holds a group with no operation to join at the nearest owned sector that isn't being seized. It stays Unassigned, so
 // it joins the next operation like any other. Moving it also keeps Warlords from treating a waiting leader as stuck.
 SWLC_fnc_resHoldOrder = {
-	params ["_cmd", "_g"];
+	params ["_cmd", "_g", ["_walk", false]];
 	private _side = _cmd get "side";
 	private _p = getPosATL leader _g;
 	private _owned = ([_side] call SWLC_fnc_adOwned) select {
@@ -216,6 +248,10 @@ SWLC_fnc_resHoldOrder = {
 	};
 	if (_owned isEqualTo []) then {_owned = [_side] call SWLC_fnc_adOwned};
 	if (_owned isEqualTo []) exitWith {false};
+	if (_walk) then {
+		private _near = _owned select {[_p, [_x] call SWLC_fnc_adPos] call SWLC_fnc_ladderWalkable};
+		if (_near isNotEqualTo []) then {_owned = _near};
+	};
 	private _c = [[_owned, _p] call SWLC_fnc_adNearest] call SWLC_fnc_adPos;
 	private _spot = [_c, _g] call SWLC_fnc_shuffleSpot;
 	if (!isNil "SWLC_fnc_routeSafePos") then {
@@ -247,6 +283,37 @@ SWLC_fnc_groupReassign = {
 };
 
 // ---- The ladder ----
+
+// Whether a group could walk between two places. Always yes with the water check switched off.
+SWLC_fnc_ladderWalkable = {
+	params ["_from", "_to"];
+	if !(["noWaterMoves"] call SWLC_fnc_resItem) exitWith {true};
+	[_from, _to] call SWLC_fnc_routeLandReachable
+};
+
+// For a group the ladder won't replace: a job it can reach. The operation if there's land to its rally, otherwise a
+// hold at the nearest owned sector it can walk to, and it's left out of the operation for a while so it isn't sent
+// straight back to the order it couldn't carry out.
+SWLC_fnc_ladderReachableJob = {
+	params ["_cmd", "_g", "_reason"];
+	if !([_g] call SWLC_fnc_resMayTouch) exitWith {false};
+	private _op = _cmd get "op";
+	private _joins = !isNil "_op" && {!([_cmd] call SWLC_fnc_rebuilding)} && {[getPosATL leader _g, _op get "rally"] call SWLC_fnc_ladderWalkable};
+	[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
+	[_g] call SWLC_fnc_adClearOrder;
+	_g setVariable ["SWLC_picketSector", nil];
+	_g setVariable ["SWLC_scoutUntil", nil];
+	_g setVariable ["SWLC_joinUntil", -1];
+	[_g, "Unassigned", [], _reason] call SWLC_fnc_setState;
+	["C_LADDER", [["group", groupId _g], ["side", _cmd get "side"], ["rung", "job"], ["reason", _reason], ["joins", _joins]]] call SWLC_fnc_log;
+	if (_joins) exitWith {
+		[_cmd, _g] call SWLC_fnc_musterAssign;
+		true
+	};
+	_g setVariable ["SWLC_noAssignUntil", time + CFG("ladderJobHoldSeconds")];
+	[_cmd, _g, true] call SWLC_fnc_resHoldOrder;
+	true
+};
 
 // How far the group still has to go: along its route when the route code is loaded, else in a straight line.
 SWLC_fnc_watchdogDist = {
@@ -300,16 +367,24 @@ SWLC_fnc_ladderStep = {
 	private _wait = false;
 	while {_done == "" && {!_wait} && {_next < count SWLC_ladderRungs}} do {
 		private _rung = SWLC_ladderRungs # _next;
-		// The earlier rungs can all fall through in one step. Replacing a group needs longer than that to be justified.
-		if (_rung == "respawn" && {_force == ""} && {(time - (_g getVariable ["SWLC_ladderStart", time])) < CFG("ladderMinClimbSeconds")}) then {
-			_wait = true;
-		} else {
+		if (_rung == "respawn" && {_force == ""} && {_g getVariable ["SWLC_orderBlocked", false]}) then {
+			// The order has no land route, and a fresh body at base wouldn't have one either. Fast travel has had its go.
 			_next = _next + 1;
-			private _why = [_cmd, _g, _rung, _reason, _state, _goal] call SWLC_fnc_ladderApply;
-			if (_why == "") then {
-				_done = _rung;
+			["C_LADDERSKIP", [["group", groupId _g], ["side", _cmd get "side"], ["rung", _rung], ["why", "order_blocked"]]] call SWLC_fnc_log;
+			[_cmd, _g, "ladder_blocked"] call SWLC_fnc_ladderReachableJob;
+			_done = "job";
+		} else {
+			// The earlier rungs can all fall through in one step. Replacing a group needs longer than that to be justified.
+			if (_rung == "respawn" && {_force == ""} && {(time - (_g getVariable ["SWLC_ladderStart", time])) < CFG("ladderMinClimbSeconds")}) then {
+				_wait = true;
 			} else {
-				["C_LADDERSKIP", [["group", groupId _g], ["side", _cmd get "side"], ["rung", _rung], ["why", _why]]] call SWLC_fnc_log;
+				_next = _next + 1;
+				private _why = [_cmd, _g, _rung, _reason, _state, _goal] call SWLC_fnc_ladderApply;
+				if (_why == "") then {
+					_done = _rung;
+				} else {
+					["C_LADDERSKIP", [["group", groupId _g], ["side", _cmd get "side"], ["rung", _rung], ["why", _why]]] call SWLC_fnc_log;
+				};
 			};
 		};
 	};
@@ -318,9 +393,9 @@ SWLC_fnc_ladderStep = {
 		[_g] call SWLC_fnc_ladderReset;
 		""
 	};
-	if (_done == "respawn") exitWith {
+	if (_done in ["respawn", "job"]) exitWith {
 		[_g] call SWLC_fnc_ladderReset;
-		"respawn"
+		_done
 	};
 	_g setVariable ["SWLC_ladderRung", _next];
 	_g setVariable ["SWLC_ladderAt", time];
@@ -394,16 +469,32 @@ SWLC_fnc_ladderRespawn = {
 	private _units = [_g] call SWLC_fnc_alive;
 	if (_units isEqualTo []) exitWith {"no_men"};
 	if ([_g] call SWLC_fnc_adGroupHasPlayer) exitWith {"player"};
+
+	// A cap on the last rung, so no fault can spend a side's men faster than this.
+	private _times = (_cmd getOrDefault ["respawnTimes", []]) select {(time - _x) < CFG("ladderRespawnWindowSeconds")};
+	if ((count _times) >= CFG("ladderRespawnMax")) exitWith {
+		_cmd set ["respawnTimes", _times];
+		[_cmd, _g, "ladder_capped"] call SWLC_fnc_ladderReachableJob;
+		"capped"
+	};
+	_times pushBack time;
+	_cmd set ["respawnTimes", _times];
+
 	private _slots = _units select {[_x] call SWLC_fnc_adIsWarlord};
 	private _bought = _units - _slots;
 
-	// What the bought men cost, at list price. A class the shop doesn't sell refunds nothing.
+	// What the bought men cost when they were bought, or the list price for men from elsewhere.
+	// A class the shop doesn't sell refunds nothing.
 	private _list = _cmd getOrDefault ["infantry", []];
 	private _refund = 0;
 	{
-		private _class = typeOf _x;
-		private _i = _list findIf {(_x # 0) == _class};
-		if (_i >= 0) then {_refund = _refund + ((_list # _i) # 1)};
+		private _price = _x getVariable "SWLC_paid";
+		if (isNil "_price") then {
+			private _class = typeOf _x;
+			private _i = _list findIf {(_x # 0) == _class};
+			_price = if (_i >= 0) then {(_list # _i) # 1} else {0};
+		};
+		_refund = _refund + _price;
 	} forEach _bought;
 	_refund = round (_refund * CFG("ladderRefundFactor"));
 
@@ -417,6 +508,11 @@ SWLC_fnc_ladderRespawn = {
 		if (vehicle _x == _x) then {deleteVehicle _x} else {(vehicle _x) deleteVehicleCrew _x};
 	} forEach _bought;
 
+	// Paid before the kill and not to the warlords about to die: a dead warlord's funds come back from a backup that
+	// is only taken every two seconds, so a credit just before the kill could be lost with it.
+	private _paid = [_side, _refund, _slots] call SWLC_fnc_adCredit;
+	if (_paid < _refund) then {_paid = _paid + ([_side, _refund - _paid] call SWLC_fnc_adCredit)};
+
 	private _pending = _cmd getOrDefault ["respawning", []];
 	{
 		_x setVariable ["SWLC_forcedRespawn", true];
@@ -427,8 +523,6 @@ SWLC_fnc_ladderRespawn = {
 	} forEach _slots;
 	_cmd set ["respawning", _pending];
 
-	// After the kill, so the credit goes to warlords still standing.
-	private _paid = [_side, _refund] call SWLC_fnc_adCredit;
 	["C_LADDER", [["group", groupId _g], ["side", _side], ["rung", "respawn"], ["reason", _reason], ["refund", _paid]]] call SWLC_fnc_log;
 	""
 };
@@ -500,7 +594,7 @@ SWLC_fnc_resFaultOf = {
 	if (_state == "Unassigned") exitWith {
 		if ([_cmd] call SWLC_fnc_rebuilding) exitWith {""};
 		if (_age < CFG("idleGraceSeconds")) exitWith {""};
-		if (!isNil {_cmd get "op"}) exitWith {"no_task"};
+		if (!isNil {_cmd get "op"} && {time >= (_g getVariable ["SWLC_noAssignUntil", -1])}) exitWith {"no_task"};
 		if ((_g getVariable ["SWLC_order", []]) isEqualTo []) exitWith {"no_task"};
 		// No operation yet and a hold order already: keep it shifting, nothing to report.
 		if ((time - (_g getVariable ["SWLC_holdAt", -1e6])) >= CFG("reservePatrolSeconds") && {[_g] call SWLC_fnc_adOrderDone}) then {

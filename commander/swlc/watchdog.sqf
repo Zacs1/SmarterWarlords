@@ -105,7 +105,9 @@ SWLC_fnc_watchdogEscalate = {
 	if (_ladder) then {_owned = _owned select {!([_side, _x] call SWLC_fnc_adEnemySeizing)}};
 	_owned = [_owned, [], {([_x] call SWLC_fnc_adPos) distance2D _toward}, "ASCEND"] call BIS_fnc_sortBy;
 	if (_ladder) then {
-		_owned = (_owned select {([_x] call SWLC_fnc_adPos) distance2D (leader _g) >= CFG("ftMinDistance")}) select [0, CFG("ladderFTCandidates")];
+		// Only sectors with a way on to the goal: landing somewhere cut off from it just moves the problem.
+		_owned = _owned select {([_x] call SWLC_fnc_adPos) distance2D (leader _g) >= CFG("ftMinDistance")};
+		_owned = (_owned select {[[_x] call SWLC_fnc_adPos, _toward] call SWLC_fnc_ladderWalkable}) select [0, CFG("ladderFTCandidates")];
 	} else {
 		_owned = _owned select [0, 1];
 	};

@@ -310,13 +310,13 @@ SWLC_fnc_adDebit = {
 
 // Pays _amount back to the side's AI warlords, poorest first, up to Warlords' CP cap. Returns what was paid.
 SWLC_fnc_adCredit = {
-	params ["_side", "_amount"];
+	params ["_side", "_amount", ["_except", []]];
 	private _paid = 0;
 	if (_amount <= 0) exitWith {0};
 	isNil {
 		private _cap = missionNamespace getVariable ["BIS_WL_maxCP", 10e10];
 		private _left = _amount;
-		private _takers = ([_side] call SWLC_fnc_adAIWarlords) apply {[_x getVariable ["BIS_WL_funds", 0], _x]};
+		private _takers = (([_side] call SWLC_fnc_adAIWarlords) - _except) apply {[_x getVariable ["BIS_WL_funds", 0], _x]};
 		_takers sort true;
 		{
 			if (_left <= 0) exitWith {};
