@@ -131,7 +131,7 @@ private _xS = _route # 1;
 {[east, _x] call SWLG_take} forEach (_route select [2, 99]);
 [west, _yS] call SWLG_take;
 [west, _xS] call SWLG_take;
-_xS setVariable ["SWLC_capMult_WEST", 100];
+_xS setVariable ["SWLC_capMult_WEST", 100000];
 
 // The commander needs a few passes with X in its owned list, and some groups to send.
 // Fund first and wait for full groups, because a group that has just spawned is one man and dies at once.

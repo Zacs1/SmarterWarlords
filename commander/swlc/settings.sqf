@@ -543,6 +543,10 @@ SWLC_settings = createHashMapFromArray [
 	["roundSuddenDeathMax", 2],
 
 	// Part H: smarter squads. One switch per behaviour.
+	["moveCalm", true],               // a group on the march with no known enemy near goes back to its ordered behaviour, instead of crawling in COMBAT
+	["moveCalmRange", 300],           // known enemies this close leave it in COMBAT; matches engagedRange
+	["moveCalmMaxAge", 60],           // seconds a sighting still counts
+	["moveCalmStates", ["Travelling", "Advancing"]],
 	["squadPosture", true],           // formation, speed and stance by situation
 	["squadBounding", true],          // two fire teams leapfrog from the rally inward
 	["squadFlank", true],             // pinned squads suppress and flank (always off while LAMBS is loaded)

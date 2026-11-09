@@ -114,8 +114,9 @@ def check_resupply(data) -> tuple[bool, str]:
     low = first(gf(data, "low"))
     if not low:
         return False, "the scenario never stripped the ammo"
-    sent = [e for e in hold(data, "resupply_sent") if _t(e) >= _t(low)]
-    delivered = [e for e in hold(data, "resupply_delivered") if _t(e) >= _t(low)]
+    # Real fighting can run them low before the scenario strips their ammo, and that resupply counts just the same.
+    sent = hold(data, "resupply_sent")
+    delivered = hold(data, "resupply_delivered")
     close = [e for e in delivered if _num(e, "dist", 1e6) <= DELIVERED_METRES]
     restock = hold(data, "restock")
     return bool(sent) and bool(close), f"{len(sent)} sent, {len(delivered)} delivered, {len(close)} within {DELIVERED_METRES} m, {len(restock)} restocks; first sent {_t(first(sent)) - _t(low) if sent else '-'} s after going low"

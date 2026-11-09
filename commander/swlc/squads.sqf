@@ -77,6 +77,7 @@ SWLC_fnc_squadTick = {
 			[_cmd, _groups # _i, "squad", {
 				params ["_cmd", "_g"];
 				[_cmd, _g, _contacts] call SWLC_fnc_squadGroup;
+				[_cmd, _g] call SWLC_fnc_squadCalm;
 			}] call SWLC_fnc_resGuarded;
 			_i = (_i + 1) mod _n;
 		};
@@ -91,6 +92,26 @@ SWLC_fnc_squadTick = {
 			[_cmd, _x] call SWLC_fnc_squadLight;
 		};
 	} forEach (allGroups select {side _x == _side && {!((_x getVariable ["SWLC_borrowedBy", objNull]) isEqualTo objNull)}});
+};
+
+// The engine drops a group into COMBAT when it knows of an enemy however far away, and a group in COMBAT bounds forward at
+// well under half its pace. A group on the march with nobody it knows of near it goes back to its ordered behaviour.
+// Inside this range Engaged and the squad rules take over, so nothing here touches a real fight.
+SWLC_fnc_squadCalm = {
+	params ["_cmd", "_g"];
+	if !(CFG("moveCalm")) exitWith {};
+	private _l = leader _g;
+	if (!alive _l || {(behaviour _l) != "COMBAT"} || {!isNull objectParent _l}) exitWith {};
+	if !(([_g] call SWLC_fnc_state) in CFG("moveCalmStates")) exitWith {};
+	if (!([_g] call SWLC_fnc_resMayTouch) || {[_g] call SWLC_fnc_lambsBusy} || {[_g] call SWLC_fnc_groupFighting}) exitWith {};
+	if ((_l targets [true, CFG("moveCalmRange"), [], CFG("moveCalmMaxAge")]) isNotEqualTo []) exitWith {};
+	private _want = (_g getVariable ["SWLC_order", []]) param [1, "AWARE"];
+	if (_want == "COMBAT") then {_want = "AWARE"};
+	_g setBehaviour _want;
+	if (time >= (_g getVariable ["SWLC_calmLogAt", -1e6])) then {
+		_g setVariable ["SWLC_calmLogAt", time + 60];
+		["C_SQUAD", [["side", side _g], ["behaviour", "calm"], ["event", "calm"], ["group", groupId _g], ["to", _want], ["state", [_g] call SWLC_fnc_state]]] call SWLC_fnc_log;
+	};
 };
 
 SWLC_fnc_squadGroup = {
