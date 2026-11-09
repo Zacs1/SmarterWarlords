@@ -79,6 +79,7 @@ SWLG_placeEast = {
 		private _u = _g createUnit ["O_T_Soldier_F", _c, [], 25, "NONE"];
 		_u allowDamage false;
 		_u disableAI "PATH";
+		removeAllWeapons _u; // combat mode alone didn't stop them shooting the holdouts in the first run
 	};
 	_g setCombatMode "BLUE";
 	_g
@@ -133,7 +134,9 @@ private _xS = _route # 1;
 _xS setVariable ["SWLC_capMult_WEST", 100];
 
 // The commander needs a few passes with X in its owned list, and some groups to send.
-private _end = time + 150;
+// Fund first and wait for full groups, because a group that has just spawned is one man and dies at once.
+[west, 4000] call SWLG_fund;
+private _end = time + 240;
 private _pool = [];
 waitUntil {
 	sleep 2;
@@ -141,10 +144,10 @@ waitUntil {
 		[_x] call SWLC_fnc_resMayTouch
 		&& {!(([_x] call SWLC_fnc_state) in ["Picket", "Reserve", "Raiding", "Probing", "Hunting"])}
 		&& {vehicle leader _x == leader _x}
+		&& {([_x] call SWLC_fnc_groupMen) >= 4}
 	};
 	(count _pool) >= 5 || {time > _end}
 };
-[west, 4000] call SWLG_fund;
 sleep 10;
 
 SWLC_fnc_frontFighting = {
