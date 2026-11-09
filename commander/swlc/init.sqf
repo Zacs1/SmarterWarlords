@@ -28,7 +28,7 @@ if (!isServer) exitWith {};
 
 	{
 		call compile preprocessFileLineNumbers format ["swlc\%1.sqf", _x];
-	} forEach ["util", "adapter", "radio", "intel", "groups", "staging", "logistics", "vehicles", "wave", "watchdog", "routes", "resilience", "defence", "smart", "status", "rules", "raids", "pickets", "economy", "squads", "strategy", "menu", "commander", "debug"];
+	} forEach ["util", "adapter", "radio", "intel", "groups", "staging", "logistics", "vehicles", "wave", "watchdog", "routes", "resilience", "upkeep", "defence", "smart", "status", "rules", "raids", "pickets", "economy", "squads", "strategy", "menu", "commander", "debug"];
 
 	waitUntil {sleep 1; [] call SWLC_fnc_adReady};
 	[] call SWLC_fnc_adInit;

@@ -569,5 +569,27 @@ SWLC_settings = createHashMapFromArray [
 	["joinPushRadius", 500],
 	["joinPushGroups", 2],
 	["joinPushSeconds", 240],
-	["joinPushCooldown", 240]
+	["joinPushCooldown", 240],
+
+	// Resilience. Master switch for the whole part; not tied to rulesVariant.
+	["resilience", true],
+
+	// Upkeep (upkeep.sqf). Group repairs that run every tick.
+	["upkeepSlices", 2],              // the heavier checks take this many ticks to go round every group
+	["upkeepRoomExtra", 3],           // men a receiving group can hold above the side's squad size
+	["upkeepNoFlee", true],           // commander groups never flee; the commander's own fall-back rules decide retreats
+	["upkeepLeader", true],           // a group with a dead leader gets a new one and its orders again
+	["leaderWarlordMetres", 150],     // a respawned warlord this close to the group's stand-in leader takes it back
+	["upkeepStragglers", true],
+	["stragglerMetres", 200],         // further than this from the leader counts as straggling
+	["stragglerGraceSeconds", 30],    // must still be that far after this long
+	["stragglerRecheckSeconds", 60],  // time between recalls of the same man
+	["stragglerJoin", true],          // a straggler nearer another group joins it instead of walking back
+	["stragglerJoinMetres", 500],     // furthest a straggler goes to join another group
+	["upkeepRemnants", true],
+	["remnantMaxMen", 2],             // a group with no living warlord and this few men merges into another
+	["remnantMergeMetres", 400],      // furthest a remnant goes to merge
+	["remnantGraceSeconds", 60],      // time for a dead warlord to respawn beside his men first
+	["upkeepLeftovers", true],
+	["leftoverSeconds", 45]           // men out of their vehicle, or left sitting in one, this long get picked up
 ];
