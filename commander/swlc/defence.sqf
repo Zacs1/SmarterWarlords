@@ -217,7 +217,7 @@ SWLC_fnc_defRespond = {
 
 	// 3. A raid-sized threat: the attack's least-engaged groups, never ones in a fight, up to a third of the attack.
 	// A bigger force is a counterattack and falls through to the full defence rules below.
-	if (_prop && {!_big || {!_worth}} && {(count (_rec get "groups")) < _need}) exitWith {
+	if (_prop && {!_big} && {(count (_rec get "groups")) < _need}) exitWith {
 		private _op = _cmd get "op";
 		if (isNil "_op") exitWith {};
 		private _live = [_op] call SWLC_fnc_waveLive;
