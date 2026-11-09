@@ -183,7 +183,20 @@ private _other = (([west] call SWLC_fnc_adAvailable) - _front) select {!(([_x] c
 if (_other isNotEqualTo []) then {_cmd set ["preferredTarget", _other # 0]} else {_cmd deleteAt "preferredTarget"};
 [[format ["event=front|sector=%1|front=%2|links=%3|owned=%4|other=%5", _raidName, [_front] call SWLG_nameOf, [[_raidS] call SWLC_fnc_adLinks] call SWLG_nameOf,
 	[[west] call SWLC_fnc_adOwned] call SWLG_nameOf, [_other] call SWLG_nameOf]]] call SWLG_emit;
-sleep 25;
+// A vote already running when the front appeared can still land on the raid sector, so it is sent back until it doesn't.
+private _settle = time + 120;
+waitUntil {
+	sleep 3;
+	private _now = [west] call SWLC_fnc_adTarget;
+	if (_now isEqualTo _raidS && {_other isNotEqualTo []}) then {
+		_cmd set ["preferredTarget", _other # 0];
+		[west] call SWLC_fnc_adForceRevote;
+		[[format ["event=revote_after_setup|from=%1|to=%2", _raidName, [_other # 0] call SWLC_fnc_adName]]] call SWLG_emit;
+		sleep 30;
+	};
+	private _after = [west] call SWLC_fnc_adTarget;
+	(!isNull _after && {_after isNotEqualTo _raidS}) || {time > _settle}
+};
 private _targetNow = [west] call SWLC_fnc_adTarget;
 [[format ["event=target_after_setup|target=%1|front=%2", if (isNull _targetNow) then {"-"} else {[_targetNow] call SWLC_fnc_adName}, [[west] call SWLC_fnc_raidFront] call SWLG_nameOf]]] call SWLG_emit;
 private _trg = [_raidS, west] call SWLC_fnc_capTrigger;
