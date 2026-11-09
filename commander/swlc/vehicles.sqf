@@ -111,6 +111,7 @@ SWLC_fnc_vehShop = {
 		} else {
 			private _need = if (([_side] call SWLC_fnc_cpFree) >= CFG("vehSeatForFullGroupCP")) then {_men max CFG("shopGroupSize")} else {_men};
 			private _entry = [_cmd, _need] call SWLC_fnc_vehCheapestTransport;
+			if (_entry isEqualTo []) then {_entry = [_cmd, _men] call SWLC_fnc_vehCheapestTransport};
 			if (_entry isNotEqualTo [] && {([_cmd] call SWLC_fnc_vehFleetCount) < CFG("vehMaxFleet")} && {[_cmd, _entry, _g, _w] call SWLC_fnc_vehBuy}) then {_buys = _buys + 1};
 		};
 	} forEach _candidates;

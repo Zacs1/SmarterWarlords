@@ -391,7 +391,7 @@ SWLC_settings = createHashMapFromArray [
 	["cpReserveMax", 1500],           // ...capped here, so it never stops a poor side buying cheap transport
 	["cpPlentiful", 3000],            // CP above the reserve at which combat vehicles are bought without a threat reason
 	["cpCombatFraction", 0.6],        // most of the spare CP one combat vehicle may use
-	["shopGroupSize", 5],
+	["shopGroupSize", 10],            // men per AI warlord, leader included. Stock Warlords lets a warlord have 9 others
 	["shopMaxInfantryPerTick", 6],
 	["scanBuying", true],
 	["scanStampSeconds", 130],        // blocks Warlords' own random AI scan on an all-AI side
@@ -472,9 +472,9 @@ SWLC_settings = createHashMapFromArray [
 	["difficulty", "normal"],         // "easy", "normal" or "hard"
 	["reactionDelay", 0],             // seconds before a new sighting affects plans and defence (radio is not delayed)
 	["difficultyPresets", createHashMapFromArray [
-		["easy", [["intelDecayMultiplier", 0.6], ["shopGroupSize", 3], ["reactionDelay", 20], ["scanBuying", false]]],
-		["normal", [["intelDecayMultiplier", 1], ["shopGroupSize", 5], ["reactionDelay", 0], ["scanBuying", true]]],
-		["hard", [["intelDecayMultiplier", 1.5], ["shopGroupSize", 6], ["reactionDelay", 0], ["scanBuying", true]]]
+		["easy", [["intelDecayMultiplier", 0.6], ["shopGroupSize", 6], ["reactionDelay", 20], ["scanBuying", false]]],
+		["normal", [["intelDecayMultiplier", 1], ["shopGroupSize", 10], ["reactionDelay", 0], ["scanBuying", true]]],
+		["hard", [["intelDecayMultiplier", 1.5], ["shopGroupSize", 10], ["reactionDelay", 0], ["scanBuying", true]]]
 	]],
 	["verboseLog", true],             // per-vehicle and per-guard lines for the test analyser; the playable build turns them off
 	["profileStages", false],         // test switch: log the cost of each stage of the commander tick
