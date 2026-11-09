@@ -173,8 +173,28 @@ while {(([west] call SWLC_fnc_raidFront) isEqualTo []) && {time < _deadline}} do
 	};
 	sleep 8;
 };
-private _front = [west] call SWLC_fnc_raidFront;
-if (_front isEqualTo []) exitWith {[["event=fail_no_front"]] call SWLG_emit};
+// A side can't raid its own target, so WEST needs somewhere else to vote. With nothing neutral in reach, the enemy sector it would have to vote for is handed over.
+private _handDeadline = time + 60;
+waitUntil {
+	sleep 2;
+	private _reach = ([west] call SWLC_fnc_adAvailable) select {!([_x] call SWLC_fnc_adIsBase)};
+	private _neutral = _reach select {!(([_x] call SWLC_fnc_adOwner) in [west, east])};
+	private _enemy = _reach select {([_x] call SWLC_fnc_adOwner) == east};
+	if (_neutral isEqualTo [] && {_enemy isNotEqualTo []}) then {
+		[west, _enemy # 0] call SWLG_take;
+		sleep 6;
+	};
+	(_neutral isNotEqualTo [] && {_enemy isNotEqualTo []}) || {time > _handDeadline}
+};
+// Picked by hand: the raid front leaves out WEST's own target, which a running vote may still land on.
+private _westOwned = [west] call SWLC_fnc_adOwned;
+private _enemyNear = ([east] call SWLC_fnc_adOwned) select {
+	!([_x] call SWLC_fnc_adIsBase)
+	&& {_x getVariable ["BIS_WL_handleServerRunning", false]}
+	&& {(([_x] call SWLC_fnc_adLinks) findIf {_x in _westOwned}) >= 0}
+};
+if (_enemyNear isEqualTo []) exitWith {[["event=fail_no_front"]] call SWLG_emit};
+private _front = _enemyNear;
 
 private _raidS = _front # 0;
 private _raidName = [_raidS] call SWLC_fnc_adName;
