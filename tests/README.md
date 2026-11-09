@@ -21,7 +21,9 @@ Options for `run-round.ps1`:
 | `-Mods "450814997,1858075458"` | Workshop items to load. Only CBA_A3 and LAMBS stable are allowed |
 | `-NoBuild` | Uses the test mission as last built |
 
-Scenario tests are short and end with `python tools\analyse_round.py <rpt> --gate <name>`. Gates are `gate0`, `phase1`, `gate2`, `phase2soak`, `phase3`, `phase4` and `phase6`. The analyser exits 0 only if every check that ran passed.
+Scenario tests are short and end with `python tools\analyse_round.py <rpt> --gate <name>`. Gates are `gate0`, `phase1`, `gate2`, `phase2soak`, `phase3`, `phase4`, `phase6`, `partr` and `soakr`. The analyser exits 0 only if every check that ran passed.
+
+The `sabotage` scenario is the resilience test and stays in the suite: it kills leaders, teleports groups into the sea, forest and rocks, deletes waypoints, flips and immobilises vehicles, scatters a squad and throws an error in one group's handling, then `--gate partr` checks each group is moving again within 3 minutes. Run it with `-Scenario sabotage -Overrides "testHooks=true"`. `--gate soakr` runs on any full round: no commander group goes 4 minutes without progress.
 
 `tools/lint-sqf.ps1` parses every commander file with HEMTT. `tools/build-playable.ps1` builds the scenario for hosted play.
 
