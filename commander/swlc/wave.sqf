@@ -377,9 +377,13 @@ SWLC_fnc_rallyTick = {
 	if ((_op get "firstAtRally") < 0) then {_op set ["firstAtRally", time]};
 	private _waited = time - (_op get "firstAtRally");
 	private _forced = _op getOrDefault ["forceGo", false];
-	private _byCount = (count _ready) >= ([_cmd, _op] call SWLC_fnc_stratGoCount);
-	private _byTimer = _waited >= ([_cmd, _op] call SWLC_fnc_rallyLoneWait);
-	if !(_byCount || {_byTimer} || {_forced}) exitWith {};
+	// Enough of the wave has to be here first, so it goes in as one attack and not two groups at a time. goMassMaxSeconds is for stragglers who never come.
+	private _share = [_live, _ready] call SWLC_fnc_rallyShare;
+	private _massOk = !CFG("goMassGate") || {_share >= CFG("goMassFraction")};
+	private _byCount = _massOk && {(count _ready) >= ([_cmd, _op] call SWLC_fnc_stratGoCount)};
+	private _byTimer = _massOk && {_waited >= ([_cmd, _op] call SWLC_fnc_rallyLoneWait)};
+	private _byMax = CFG("goMassGate") && {_waited >= CFG("goMassMaxSeconds")};
+	if !(_byCount || {_byTimer} || {_byMax} || {_forced}) exitWith {};
 	if ([_cmd, _op] call SWLC_fnc_smartPrepFire) exitWith {};
 
 	_op set ["forceGo", false];
@@ -388,8 +392,24 @@ SWLC_fnc_rallyTick = {
 	{[_cmd, _x, "waveGoIn", {[_cmd, _op, _g] call SWLC_fnc_waveGoIn}] call SWLC_fnc_resGuarded} forEach _ready;
 	[_cmd, _op, _ready] call SWLC_fnc_smartSmoke;
 	["C_WAVE", [["side", _side], ["wave", _op get "id"], ["event", "assault"], ["groups", count _ready], ["men", _op get "launchStrength"], ["target", [_target] call SWLC_fnc_adName],
-		["by_timer", _byTimer && {!_byCount}], ["forced", _forced], ["wait", round _waited]]] call SWLC_fnc_log;
+		["by_timer", _byTimer && {!_byCount}], ["by_max", _byMax && {!_massOk}], ["share", (round (_share * 100)) / 100], ["forced", _forced], ["wait", round _waited]]] call SWLC_fnc_log;
 	[_side, "moveout", [count _ready, [_target] call SWLC_fnc_adName]] call SWLC_fnc_radio;
+};
+
+// The share of the wave's men who are ready at the rally. Scouts have their own job and don't count.
+SWLC_fnc_rallyShare = {
+	params ["_live", "_ready"];
+	private _men = [_live select {([_x] call SWLC_fnc_state) != "Recon"}] call SWLC_fnc_groupsMen;
+	if (_men <= 0) exitWith {1};
+	(([_ready] call SWLC_fnc_groupsMen) / _men) min 1
+};
+
+// The longest a group can be left at the rally by the go rule, for anything that needs to know how long is normal.
+SWLC_fnc_rallyMaxWait = {
+	params ["_cmd", "_op"];
+	private _wait = [_cmd, _op] call SWLC_fnc_rallyLoneWait;
+	if (CFG("goMassGate")) then {_wait = _wait max CFG("goMassMaxSeconds")};
+	_wait
 };
 
 // How long a lone group waits at the rally before going in anyway.

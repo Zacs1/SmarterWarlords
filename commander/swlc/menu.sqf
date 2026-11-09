@@ -530,7 +530,7 @@ SWLC_fnc_menuDo_plan = {
 		private _held = (_op getOrDefault ["playerHoldUntil", -1]) - time;
 		if (_held > 0) exitWith {format ["Holding for you, %1 left.", [_held] call SWLC_fnc_statusClock]};
 		if ((_op get "firstAtRally") >= 0) exitWith {
-			format ["Going in within %1.", [(_op get "firstAtRally") + ([_cmd, _op] call SWLC_fnc_rallyLoneWait) - time] call SWLC_fnc_statusClock]
+			format ["Going in within %1.", [(_op get "firstAtRally") + ([_cmd, _op] call SWLC_fnc_rallyMaxWait) - time] call SWLC_fnc_statusClock]
 		};
 		"Waiting for groups at the rally."
 	};

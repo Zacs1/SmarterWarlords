@@ -87,8 +87,11 @@ SWLC_fnc_statusRow = {
 					private _ready = {([_x] call SWLC_fnc_state) == "Waiting" && {time >= (_x getVariable ["SWLC_restUntil", -1])}} count ([_op] call SWLC_fnc_waveLive);
 					private _need = (([_cmd, _op] call SWLC_fnc_stratGoCount) - _ready) max 0;
 					private _first = _op get "firstAtRally";
-					private _left = if (_first < 0) then {0} else {(_first + ([_cmd, _op] call SWLC_fnc_rallyLoneWait)) - time};
-					_reason = if (_need > 0) then {format ["needs %1 more group to go, or alone in %2", _need, [_left] call SWLC_fnc_statusClock]} else {"going in now"};
+					private _left = if (_first < 0) then {0} else {(_first + ([_cmd, _op] call SWLC_fnc_rallyMaxWait)) - time};
+					private _live = [_op] call SWLC_fnc_waveLive;
+					private _here = _live select {([_x] call SWLC_fnc_state) == "Waiting" && {time >= (_x getVariable ["SWLC_restUntil", -1])}};
+					private _short = CFG("goMassGate") && {([_live, _here] call SWLC_fnc_rallyShare) < CFG("goMassFraction")};
+					_reason = if (_need > 0 || {_short}) then {format ["waiting for the rest of the wave, going in within %1", [_left] call SWLC_fnc_statusClock]} else {"going in now"};
 				};
 			};
 		};

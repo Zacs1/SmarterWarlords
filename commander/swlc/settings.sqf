@@ -216,6 +216,9 @@ SWLC_settings = createHashMapFromArray [
 
 	// Rally and go
 	["goMinGroups", 2],               // groups ready at the rally that go in together
+	["goMassGate", true],             // the first push waits until most of the wave has reached the rally
+	["goMassFraction", 0.6],          // share of the wave's men ready at the rally
+	["goMassMaxSeconds", 270],        // after the first group arrives, go with whoever is there
 	["rallyLoneWait", 60],            // a lone group with nobody fighting waits this long, then goes in anyway
 	["rallyOutside", 200],            // metres outside the sector square
 	["rallyJoinRadius", 500],         // a group this close to the rally skips the muster

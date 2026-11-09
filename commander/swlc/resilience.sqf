@@ -808,7 +808,7 @@ SWLC_fnc_resSweepSlice = {
 	private _idle = 0;
 	private _total = 0;
 	private _op = _cmd get "op";
-	private _loneWait = if (isNil "_op") then {CFG("rallyLoneWait")} else {[_cmd, _op] call SWLC_fnc_rallyLoneWait};
+	private _loneWait = if (isNil "_op") then {CFG("rallyLoneWait")} else {[_cmd, _op] call SWLC_fnc_rallyMaxWait};
 	{
 		private _g = _x;
 		private _spent = 0;

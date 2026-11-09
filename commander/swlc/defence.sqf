@@ -483,7 +483,7 @@ SWLC_fnc_planPublish = {
 	private _op = _cmd get "op";
 	if (!isNull _target && {!isNil "_op"}) then {
 		private _eta = -1;
-		if ((_op get "firstAtRally") >= 0) then {_eta = round (((_op get "firstAtRally") + ([_cmd, _op] call SWLC_fnc_rallyLoneWait) - time) max 0)};
+		if ((_op get "firstAtRally") >= 0) then {_eta = round (((_op get "firstAtRally") + ([_cmd, _op] call SWLC_fnc_rallyMaxWait) - time) max 0)};
 		private _musters = [];
 		{
 			if ((_y get "groups") isNotEqualTo [] || {(_y get "batch") isNotEqualTo []}) then {_musters pushBack [_y get "pos", _y get "name"]};
