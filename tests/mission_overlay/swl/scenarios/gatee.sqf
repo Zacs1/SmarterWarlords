@@ -218,6 +218,18 @@ private _name = [_sector] call SWLC_fnc_adName;
 
 // EAST mustn't happen to vote for the sector under test.
 private _eastTargets = ([east] call SWLC_fnc_adAvailable) - [_sector];
+// On a chain of sectors the sector under test can be EAST's only choice, so hand a sector behind EAST's line back to neutral to give it another.
+if (_eastTargets isEqualTo []) then {
+	private _links = [_sector] call SWLC_fnc_adLinks;
+	private _spare = ([east] call SWLC_fnc_adOwned) select {!([_x] call SWLC_fnc_adIsBase) && {!(_x in _links)}};
+	if (_spare isNotEqualTo []) then {
+		(_spare # 0) setVariable ["BIS_WL_sectorSide", resistance, true];
+		[[format ["event=east_spare|sector=%1", [_spare # 0] call SWLC_fnc_adName]]] call SWLG_emit;
+		sleep 2;
+		_eastTargets = ([east] call SWLC_fnc_adAvailable) - [_sector];
+	};
+};
+[[format ["event=east_options|count=%1", count _eastTargets]]] call SWLG_emit;
 if (_eastTargets isNotEqualTo []) then {_cmdE set ["preferredTarget", _eastTargets # 0]};
 // A vote that is already running can still land on it, and a raid on the side's own target stands itself down.
 private _settle = time + 120;
