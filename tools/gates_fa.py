@@ -138,16 +138,22 @@ def check_fallback(data) -> tuple[bool, str]:
 
 
 def check_counter(data) -> tuple[bool, str]:
-    wiped = first(gf(data, "wiped"))
+    # Real fighting can finish them before the scenario does, so take whichever came first.
+    wiped = [e for e in (first(gf(data, "wiped")), first(hold(data, "wiped"))) if e]
     if not wiped:
-        return False, "the scenario never killed the holdouts"
-    t0 = _t(wiped)
+        return False, "the holdouts were never wiped out"
+    t0 = min(_t(e) for e in wiped)
     counter = goal_changes(data, "counter", t0)
     x = x_name(data)
     if not counter:
         return False, "the goal never became counterattack after the holdouts died"
-    after = _t(counter[0]) - t0
-    ticks = [e for e in gf(data, "tick") if _t(e) > t0 + COUNTER_REACTION_SECONDS]
+    # Holdouts dying during a Part C defence: the goal stays on Y until that's over, so the clock starts when it ends.
+    ended = [_t(e) for e in hold(data, "defend_end") if _t(e) >= t0]
+    start = min(ended) if ended else t0
+    after = _t(counter[0]) - start
+    # With the commit timer off this scenario runs into the 12-minute deadlock vote, which real rounds don't use with holdouts.
+    deadlock = [_t(e) for e in data.of("C_DECISION") if e.get("side") == SIDE and e.get("decision") == "deadlock_revote" and _t(e) >= t0]
+    ticks = [e for e in gf(data, "tick") if _t(e) > start + COUNTER_REACTION_SECONDS and (not deadlock or _t(e) < min(deadlock))]
     on_x = sum(1 for e in ticks if e.get("target") == x)
     left = [e for e in hold(data, "reinforce_left") if _t(e) >= t0 - 300]
     ok = after <= COUNTER_REACTION_SECONDS and bool(ticks) and on_x == len(ticks)

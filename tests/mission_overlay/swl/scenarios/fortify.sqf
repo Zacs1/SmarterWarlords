@@ -1,5 +1,5 @@
 // Fortify gate: defenders buy, place and crew statics when their sector is threatened. Run with:
-//   powershell -ExecutionPolicy Bypass -File tools\run-round.ps1 -DurationMinutes 12 -Name fortify -Scenario fortify -Overrides "goMinGroups=99;rallyLoneWait=99999;scanBuying=false;ruleCommitTimer=false;ftChargeCost=false"
+//   powershell -ExecutionPolicy Bypass -File tools\run-round.ps1 -DurationMinutes 12 -Name fortify -Scenario fortify -Overrides "alertEnabled=false;goMinGroups=99;rallyLoneWait=99999;scanBuying=false;ruleCommitTimer=false;ftChargeCost=false"
 // Then: python tools/analyse_round.py <rpt> --gate fortify
 //
 // Lines go out as SWL|GFORT. Test hook: this writes the alert record and the stance straight onto the WEST commander record, so it

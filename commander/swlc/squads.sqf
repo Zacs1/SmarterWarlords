@@ -88,6 +88,7 @@ SWLC_fnc_squadTick = {
 	private _side = _cmd get "side";
 	{
 		if (!(_x in _groups)) then {
+			[_x] call SWLC_fnc_squadCalmOff;
 			[_cmd, _x, _contacts] call SWLC_fnc_squadGroup;
 			[_cmd, _x] call SWLC_fnc_squadLight;
 		};
@@ -101,17 +102,36 @@ SWLC_fnc_squadCalm = {
 	params ["_cmd", "_g"];
 	if !(CFG("moveCalm")) exitWith {};
 	private _l = leader _g;
-	if (!alive _l || {(behaviour _l) != "COMBAT"} || {!isNull objectParent _l}) exitWith {};
-	if !(([_g] call SWLC_fnc_state) in CFG("moveCalmStates")) exitWith {};
-	if (!([_g] call SWLC_fnc_resMayTouch) || {[_g] call SWLC_fnc_lambsBusy} || {[_g] call SWLC_fnc_groupFighting}) exitWith {};
-	if ((_l targets [true, CFG("moveCalmRange"), [], CFG("moveCalmMaxAge")]) isNotEqualTo []) exitWith {};
-	private _want = (_g getVariable ["SWLC_order", []]) param [1, "AWARE"];
-	if (_want == "COMBAT") then {_want = "AWARE"};
-	_g setBehaviour _want;
-	if (time >= (_g getVariable ["SWLC_calmLogAt", -1e6])) then {
-		_g setVariable ["SWLC_calmLogAt", time + 60];
-		["C_SQUAD", [["side", side _g], ["behaviour", "calm"], ["event", "calm"], ["group", groupId _g], ["to", _want], ["state", [_g] call SWLC_fnc_state]]] call SWLC_fnc_log;
+	private _on = _g getVariable ["SWLC_calmOn", false];
+	if (!_on && {(behaviour _l) != "COMBAT"}) exitWith {};
+	private _ok = alive _l
+		&& {isNull objectParent _l}
+		&& {([_g] call SWLC_fnc_state) in CFG("moveCalmStates")}
+		&& {[_g] call SWLC_fnc_resMayTouch}
+		&& {!([_g] call SWLC_fnc_lambsBusy)}
+		&& {!([_g] call SWLC_fnc_groupFighting)}
+		&& {(_l targets [true, CFG("moveCalmRange"), [], CFG("moveCalmMaxAge")]) isEqualTo []};
+	if (!_ok) exitWith {[_g] call SWLC_fnc_squadCalmOff};
+	// Without this the engine puts them straight back into COMBAT, and setBehaviour alone only lasts a moment.
+	_g setVariable ["SWLC_calmOn", true];
+	{_x disableAI "AUTOCOMBAT"} forEach ((units _g) select {alive _x});
+	if ((behaviour _l) == "COMBAT") then {
+		private _want = (_g getVariable ["SWLC_order", []]) param [1, "AWARE"];
+		if (_want == "COMBAT") then {_want = "AWARE"};
+		_g setBehaviour _want;
+		if (time >= (_g getVariable ["SWLC_calmLogAt", -1e6])) then {
+			_g setVariable ["SWLC_calmLogAt", time + 60];
+			["C_SQUAD", [["side", side _g], ["behaviour", "calm"], ["event", "calm"], ["group", groupId _g], ["to", _want], ["state", [_g] call SWLC_fnc_state]]] call SWLC_fnc_log;
+		};
 	};
+};
+
+// Hands the group back to the engine: any contact, any change of job, or a player taking it.
+SWLC_fnc_squadCalmOff = {
+	params ["_g"];
+	if !(_g getVariable ["SWLC_calmOn", false]) exitWith {};
+	_g setVariable ["SWLC_calmOn", false];
+	{_x enableAI "AUTOCOMBAT"} forEach (units _g);
 };
 
 SWLC_fnc_squadGroup = {
