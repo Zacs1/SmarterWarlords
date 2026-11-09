@@ -150,7 +150,6 @@ SWLC_settings = createHashMapFromArray [
 	["resLocality", true],
 
 	// Resilience: "resilience" gates every behaviour below. It stays active when the rules variant is off.
-	["resilience", true],
 
 	// Route network: long moves follow roads and tracks in short hops
 	["routeNetwork", true],
@@ -572,7 +571,6 @@ SWLC_settings = createHashMapFromArray [
 	["joinPushCooldown", 240],
 
 	// Resilience. Master switch for the whole part; not tied to rulesVariant.
-	["resilience", true],
 
 	// Upkeep (upkeep.sqf). Group repairs that run every tick.
 	["upkeepSlices", 2],              // the heavier checks take this many ticks to go round every group
