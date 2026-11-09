@@ -138,7 +138,10 @@ SWLC_fnc_vehTick = {
 				_r set ["state", "ready"];
 				["C_VEH", [["side", _side], ["id", _r get "id"], ["event", "landed"], ["after", round (time - (_r get "boughtAt"))], ["x", round ((getPosATL _v) # 0)], ["y", round ((getPosATL _v) # 1)]]] call SWLC_fnc_log;
 			};
-			[_cmd, _r get "group", "vehStuck", {[_cmd, _r] call SWLC_fnc_vehStuckCheck}] call SWLC_fnc_resGuarded;
+			[_cmd, _r get "group", "vehStuck", {
+				[_cmd, _r] call SWLC_fnc_vehStuckCheck;
+				[_r] call SWLC_fnc_vehSlowCheck;
+			}] call SWLC_fnc_resGuarded;
 			if (CFG("verboseLog")) then {
 				private _p = getPosATL _v;
 				["C_VTRK", [["side", _side], ["id", _r get "id"], ["state", _r get "state"], ["wave", _r get "wave"], ["x", round (_p # 0)], ["y", round (_p # 1)]]] call SWLC_fnc_log;
@@ -148,7 +151,91 @@ SWLC_fnc_vehTick = {
 	_cmd set ["vehicles", _keep];
 };
 
-// A driver that barely moves: reset once, then abandon the vehicle and walk.
+// Well clear of any fight? A lift must never be something a player sees, or a way out of trouble.
+SWLC_fnc_vehSafeToLift = {
+	params ["_cmd", "_g", "_v"];
+	private _side = _cmd get "side";
+	private _p = getPosATL _v;
+	if ((behaviour leader _g) == "COMBAT") exitWith {false};
+	if ([_g] call SWLC_fnc_groupFighting) exitWith {false};
+	if (((crew _v) findIf {isPlayer _x}) >= 0) exitWith {false};
+	if ((allPlayers findIf {alive _x && {(_x distance2D _p) < CFG("vehUnstickPlayerRadius")}}) >= 0) exitWith {false};
+	private _enemy = (_p nearEntities [["Man", "Car", "Tank", "Air", "Ship", "StaticWeapon"], CFG("vehUnstickEnemyRadius")]) findIf {
+		alive _x && {(side group _x) in [west, east, resistance]} && {[side group _x, _side] call BIS_fnc_sideIsEnemy}
+	};
+	if (_enemy >= 0) exitWith {false};
+	private _zone = [west, east] findIf {
+		private _t = [_x] call SWLC_fnc_adTarget;
+		!isNull _t && {[_t, _p, CFG("vehUnstickZoneRadius")] call SWLC_fnc_adInSquare}
+	};
+	_zone < 0
+};
+
+// A vehicle that isn't getting anywhere. Returns true if this dealt with it.
+SWLC_fnc_vehStuckRescue = {
+	params ["_cmd", "_g", "_r", "_v"];
+	private _flipped = ((vectorUp _v) # 2) < 0.4;
+	private _safe = [_cmd, _g, _v] call SWLC_fnc_vehSafeToLift;
+	// It can't drive: nobody sits in it waiting for a timer, under fire or not.
+	if (!canMove _v || {(fuel _v) <= 0} || {_flipped && {!_safe}}) exitWith {
+		_g setVariable ["SWLC_legAbandon", true];
+		["C_VEH", [["side", _cmd get "side"], ["id", _r get "id"], ["event", "wreck"], ["group", groupId _g], ["canmove", canMove _v], ["flipped", _flipped]]] call SWLC_fnc_log;
+		true
+	};
+	if !(CFG("vehUnstick") && {_safe}) exitWith {false};
+	if ((_r getOrDefault ["lifts", 0]) >= CFG("vehUnstickMax")) exitWith {false};
+	if ((time - (_r getOrDefault ["liftAt", -1e6])) < CFG("vehUnstickCooldown")) exitWith {false};
+
+	private _p = getPosATL _v;
+	private _goal = _g getVariable ["SWLC_goal", []];
+	private _dir = if (_goal isEqualTo []) then {getDir _v} else {_p getDir _goal};
+	private _probe = _p getPos [CFG("vehUnstickAhead"), _dir];
+	private _roads = _probe nearRoads 80;
+	private _spot = _probe;
+	if (_roads isNotEqualTo []) then {
+		_spot = getPosATL (([_roads, [], {_x distance2D _probe}, "ASCEND"] call BIS_fnc_sortBy) # 0);
+	};
+	_spot = _spot findEmptyPosition [0, 30, typeOf _v];
+	if (_spot isEqualTo [] || {surfaceIsWater _spot}) exitWith {false};
+
+	_v setVelocity [0, 0, 0];
+	_v setVehiclePosition [_spot, [], 0, "NONE"];
+	_v setDir _dir;
+	_v setVectorUp (surfaceNormal (getPosATL _v));
+	_r set ["lifts", (_r getOrDefault ["lifts", 0]) + 1];
+	_r set ["liftAt", time];
+	_r set ["stuck", 0];
+	_r set ["sample", [time, getPosATL _v]];
+	[_g, _g getVariable ["SWLC_wpProgress", 0]] call SWLC_fnc_adApplyOrder;
+	["C_VEH", [["side", _cmd get "side"], ["id", _r get "id"], ["event", "lifted"], ["group", groupId _g], ["count", _r get "lifts"], ["flipped", _flipped],
+		["x", round (_p # 0)], ["y", round (_p # 1)], ["tox", round (_spot # 0)], ["toy", round (_spot # 1)]]] call SWLC_fnc_log;
+	true
+};
+
+// Slow down where the pile-ups happen: behind another vehicle and around sectors. Off again everywhere else.
+SWLC_fnc_vehSlowCheck = {
+	params ["_r"];
+	if !(CFG("vehSlowNearby")) exitWith {};
+	private _v = _r get "obj";
+	private _g = _r get "group";
+	if (isNull _g || {!alive _v}) exitWith {};
+	private _want = -1;
+	if (((_g getVariable ["SWLC_leg", ""]) in ["DRIVE", "FOLLOW"]) && {(behaviour leader _g) != "COMBAT"}) then {
+		private _ahead = ((_v nearEntities [["Car", "Tank"], CFG("vehSlowRadius")]) - [_v]) findIf {
+			private _rel = _v getRelDir _x;
+			alive _x && {_rel < 60 || {_rel > 300}}
+		};
+		private _p = getPosATL _v;
+		private _atSector = SWLC_sectors findIf {[_x, _p, CFG("vehSlowSectorRadius")] call SWLC_fnc_adInSquare};
+		if (_ahead >= 0 || {_atSector >= 0}) then {_want = CFG("vehSlowSpeed")};
+	};
+	if (_want != (_r getOrDefault ["slow", -1])) then {
+		_r set ["slow", _want];
+		_v forceSpeed _want;
+	};
+};
+
+// A driver that barely moves: lifted clear if that's safe, otherwise reset once, then abandon the vehicle and walk.
 SWLC_fnc_vehStuckCheck = {
 	params ["_cmd", "_r"];
 	private _g = _r get "group";
@@ -164,6 +251,10 @@ SWLC_fnc_vehStuckCheck = {
 	if ((time - _t0) < CFG("vehStuckWindow")) exitWith {};
 	private _moved = _p distance2D _p0;
 	_r set ["sample", [time, _p]];
+	if (_moved >= CFG("vehUnstickResetMetres")) then {_r set ["lifts", 0]};
+	private _rescued = false;
+	if (_moved < CFG("vehStuckMinMetres")) then {_rescued = [_cmd, _g, _r, _v] call SWLC_fnc_vehStuckRescue};
+	if (_rescued) exitWith {};
 
 	if (_leg == "FOLLOW") exitWith {
 		if (_moved < 1 && {(time - (_r getOrDefault ["nudged", -1000])) >= CFG("combatNudgeSeconds")}) then {
@@ -172,7 +263,7 @@ SWLC_fnc_vehStuckCheck = {
 		};
 	};
 
-	if (_moved >= CFG("vehStuckMinMetres") || {(behaviour leader _g) == "COMBAT"}) exitWith {};
+	if (_moved >= CFG("vehStuckMinMetres")) exitWith {};
 	private _n = (_r get "stuck") + 1;
 	_r set ["stuck", _n];
 	["C_VEH", [["side", _cmd get "side"], ["id", _r get "id"], ["event", "stuck"], ["count", _n], ["group", groupId _g], ["x", round (_p # 0)], ["y", round (_p # 1)]]] call SWLC_fnc_log;

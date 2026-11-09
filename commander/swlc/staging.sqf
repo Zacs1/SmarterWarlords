@@ -293,6 +293,13 @@ SWLC_fnc_musterMountTick = {
 		private _gone = _batch select {
 			((time - (_x getVariable ["SWLC_mountGo", time])) >= CFG("mountCapSeconds")) || {[_x] call SWLC_fnc_groupReady}
 		};
+		// Vehicles pull out one at a time, so two never fight over the same bit of road.
+		private _riders = _gone select {count ([_x] call SWLC_fnc_vehRecOf) > 0};
+		if (_riders isNotEqualTo []) then {
+			private _due = (time - (_rec getOrDefault ["lastVehOut", -1e6])) >= CFG("vehDepartGap");
+			_gone = (_gone - _riders) + ([[], [_riders # 0]] select _due);
+			if (_due) then {_rec set ["lastVehOut", time]};
+		};
 		if (_gone isEqualTo []) exitWith {};
 		// waveDepart empties the record's batch, so whoever is still boarding goes back in afterwards.
 		private _stay = _batch - _gone;

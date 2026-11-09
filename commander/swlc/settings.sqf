@@ -261,9 +261,22 @@ SWLC_settings = createHashMapFromArray [
 	["dismountArriveRadius", 50],
 	["mountCapSeconds", 60],          // after the muster ends
 	["mountLateExtra", 45],           // a group not ready at the cap is a second element, this long at most
-	["vehStuckWindow", 40],
+	["vehStuckWindow", 25],
 	["vehStuckMinMetres", 15],
 	["vehStuckLimit", 2],
+	["vehUnstick", true],             // a stuck vehicle travelling well away from any fight is lifted to a clear spot nearby and carries on
+	["vehUnstickEnemyRadius", 300],   // no lift with an enemy this close
+	["vehUnstickPlayerRadius", 150],  // nor a player close enough to watch it happen
+	["vehUnstickZoneRadius", 350],    // nor this close to the edge of a sector either side is attacking
+	["vehUnstickAhead", 60],          // looks for a road this far ahead, towards where it was going
+	["vehUnstickCooldown", 45],
+	["vehUnstickMax", 3],             // lifts before the men get out and walk
+	["vehUnstickResetMetres", 100],   // driving this far in one check counts as recovered, and the lifts are forgotten
+	["vehDepartGap", 8],              // seconds between vehicles pulling out of the same sector
+	["vehSlowNearby", true],          // slow down near other vehicles and sectors, where the pile-ups happen
+	["vehSlowRadius", 40],            // another vehicle this close ahead
+	["vehSlowSectorRadius", 120],     // metres from a sector's edge
+	["vehSlowSpeed", 8],              // metres per second
 	["combatFollowDist", 75],         // metres behind the lead infantry (50 to 100 in the design)
 	["combatReorderDist", 50],
 	["combatNudgeSeconds", 100],      // keeps Warlords' stuck check from abandoning a holding crew
