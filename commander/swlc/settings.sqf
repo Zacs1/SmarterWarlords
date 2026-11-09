@@ -172,7 +172,7 @@ SWLC_settings = createHashMapFromArray [
 	["holdClearSeconds", 120],        // that sector counts as clear after this long with no fighting and no enemy known inside
 	["holdNearXMetres", 350],         // a group fighting this close to the lost sector is not pulled away
 	["holdDefendNearMetres", 150],    // a group this far outside the threatened sector's square turns to defend it
-	["commitSeconds", 660],           // 11 minutes on one target
+	["commitSeconds", 1800],          // 30 minutes on one target: a safety net against a stuck objective, not a deadline
 	["commitExtendSeconds", 180],     // staying buys this much more time
 	["commitMaxExtensions", 2],
 	["commitStayProgress", 0.5],      // capture progress that always counts as close to winning

@@ -70,3 +70,9 @@ The C-E reviewer read the merged defence code (c1e733e). Fixed: a holdout goal o
 
 - sabotage3 (`2026-11-09_20-19-15_sabotage3`, build 92dffac): all 11 cases PASS; the single script error is the injected one (the generic "no script errors" line FAILs on it, as always). Ladder: reissue 3, reroute 1, fasttravel 1, respawn 0.
 - Final soak `soakfront` started at about 20:41 on build 1f3be02 (code as 92dffac), 70 minutes, solo, CBA + LAMBS.
+
+- Soak at 34 minutes, findings for the hand-off (no code changes during the soak):
+  - The commit timer's "losing" test uses own losses per enemy killed, with kills floored at 1. So 5 men lost for 1 killed is "clearly losing" (`commitLossRatio` 2), and with no other target available it rebuilds. WEST's wave 2 was 650 m from Rautake when that fired at t=1330. Same pattern and nearly the same times in soakfinal, so it predates this run. Suggested fix: require a minimum number of losses before the ratio counts. Not applied, it couldn't be soaked in the time left.
+  - Vehicles bought at Laikoro land in tight ground: 16 of the stuck or lifted events are around 1700,6000-6200. The same vehicle gets lifted repeatedly (id 10 three times in 2 minutes) and is eventually abandoned, and the group walks about 2 km.
+
+- User during the soak: "maybe our commitment timer needs to be way longer lol, I think it should less be a window and more giving the player to cancel an objective if they decide to?" `commitSeconds` set to 1800 (from 660). The running soak has the old value, its mission was already built. Player cancel command deferred: new menu code that needs a human client to test.
