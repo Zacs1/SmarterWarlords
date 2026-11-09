@@ -50,7 +50,7 @@ def check(name: str, gate: str | None = None) -> Callable[[CheckFn], CheckFn]:
 def _load_gate_modules() -> None:
     """Gate checks kept in their own files, one per rules part."""
     import importlib
-    for name in ("gates_d", "gates_e", "gates_f", "gates_g", "gates_h", "gates_activity", "gates_r", "gates_front", "gates_fb", "gates_fd", "gates_fa", "gates_steamroll", "gates_alert", "gates_stance"):
+    for name in ("gates_d", "gates_e", "gates_f", "gates_g", "gates_h", "gates_activity", "gates_r", "gates_front", "gates_fb", "gates_fd", "gates_fa", "gates_steamroll", "gates_alert", "gates_stance", "gates_fort"):
         try:
             importlib.import_module(name).register(check)
         except ModuleNotFoundError:

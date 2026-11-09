@@ -75,6 +75,7 @@ SWLC_fnc_upkeepBusy = {
 SWLC_fnc_upkeepOnJob = {
 	params ["_g", "_u"];
 	_u isEqualTo (_g getVariable ["SWLC_rearmUnit", objNull]) || {(_u getVariable ["SWLC_kitTask", ""]) != ""}
+		|| {!isNull (_u getVariable ["SWLC_fortGun", objNull])} || {(_u getVariable ["SWLC_fortAT", []]) isNotEqualTo []}
 };
 
 // Writes the group's standing order again, from where it had got to.
@@ -305,7 +306,7 @@ SWLC_fnc_upkeepLooseCrew = {
 	{
 		private _u = _x;
 		private _v = objectParent _u;
-		if (alive _u && {!isNull _v} && {[_g, _v] call SWLC_fnc_upkeepLooseRide}) then {
+		if (alive _u && {!isNull _v} && {isNull (_u getVariable ["SWLC_fortGun", objNull])} && {[_g, _v] call SWLC_fnc_upkeepLooseRide}) then {
 			// A crew with a working gun in a fight is doing its job, whoever put it there. Men sitting in a truck under fire are not.
 			if !(_combat && {canFire _v} && {alive gunner _v}) then {
 				private _at = _u getVariable ["SWLC_loAt", -1];
