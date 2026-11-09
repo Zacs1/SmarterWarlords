@@ -48,8 +48,9 @@ SWLC_fnc_refreshGroups = {
 	private _side = _cmd get "side";
 	private _list = _cmd get "groups";
 
+	private _quarantined = _cmd getOrDefault ["quarantine", []];
 	{
-		if !(_x in _list) then {
+		if !(_x in _list || {_x in _quarantined}) then {
 			if !([_x] call SWLC_fnc_adGroupHasPlayer) then {
 				_list pushBack _x;
 				_x setVariable ["SWLC_waveId", -1];
