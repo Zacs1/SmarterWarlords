@@ -5,6 +5,41 @@
 SWLC_settings = createHashMapFromArray [
 	// Master switch
 	["commanderEnabled", true],
+	// Defenders fortify (fortify.sqf). Works in vanilla rules and the rules variant alike.
+	["fortifyEnabled", true],
+	["fortifyMaxPerSector", 4],          // hard cap per sector, whatever the stance says
+	["fortifyBuyPerTick", 1],            // guns bought per 10 s tick, so a threatened sector fills up over a minute or so
+	["fortifyStaticsAttack", 2],         // guns per sector while the commander is attacking, it needs the CP for the attack
+	["fortifyStaticsHold", 4],
+	["fortifyStaticsRebuild", 4],
+	["fortifyCpFractionAttack", 0.25],   // a gun may cost at most this share of free CP (CP above the reserve)
+	["fortifyCpFractionHold", 0.6],
+	["fortifyCpFractionRebuild", 0.6],
+	["fortifyMix", ["MG", "AT", "GL", "MG"]], // what to buy, in order; a kind that can't be had gives way to the next
+	["fortifyPreferHigh", true],         // the raised tripod versions of the MG and GL, to see over grass and walls
+	["fortifyEdgeFraction", 0.4],        // how far out along the approach, as a share of the sector's width (0.5 is the edge)
+	["fortifyMinCentreDist", 40],        // metres. Never closer to the sector centre than this
+	["fortifySpacing", 30],              // metres between guns at one sector
+	["fortifyRoadClear", 8],             // metres clear of any road
+	["fortifyMaxGradient", 0.4],
+	["fortifyCoverRange", 200],          // metres of open terrain wanted along the line of fire. Any valid spot if none has it
+	["fortifyNoSpotRetry", 60],          // seconds before looking again at a sector with no valid ground
+	["fortifyRespectEnemyNear", true],   // no buying with an enemy near, as Warlords refuses a player placing a defence
+	["fortifyReplaceSeconds", 240],      // a destroyed gun still counts against the cap for this long
+	["fortifyCrewReach", 300],           // metres. Men further than this from a gun or road spot aren't sent
+	["fortifyMaxCrewPerGroup", 2],       // the rest of the group keeps its normal job
+	["fortifyCrewWalkSeconds", 30],      // time allowed to reach a gun is this...
+	["fortifyCrewWalkSpeed", 2.5],       // ...plus the distance at this many metres a second
+	["fortifyCrewSeatDist", 12],         // metres. Beside the gun when the time runs out: seated directly rather than given up on
+	["fortifyATMen", 2],                 // AT soldiers covering the approach road, per alert
+	["fortifyATReachFraction", 0.75],    // road points further from the centre than this share of the sector's width are ignored
+	["fortifyATRoadOffset", 12],         // metres off the road
+	["fortifyATLookRange", 150],
+	["fortifyATArrive", 6],              // metres from the spot that counts as arrived
+	["fortifyATWalkSeconds", 120],
+	["fortifyATDrift", 25],              // pushed further than this off the spot and he is sent back...
+	["fortifyATDriftMax", 2],            // ...this many times, then released
+	["fortifyRefuseLogSeconds", 60],     // one log line per sector and reason in this long
 	["killLog", true],                // one C_KILL line per man killed, with position and sides, for the front-line analysis
 
 	// A group a human was in within this many seconds is never ordered

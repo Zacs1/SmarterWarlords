@@ -144,6 +144,7 @@ SWLC_radioLines = createHashMapFromArray [
 	["engagedjoin", ["Moving to help at %1.", "We're closest to %1, going in.", "On our way to the fight at %1.", "Joining the contact at %1."]],
 	["engagedclear", ["Contact's dealt with, carrying on.", "Clear here, moving on.", "That's done, back on the road.", "All quiet, resuming."]],
 	["engagedfall", ["Too many, %1. Falling back to %2.", "Can't hold this, %1. Back to %2.", "Outnumbered, %1. Pulling back to %2.", "%1, more than we can take. Heading for %2."]],
+	["fortbuilt", ["Guns going in at %1, facing their approach.", "Setting up static weapons at %1.", "Digging guns in at %1, they're coming that way.", "%1 is getting guns on the approach."]],
 	["failed", ["Pull back to the rally and regroup.","That's enough. Fall back to the rally.", "Attack's failed. Regroup at the rally.", "Break off, get back to the rally."]]
 ];
 
