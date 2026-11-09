@@ -104,3 +104,14 @@ Every soak must measure each AI commander's activity and pass or fail on it. See
 - gated11 (Part D, with resilience merged): all 16 checks PASS, 0 script errors, install unchanged. Tagged rules-d-done. Resilience acted during it (6 sweep fixes, 4 ladder rungs, 9 leader replacements) without disturbing the scenario.
 - Route file loads: both 16:09 rounds logged action=ready, source=file, at t=5 (40 s when generated).
 - smokeoff (rules variant off, 10 min) started alongside sabotage1. If sabotage leads to code changes, it gets rerun on the final code.
+
+## Resilience sabotage round 1 (2026-11-09)
+
+`2026-11-09_16-09-27_sabotage1`, install unchanged. 8 of 11 cases passed: kill_leader, kill_leader2, no_waypoints, no_order, forest, rocks, flip, scatter. Respawn rung 0, reissue 1, reroute 1.
+
+Failures, all real, fixed in 085d38f:
+- sea: men swam 70 m in 200 s. The drift read as progress so the ladder never started. New: deep water for 20 s goes straight to fast travel, any sector distance.
+- immobilise: crew stayed in a dead truck for 179 s because the leftover rule waited out combat. New: only a crew with a working gun stays in a fight.
+- script_error: the hook fired and the group recovered, but C_GROUPERR never fired because the error ended only an inner call. New: the guard also counts errors from the ScriptError event, ours only. Whether that event fires on a dedicated server is still unconfirmed.
+
+The first rules-off smoke was stopped at 6 minutes because it was on the old code. sabotage2 and smokeoff2 now run together on 085d38f (two servers, the limit since the PC crash).
