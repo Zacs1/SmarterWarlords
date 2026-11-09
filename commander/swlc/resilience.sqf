@@ -282,7 +282,7 @@ SWLC_fnc_groupReassign = {
 	_g setVariable ["SWLC_scoutUntil", nil];
 	_g setVariable ["SWLC_joinUntil", -1];
 	[_g, "Unassigned", [], _reason] call SWLC_fnc_setState;
-	if (!isNil {_cmd get "op"} && {!([_cmd] call SWLC_fnc_rebuilding)}) exitWith {
+	if (!isNil {_cmd get "op"} && {!([_cmd] call SWLC_fnc_stanceNoWave)}) exitWith {
 		[_cmd, _g] call SWLC_fnc_musterAssign;
 		true
 	};
@@ -306,7 +306,7 @@ SWLC_fnc_ladderReachableJob = {
 	params ["_cmd", "_g", "_reason"];
 	if !([_g] call SWLC_fnc_resMayTouch) exitWith {false};
 	private _op = _cmd get "op";
-	private _joins = !isNil "_op" && {!([_cmd] call SWLC_fnc_rebuilding)} && {[getPosATL leader _g, _op get "rally"] call SWLC_fnc_ladderWalkable};
+	private _joins = !isNil "_op" && {!([_cmd] call SWLC_fnc_stanceNoWave)} && {[getPosATL leader _g, _op get "rally"] call SWLC_fnc_ladderWalkable};
 	[_cmd, _g] call SWLC_fnc_waveRemoveGroup;
 	[_g] call SWLC_fnc_adClearOrder;
 	_g setVariable ["SWLC_picketSector", nil];
@@ -602,7 +602,7 @@ SWLC_fnc_resFaultOf = {
 	if (_state == "-") exitWith {"no_task"};
 
 	if (_state == "Unassigned") exitWith {
-		if ([_cmd] call SWLC_fnc_rebuilding) exitWith {""};
+		if ([_cmd] call SWLC_fnc_stanceNoWave) exitWith {""};
 		if (_age < CFG("idleGraceSeconds")) exitWith {""};
 		if (!isNil {_cmd get "op"} && {time >= (_g getVariable ["SWLC_noAssignUntil", -1])}) exitWith {"no_task"};
 		if ((_g getVariable ["SWLC_order", []]) isEqualTo []) exitWith {"no_task"};
@@ -653,7 +653,7 @@ SWLC_fnc_resFix = {
 		"reissue"
 	};
 	[_cmd, _g, "sweep_" + _fault] call SWLC_fnc_groupReassign;
-	["assign", "hold"] select (isNil {_cmd get "op"} || {[_cmd] call SWLC_fnc_rebuilding})
+	["assign", "hold"] select (isNil {_cmd get "op"} || {[_cmd] call SWLC_fnc_stanceNoWave})
 };
 
 // Re-issues a group's orders when it moves to another machine.
@@ -750,7 +750,7 @@ SWLC_fnc_resIdleCap = {
 	private _share = _idle / _total;
 	if (_share <= CFG("idleCapShare")) exitWith {};
 	if (time < (_cmd getOrDefault ["idleCapNext", 0])) exitWith {};
-	if ([_cmd] call SWLC_fnc_rebuilding) exitWith {};
+	if ([_cmd] call SWLC_fnc_stanceNoWave) exitWith {};
 	private _hasOp = !isNil {_cmd get "op"};
 	private _target = _cmd get "target";
 	// No plan and no target just means a vote is under way, and a new plan needs a target.

@@ -43,10 +43,13 @@ SWLC_fnc_raidRefusal = {
 SWLC_fnc_raidSpare = {
 	params ["_cmd", "_near"];
 	private _groups = _cmd get "groups";
-	private _attack = {([_x] call SWLC_fnc_state) in ["Unassigned", "Mustering", "Travelling", "Advancing", "Waiting", "Assaulting", "Regrouping"]} count _groups;
-	private _can = _attack - CFG("raidKeepGroups");
+	// In hold everyone is in the reserve, so that's where a raid comes from, and the side keeps more back.
+	private _hold = ([_cmd] call SWLC_fnc_stanceOf) == "hold";
+	private _extra = [[], ["Reserve"]] select _hold;
+	private _attack = {([_x] call SWLC_fnc_state) in (["Unassigned", "Mustering", "Travelling", "Advancing", "Waiting", "Assaulting", "Regrouping"] + _extra)} count _groups;
+	private _can = _attack - ([CFG("raidKeepGroups"), CFG("stanceHoldRaidKeep")] select _hold);
 	if (_can <= 0) exitWith {[]};
-	private _free = _groups select {([_x] call SWLC_fnc_state) in ["Unassigned", "Mustering", "Travelling"] && {vehicle leader _x == leader _x}};
+	private _free = _groups select {([_x] call SWLC_fnc_state) in (["Unassigned", "Mustering", "Travelling"] + _extra) && {vehicle leader _x == leader _x}};
 	_free = [_free, [], {leader _x distance2D _near}, "ASCEND"] call BIS_fnc_sortBy;
 	_free select [0, _can]
 };
@@ -238,7 +241,8 @@ SWLC_fnc_raidDecide = {
 
 	private _op = _cmd get "op";
 	private _stuck = !isNil "_op" && {((_op getOrDefault ["pushFails", 0]) >= 1) || {(time - (_op get "created")) >= CFG("raidStuckAfterSeconds")}};
-	private _limit = [CFG("raidMaxDefenders"), CFG("raidMaxDefendersStuck")] select _stuck;
+	private _hold = ([_cmd] call SWLC_fnc_stanceOf) == "hold";
+	private _limit = [[CFG("raidMaxDefenders"), CFG("raidMaxDefendersStuck")] select _stuck, CFG("stanceHoldRaidMaxDefenders")] select _hold;
 	private _best = objNull;
 	private _bestScore = -1e9;
 	{
@@ -252,10 +256,11 @@ SWLC_fnc_raidDecide = {
 	if (isNull _best) exitWith {};
 
 	private _spare = [_cmd, [_best] call SWLC_fnc_adPos] call SWLC_fnc_raidSpare;
-	if ((count _spare) < CFG("raidAIMinGroups")) exitWith {};
+	private _maxGroups = [CFG("raidAIGroups"), CFG("stanceHoldRaidGroups")] select _hold;
+	if ((count _spare) < (CFG("raidAIMinGroups") min _maxGroups)) exitWith {};
 	if (([_cmd, _best, [_side] call SWLC_fnc_cpFree] call SWLC_fnc_raidRefusal) != "") exitWith {};
 	if !([_side, CFG("raidCostCP")] call SWLC_fnc_adDebit) exitWith {};
-	[_cmd, _best, "ai", _spare select [0, CFG("raidAIGroups")]] call SWLC_fnc_raidStart;
+	[_cmd, _best, "ai", _spare select [0, _maxGroups]] call SWLC_fnc_raidStart;
 };
 
 // How much a raid on this sector is worth. Part G adds what the sector unlocks.

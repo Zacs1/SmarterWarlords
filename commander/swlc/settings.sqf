@@ -31,6 +31,34 @@ SWLC_settings = createHashMapFromArray [
 	["alertBreakInMen", 2],           // enemy men known inside the square before the reserve goes in
 	["alertInsideMargin", 0],         // metres outside the square that count as inside
 	["alertFaceSeconds", 30],         // how often a group at its spot is turned to face the approach
+
+	// Per-side stance (stance.sqf): attack, hold or rebuild. On whether or not the rules variant is.
+	// ratio = own strength / (known enemy strength * stanceIntelFactor) * how recent waves went.
+	["stanceEnabled", true],
+	["stanceTickSeconds", 20],         // how often the balance is worked out
+	["stanceMinSeconds", 180],         // least time in a stance before the balance can change it; a commit-timer rebuild ignores this
+	["stanceHoldBelow", 0.9],          // attack to hold under this ratio
+	["stanceRebuildBelow", 0.55],      // hold to rebuild under this
+	["stanceHoldAbove", 0.8],          // rebuild to hold at this or more
+	["stanceAttackAbove", 1.25],       // hold or rebuild back to attack at this or more
+	["stanceMinKnown", 12],            // less known enemy strength than this is too little to judge: attack
+	["stanceIntelFactor", 1.25],       // the board is a partial picture, so the known enemy counts for a bit more
+	["stanceMemoryHalfLife", 240],     // seconds for the remembered peak of known enemy strength to halve
+	["stanceArmourWeight", 6],         // men one tank or APC counts as, after enough AT cancels it (planAtPerArmour launchers each)
+	["stanceLightWeight", 3],          // men one light vehicle or aircraft counts as
+	["stanceCPPerMan", 150],           // CP that counts as one man of own strength...
+	["stanceCPMaxMen", 15],            // ...up to this many
+	["stanceOutcomeWindow", 420],      // seconds recent wave results count for
+	["stanceOutcomeStep", 0.15],       // change to the ratio per failed push (down) or capture (up)
+	["stanceOutcomeMin", 0.7],
+	["stanceOutcomeMax", 1.2],
+	["stanceHoldReserveFraction", 1],  // in hold, this share of the groups stand in the reserve
+	["stanceHoldRaidKeep", 3],         // in hold, groups kept back when raids and probes draw on the reserve
+	["stanceHoldRaidGroups", 1],       // in hold, groups on one raid
+	["stanceHoldRaidMaxDefenders", 3], // in hold, the most known defenders a raid goes for
+	["stanceAtPerGroup", 1],           // in hold and rebuild, AT launchers wanted per reserve group at the post, plus planAtPerArmour per known armour
+	["stanceLogSeconds", 60],          // how often the C_STANCE state line is logged
+
 	["killLog", true],                // one C_KILL line per man killed, with position and sides, for the front-line analysis
 
 	// A group a human was in within this many seconds is never ordered

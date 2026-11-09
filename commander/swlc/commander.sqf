@@ -130,7 +130,7 @@ SWLC_fnc_cmdLogCost = {
 // One tick, in order. Each entry runs in its own frame: a list of stages together, or a function that works
 // through musters or groups one at a time. A tick spread over several frames costs the same but never stalls one.
 SWLC_cmdSlices = [
-	["refreshGroups", "cmdTarget", "econTick", "commitTick", "rebuildTick", "intelSummarise", "logInit"],
+	["refreshGroups", "cmdTarget", "stanceTick", "econTick", "commitTick", "rebuildTick", "intelSummarise", "logInit"],
 	["vehTick", "watchdogTick", "waveHead"],
 	"cmdMusterSlices",
 	["waveTail"],
@@ -241,7 +241,7 @@ SWLC_fnc_cmdVoteStuck = {
 	params ["_cmd", "_t"];
 	if (!isNull _t) exitWith {_cmd deleteAt "noTargetSince"};
 	private _side = _cmd get "side";
-	if (([_cmd] call SWLC_fnc_rebuilding) || {[_side] call SWLC_fnc_adSideHasPlayers}) exitWith {_cmd deleteAt "noTargetSince"};
+	if (([_cmd] call SWLC_fnc_commitRebuilding) || {[_side] call SWLC_fnc_adSideHasPlayers}) exitWith {_cmd deleteAt "noTargetSince"};
 	private _since = _cmd getOrDefault ["noTargetSince", -1];
 	if (_since < 0) exitWith {_cmd set ["noTargetSince", time]};
 	private _wait = CFG("voteStuckSeconds");
@@ -278,12 +278,12 @@ SWLC_fnc_cmdTarget = {
 			[_side, _t] call SWLC_fnc_adBlockVanillaScan;
 			[_cmd] call SWLC_fnc_commitNew;
 			_cmd deleteAt "preferredTarget";
-			if !([_cmd] call SWLC_fnc_rebuilding) then {[_cmd] call SWLC_fnc_cmdNewPlan};
+			if !([_cmd] call SWLC_fnc_stanceNoWave) then {[_cmd] call SWLC_fnc_cmdNewPlan};
 		};
 	};
 
 	// A target that arrived during a rebuild gets its plan once the rebuild is over.
-	if (!isNull _t && {isNil {_cmd get "op"}} && {([_t] call SWLC_fnc_adOwner) != _side} && {!([_cmd] call SWLC_fnc_rebuilding)}) then {[_cmd] call SWLC_fnc_cmdNewPlan};
+	if (!isNull _t && {isNil {_cmd get "op"}} && {([_t] call SWLC_fnc_adOwner) != _side} && {!([_cmd] call SWLC_fnc_stanceNoWave)}) then {[_cmd] call SWLC_fnc_cmdNewPlan};
 
 	// Deadlock breaker: no capture for too long, force a new vote on an all-AI side.
 	if (!isNull _t
@@ -325,7 +325,7 @@ SWLC_fnc_voteCast = {
 	};
 	// While rebuilding, nobody votes. If a respawning warlord has voted anyway, Warlords' timer is running and an
 	// empty vote would hand the side its first sector in the list, so the vote gets a real answer. The rebuild still holds the groups back.
-	if ([_cmd] call SWLC_fnc_rebuilding) exitWith {
+	if ([_cmd] call SWLC_fnc_commitRebuilding) exitWith {
 		if (([_side] call SWLC_fnc_adAIWarlords) findIf {!isNull (_x getVariable ["BIS_WL_selectedSector", objNull])} < 0) exitWith {};
 		private _choice = [_cmd] call SWLC_fnc_voteChoose;
 		if (!isNull _choice) then {[_side, _choice, true] call SWLC_fnc_adCastVotes};
