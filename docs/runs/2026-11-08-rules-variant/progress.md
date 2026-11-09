@@ -100,3 +100,7 @@ Every soak must measure each AI commander's activity and pass or fail on it. See
 - smoker: 0 script errors. Route network generated in 40 s: 162 nodes, 182 edges, one component, every sector on a road. Written to commander/swlc/maps/Tanoa_routes.sqf. C_LEADER fired once; no other resilience action needed.
 - gatec2 (Part C scenario): all 6 PASS, 0 script errors.
 - gateh4l (Part H, LAMBS): all PASS after a gate fix. Posture thrash failed at 1.69 changes a minute because the gate merged same-named groups on both sides (Alpha 1-5); keyed by side it is 1.07 against a limit of 1.5. No rerun needed.
+
+- gated11 (Part D, with resilience merged): all 16 checks PASS, 0 script errors, install unchanged. Tagged rules-d-done. Resilience acted during it (6 sweep fixes, 4 ladder rungs, 9 leader replacements) without disturbing the scenario.
+- Route file loads: both 16:09 rounds logged action=ready, source=file, at t=5 (40 s when generated).
+- smokeoff (rules variant off, 10 min) started alongside sabotage1. If sabotage leads to code changes, it gets rerun on the final code.
