@@ -181,8 +181,8 @@ private _raidName = [_raidS] call SWLC_fnc_adName;
 // The next vote must not take the raid sector itself as WEST's target.
 private _other = (([west] call SWLC_fnc_adAvailable) - _front) select {!(([_x] call SWLC_fnc_adOwner) in [west, east])};
 if (_other isNotEqualTo []) then {_cmd set ["preferredTarget", _other # 0]} else {_cmd deleteAt "preferredTarget"};
-[format ["event=front|sector=%1|front=%2|links=%3|owned=%4|other=%5", _raidName, [_front] call SWLG_nameOf, [[_raidS] call SWLC_fnc_adLinks] call SWLG_nameOf,
-	[[west] call SWLC_fnc_adOwned] call SWLG_nameOf, [_other] call SWLG_nameOf]] call SWLG_emit;
+[[format ["event=front|sector=%1|front=%2|links=%3|owned=%4|other=%5", _raidName, [_front] call SWLG_nameOf, [[_raidS] call SWLC_fnc_adLinks] call SWLG_nameOf,
+	[[west] call SWLC_fnc_adOwned] call SWLG_nameOf, [_other] call SWLG_nameOf]]] call SWLG_emit;
 sleep 25;
 private _targetNow = [west] call SWLC_fnc_adTarget;
 [[format ["event=target_after_setup|target=%1|front=%2", if (isNull _targetNow) then {"-"} else {[_targetNow] call SWLC_fnc_adName}, [[west] call SWLC_fnc_raidFront] call SWLG_nameOf]]] call SWLG_emit;
