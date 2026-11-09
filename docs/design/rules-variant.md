@@ -99,6 +99,25 @@ All of it lives in `economy.sqf` and `economy_client.sqf`. Each rule has a switc
 - Rearming from crates, friendly vehicles and fallen friendlies, respecting stretched supply for crates.
 - With LAMBS loaded: garrison and building clearing through LAMBS, and our stance commands wait while LAMBS has the group.
 
+## Part R: resilience
+
+No commander group can get lost or give up. `resilience.sqf`, `routes.sqf`, `upkeep.sqf`, and the existing `watchdog.sqf`, `commander.sqf` and adapter. Master switch `resilience`, plus a switch per behaviour. Unlike parts B to E, this stays on when the rules variant is off.
+
+- **Sweep** (`resSweep`): every tick, every commander group must have a task, a current waypoint and a goal that still makes sense. A failing group gets a new task at once. Logged as `C_RES`.
+- **Ladder** (`resLadder`): re-issue orders, try a different route, dismount, fast travel to the nearest safe owned sector (up to `ladderFTCandidates`), then the last rung. Each rung gets `ladderRungSeconds`, and gaining `ladderProgressMetres` ends the climb. Every rung is logged as `C_LADDER`.
+- **Last rung** (`ladderRespawn`): the group's bought men are deleted and their price refunded, the slot warlord is killed through Warlords' own forced respawn, and the men come back through the shop as fresh reinforcements. It waits at least `ladderMinClimbSeconds` after the first rung. At most `ladderRespawnMax` per side per `ladderRespawnWindowSeconds`; past that the group gets a job it can reach.
+- **Idle cap** (`resIdleCap`): more than `idleCapShare` of a side's groups idle at once drops the plan and re-plans. Logged as `C_IDLECAP`.
+- **Route network** (`routeNetwork`): a per-map network of road and track points connecting every sector, in `commander/swlc/maps/<world>_routes.sqf`. A map without a file builds one at mission start over several frames, and `tools/extract_routes.py` turns that round's log into the file. Moves over `routeMinMetres` follow it in hops of about `routeHopMetres`.
+- **Water** (`noWaterMoves`): a destination that can't be reached on land goes by fast travel.
+- **Destinations** (`validateDestinations`): every order is snapped to the nearest open, reachable ground.
+- **Stragglers** (`upkeepStragglers`): further than `stragglerMetres` from the leader for `stragglerGraceSeconds` gets a recall, or joins another commander group if one is closer.
+- **Remnants and leaders** (`upkeepRemnants`, `upkeepLeader`): groups of one or two merge into a suitable nearby group while their warlord is dead. A dead leader is replaced and the orders are given again.
+- **No fleeing** (`upkeepNoFlee`): commander groups never flee on morale.
+- **Vehicle leftovers** (`upkeepLeftovers`): crew who got out and never remounted, and lone gunners, get picked up and given orders.
+- **Isolation and supervisor** (`resGroupGuard`, `resSupervisor`): each group's handling is guarded, so one group's error stays with it (`C_GROUPERR`). A separate loop restarts the commander if its heartbeat goes quiet for `supervisorStaleSeconds`, and logs why (`C_SUP`).
+- **Locality** (`resLocality`): a group that changes machine has its orders re-issued at once (`C_LOCALITY`).
+- **Sabotage scenario**: `tests/mission_overlay/swl/scenarios/sabotage.sqf`, judged by `tools/gates_r.py`, stays in the test suite.
+
 ## Decision log
 
 | Decision | Why |
@@ -130,3 +149,13 @@ All of it lives in `economy.sqf` and `economy_client.sqf`. Each rule has a switc
 | Borrowed groups go back to the commander when the player dies | A player can be dead for some time, and the groups would stand around in the meantime. The player asks for them again after respawning. For the user to review. |
 | The commander's update is spread across frames, in the same order as before | Most of its cost was short spikes when buying or giving orders to a whole side, and a spike is what a player feels as a stutter. Each muster and each new group gets its own frame, and the two sides work half a cycle apart. |
 | A stuck vote gets nudged after `voteStuckSeconds` | One of 22 recent rounds sat with no target for 1052 seconds and the cause was not found. Re-running the vote is cheap and costs nothing when the vote is healthy. |
+| Commander groups are always warlord groups, so remnants merge only while the warlord is dead | Warlords needs each warlord alone in its own group. A merge while the warlord lives would break that. |
+| The last rung brings men back through the shop instead of creating them | A respawned group then costs and arrives exactly like any other reinforcement, and a refund covers what was deleted. The refund leaves out dying warlords, whose price was paid before the kill. |
+| The last rung waits at least 75 seconds after the first | Fast-failing rungs could otherwise reach it in seconds, for a problem one more re-issue would have solved. |
+| The last rung is capped per side | A bad map area can't turn into a side deleting its own army. Past the cap, a group gets a job it can reach and isn't sent back for `ladderJobHoldSeconds`. |
+| Resilience is outside the rules variant switch | It keeps groups working and changes no rule of the game, so it also protects a round with the rules variant off. |
+| Hops are a chain of real waypoints, and the caller's order stays as it was | Everything that reads a group's order still sees the real goal. The expanded list is kept apart in `SWLC_orderLegs`. |
+| Water moves wait for the route network to be ready | Before then a land route can't be judged, and a wrong answer costs a group 50 CP or a swim. |
+| Raiding, Probing, Recon and Picket groups never receive merged men | Those jobs depend on the group staying small and on task. |
+| Receiving groups may hold the squad size plus three | A strict limit left remnants with nowhere to go on small fronts. |
+| A counterattack on a low-value sector falls through to the full defence rules at `responseCounterattackMen` | That is the written rule. The code was peeling groups for low-value sectors whatever the size of the force, which the Part E round caught. |
