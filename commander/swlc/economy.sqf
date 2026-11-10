@@ -324,7 +324,7 @@ SWLC_fnc_econScanCost = {
 
 SWLC_fnc_econSquadCap = {
 	params ["_side"];
-	CFG("shopGroupSize") + ([0, CFG("townSquadBonus")] select ([_side, "T"] call SWLC_fnc_econBonus))
+	(CFG("shopGroupSize") + ([0, CFG("townSquadBonus")] select ([_side, "T"] call SWLC_fnc_econBonus))) min CFG("shopGroupMax")
 };
 
 // Rearm and repair work near the base, a connected industrial sector, or any owned sector.

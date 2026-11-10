@@ -6,9 +6,64 @@ SWLC_fnc_vehRecOf = { (_this # 0) getVariable ["SWLC_rec", createHashMap] };
 
 SWLC_fnc_vehWorthDriving = {
 	params ["_cmd", "_w", "_from"];
-	private _d = _from distance2D ([_w get "target"] call SWLC_fnc_adPos);
+	private _t = _w get "target";
+	private _d = _from distance2D ([_t] call SWLC_fnc_adPos);
 	// Measured from the far dismount distance: a shorter hop loses more to the mount-up than it saves.
-	(_d - CFG("dismountDistMax")) >= CFG("vehMinDriveDist")
+	(_d - (([_t] call SWLC_fnc_adSize) / 2 + CFG("dismountOutsideMax"))) >= CFG("vehMinDriveDist")
+};
+
+// The squad a parked vehicle belongs to, or grpNull once that has lapsed.
+SWLC_fnc_vehOwner = {
+	params ["_r"];
+	private _o = _r getOrDefault ["owner", grpNull];
+	if (isNull _o || {({alive _x} count units _o) == 0} || {(time - (_r getOrDefault ["ownedAt", -1e6])) > CFG("vehOwnerSeconds")}) exitWith {grpNull};
+	_o
+};
+
+SWLC_fnc_vehFreeFor = {
+	params ["_r", "_g"];
+	private _o = [_r] call SWLC_fnc_vehOwner;
+	isNull _o || {_o isEqualTo _g}
+};
+
+// A squad with its own vehicle close by skips the muster: back aboard and off to the next rally.
+SWLC_fnc_vehExpress = {
+	params ["_cmd", "_op", "_g"];
+	if !(CFG("expressRemount") && {CFG("vehiclesEnabled")}) exitWith {false};
+	if !(leader _g call SWLC_fnc_adIsWarlordUnit) exitWith {false};
+	private _r = _g getVariable ["SWLC_ride", createHashMap];
+	if (count _r == 0 || {count ([_g] call SWLC_fnc_vehRecOf) > 0}) exitWith {false};
+	private _v = _r get "obj";
+	if (isNull _v || {!alive _v} || {!canMove _v} || {(fuel _v) <= 0} || {((vectorUp _v) # 2) < 0.4}) exitWith {false};
+	if ((_r get "state") != "parked" || {!([_r, _g] call SWLC_fnc_vehFreeFor)} || {((_cmd get "vehicles") find _r) < 0}) exitWith {false};
+	private _men = [_g] call SWLC_fnc_groupMen;
+	if ((_r get "seats") < _men || {_men < CFG("expressMinFraction") * CFG("shopGroupSize")}) exitWith {false};
+	if ((leader _g distance2D _v) > CFG("expressRideRadius")) exitWith {false};
+	if !([_cmd, _op, getPosATL _v] call SWLC_fnc_vehWorthDriving) exitWith {false};
+	[_g] call SWLC_fnc_waveGroupStart;
+	_r set ["lifts", 0];
+	[_cmd, _r, _g, _op] call SWLC_fnc_vehClaimParked;
+	_g setVariable ["SWLC_mountGo", time];
+	_g setVariable ["SWLC_musterName", "the vehicles"];
+	[_g, "Mounting", getPosATL _v, "express"] call SWLC_fnc_setState;
+	_g setVariable ["SWLC_leg", "LATE"];
+	[_cmd, _g] call SWLC_fnc_vehMountGroup;
+	["C_WAVE", [["side", _cmd get "side"], ["wave", _op get "id"], ["event", "express"], ["group", groupId _g], ["veh", _r get "id"], ["men", _men], ["dist", round (leader _g distance2D _v)]]] call SWLC_fnc_log;
+	true
+};
+
+// Men who have reached their vehicle and still are not in it get seated, as long as no player is near enough to see.
+SWLC_fnc_vehHurryBoard = {
+	params ["_g"];
+	if !(CFG("mountHurry")) exitWith {};
+	private _r = [_g] call SWLC_fnc_vehRecOf;
+	if (count _r == 0 || {(_r get "state") == "arriving"} || {!(_r get "mounted")}) exitWith {};
+	if ((time - (_g getVariable ["SWLC_mountGo", time])) < CFG("mountHurrySeconds")) exitWith {};
+	private _v = _r get "obj";
+	if ((allPlayers findIf {alive _x && {(_x distance2D _v) < CFG("mountHurryPlayerRadius")}}) >= 0) exitWith {};
+	{
+		if (alive _x && {vehicle _x != _v} && {isNull objectParent _x} && {(_x distance2D _v) <= CFG("mountHurryRadius")}) then {_x moveInAny _v};
+	} forEach units _g;
 };
 
 SWLC_fnc_vehCheapestTransport = {
@@ -95,6 +150,35 @@ SWLC_fnc_vehShop = {
 		} forEach _byMen;
 	};
 
+	// Armed carriers: the biggest squads ride an armed car or APC that seats them, while there is CP to spare.
+	if (CFG("carrierEnabled")) then {
+		private _have = {(_x getOrDefault ["carrier", false]) && {alive (_x get "obj")}} count (_cmd get "vehicles");
+		private _bySize = [_candidates, [], {[_x] call SWLC_fnc_groupMen}, "DESCEND"] call BIS_fnc_sortBy;
+		{
+			private _g = _x;
+			if (_have >= CFG("carrierMaxPerSide") || {_buys >= CFG("vehBuyPerTick")}) exitWith {};
+			private _free = [_side] call SWLC_fnc_cpFree;
+			if (_free < CFG("carrierMinCP") || {([_cmd] call SWLC_fnc_vehFleetCount) >= CFG("vehMaxFleet")}) exitWith {};
+			private _men = [_g] call SWLC_fnc_groupMen;
+			private _own = (_cmd get "vehicles") findIf {
+				(_x get "state") == "parked" && {alive (_x get "obj")} && {canMove (_x get "obj")} && {(_x get "seats") >= _men}
+				&& {((_x get "obj") distance2D _musterPos) <= _radius} && {([_x] call SWLC_fnc_vehOwner) isEqualTo _g}
+			};
+			if (_own < 0) then {
+				// carrierMinSeats keeps the small armed cars out: a squad is capped at its vehicle's seats.
+				private _need = _men max CFG("carrierMinSeats");
+				private _options = _catalog select {(_x # 3) == "combat" && {(_x # 2) >= _need} && {(_x # 1) <= _free * CFG("cpCombatFraction")}};
+				_options = [_options, [], {_x # 1}, "ASCEND"] call BIS_fnc_sortBy;
+				if (_options isNotEqualTo [] && {[_cmd, _options # 0, _g, _w] call SWLC_fnc_vehBuy}) then {
+					([_g] call SWLC_fnc_vehRecOf) set ["carrier", true];
+					_candidates = _candidates - [_g];
+					_buys = _buys + 1;
+					_have = _have + 1;
+				};
+			};
+		} forEach _bySize;
+	};
+
 	// Transport: reuse anything parked nearby, then buy the cheapest that seats the group.
 	{
 		if (_buys >= CFG("vehBuyPerTick")) exitWith {};
@@ -104,6 +188,7 @@ SWLC_fnc_vehShop = {
 			(_x get "state") == "parked" && {alive (_x get "obj")} && {canMove (_x get "obj")} && {(_x get "seats") >= _men} && {((_x get "obj") distance2D _musterPos) <= _radius}
 			&& {(fuel (_x get "obj")) > 0} && {((vectorUp (_x get "obj")) # 2) >= 0.4} && {(speed (_x get "obj")) < 3}
 			&& {(time - (_x getOrDefault ["abandonedAt", -1e6])) >= CFG("vehReclaimSeconds")}
+			&& {[_x, _g] call SWLC_fnc_vehFreeFor}
 		};
 		if (_parked isNotEqualTo []) then {
 			(_parked # 0) set ["lifts", 0];
@@ -136,7 +221,12 @@ SWLC_fnc_vehTick = {
 				_g setVariable ["SWLC_rec", createHashMap];
 				if ((_g getVariable ["SWLC_leg", ""]) in ["DRIVE", "FOLLOW", "LATE"]) then {_g setVariable ["SWLC_legLost", true]};
 			};
+			if (!isNull _v) then {
+				if (isNil {_cmd get "wrecks"}) then {_cmd set ["wrecks", []]};
+				(_cmd get "wrecks") pushBack [_v, time];
+			};
 		} else {
+		  if ([_cmd, _r] call SWLC_fnc_vehDespawnCheck) then {continue};
 			_keep pushBack _r;
 			if ((_r get "state") == "arriving" && {isNull attachedTo _v} && {((getPosATL _v) # 2) < 2}) then {
 				_r set ["state", "ready"];
@@ -153,6 +243,33 @@ SWLC_fnc_vehTick = {
 		};
 	} forEach (_cmd get "vehicles");
 	_cmd set ["vehicles", _keep];
+	if (CFG("vehDespawn")) then {
+		private _wrecks = (_cmd getOrDefault ["wrecks", []]) select {!isNull (_x # 0)};
+		{
+			private _w = _x # 0;
+			if ((time - (_x # 1)) >= CFG("vehWreckSeconds") && {(allPlayers findIf {alive _x && {(_x distance2D _w) < CFG("vehDespawnPlayerRadius")}}) < 0}) then {deleteVehicle _w};
+		} forEach _wrecks;
+		_cmd set ["wrecks", _wrecks];
+	};
+};
+
+// A parked vehicle nobody is coming back for is removed, out of sight of players. Returns true if it went.
+SWLC_fnc_vehDespawnCheck = {
+	params ["_cmd", "_r"];
+	if !(CFG("vehDespawn") && {(_r get "state") == "parked"}) exitWith {false};
+	private _v = _r get "obj";
+	if !("parkedAt" in _r) then {_r set ["parkedAt", time]};
+	private _age = time - (_r get "parkedAt");
+	private _broken = !canMove _v || {(fuel _v) <= 0} || {((vectorUp _v) # 2) < 0.4};
+	private _owner = [_r] call SWLC_fnc_vehOwner;
+	private _owned = !_broken && {!isNull _owner} && {(leader _owner distance2D _v) <= CFG("vehOwnerRadius")};
+	private _limit = if (_broken) then {CFG("vehDespawnBrokenSeconds")} else {[CFG("vehDespawnSeconds"), CFG("vehDespawnOwnedSeconds")] select _owned};
+	if (_age < _limit || {(crew _v) isNotEqualTo []}) exitWith {false};
+	if ((allPlayers findIf {alive _x && {(_x distance2D _v) < CFG("vehDespawnPlayerRadius")}}) >= 0) exitWith {false};
+	private _p = getPosATL _v;
+	["C_VEH", [["side", _cmd get "side"], ["id", _r get "id"], ["event", "despawned"], ["age", round _age], ["broken", _broken], ["owned", _owned], ["x", round (_p # 0)], ["y", round (_p # 1)]]] call SWLC_fnc_log;
+	deleteVehicle _v;
+	true
 };
 
 // Well clear of any fight? A lift must never be something a player sees, or a way out of trouble.
@@ -310,12 +427,16 @@ SWLC_fnc_vehMountGroup = {
 	_g addVehicle _v;
 	_driver assignAsDriver _v;
 	private _rest = _units - [_driver];
+	// The leader of a carried squad gets out with the men, so he is never the gunner.
+	private _carried = (_r getOrDefault ["carrier", false]) && {_driver isNotEqualTo (leader _g)};
+	if (_carried) then {_rest = _rest - [leader _g]};
 	if ((_r get "role") == "combat" && {_rest isNotEqualTo []} && {(_v emptyPositions "Gunner") > 0}) then {
 		(_rest deleteAt 0) assignAsGunner _v;
 	};
 	if ((_r get "role") == "combat" && {_rest isNotEqualTo []} && {(_v emptyPositions "Commander") > 0}) then {
 		(_rest deleteAt 0) assignAsCommander _v;
 	};
+	if (_carried) then {_rest pushBack (leader _g)};
 	{_x assignAsCargo _v} forEach _rest;
 	_units orderGetIn true;
 	["C_VEH", [["side", side _g], ["id", _r get "id"], ["event", "mounting"], ["group", groupId _g]]] call SWLC_fnc_log;
@@ -349,6 +470,14 @@ SWLC_fnc_vehDismount = {
 	_r set ["state", "parked"];
 	_r set ["group", grpNull];
 	_r deleteAt "sample";
+	_r deleteAt "supportDest";
+	_r set ["parkedAt", time];
+	// Still its squad's own: they come back for it when the sector falls.
+	if (_reason in ["dismount", "released", "contact"] && {alive _v} && {canMove _v}) then {
+		_r set ["owner", _g];
+		_r set ["ownedAt", time];
+		_g setVariable ["SWLC_ride", _r];
+	};
 	_g leaveVehicle _v;
 	private _units = (units _g) select {alive _x};
 	{unassignVehicle _x} forEach _units;
@@ -357,6 +486,57 @@ SWLC_fnc_vehDismount = {
 	_g setVariable ["SWLC_rec", createHashMap];
 	private _p = getPosATL _v;
 	["C_VEH", [["side", side _g], ["id", _r get "id"], ["event", "parked"], ["reason", _reason], ["group", groupId _g], ["x", round (_p # 0)], ["y", round (_p # 1)]]] call SWLC_fnc_log;
+};
+
+// An armed carrier at the dismount point: the squad gets out, the driver and gunner stay in and wait.
+SWLC_fnc_vehCarrierDismount = {
+	params ["_cmd", "_g"];
+	private _r = [_g] call SWLC_fnc_vehRecOf;
+	if (count _r == 0) exitWith {};
+	private _v = _r get "obj";
+	private _crew = [driver _v, gunner _v, commander _v] select {!isNull _x && {alive _x}};
+	private _out = (units _g) select {alive _x && {!(_x in _crew)}};
+	{unassignVehicle _x} forEach _out;
+	_out orderGetIn false;
+	{if (vehicle _x == _v) then {doGetOut _x}} forEach _out;
+	_r set ["state", "support"];
+	_r deleteAt "sample";
+	_r deleteAt "supportDest";
+	{doStop _x} forEach _crew;
+	private _p = getPosATL _v;
+	["C_VEH", [["side", side _g], ["id", _r get "id"], ["event", "carrier_dismount"], ["group", groupId _g], ["crew", count _crew], ["out", count _out], ["x", round (_p # 0)], ["y", round (_p # 1)]]] call SWLC_fnc_log;
+};
+
+// Carriers hold at the dismount point, then move up to the edge of the sector once their infantry are past it.
+SWLC_fnc_vehCarrierTick = {
+	params ["_cmd", "_op", "_live"];
+	{
+		private _g = _x;
+		private _r = [_g] call SWLC_fnc_vehRecOf;
+		if (count _r > 0 && {(_r get "state") == "support"}) then {
+			[_cmd, _g, "vehCarrier", {
+				private _v = _r get "obj";
+				private _crew = (crew _v) select {alive _x && {group _x == _g}};
+				if (_crew isEqualTo [] || {!canMove _v}) exitWith {[_cmd, _g, "carrier_empty"] call SWLC_fnc_vehDismount};
+				private _here = getPosATL _v;
+				private _target = _op get "target";
+				private _tpos = _op get "tpos";
+				if (([_g] call SWLC_fnc_state) == "Assaulting") then {
+					private _dest = [_tpos, _op get "bearing", ([_target] call SWLC_fnc_adSize) / 2 + CFG("carrierStandoff")] call SWLC_fnc_offset;
+					private _lp = getPosATL leader _g;
+					if (!surfaceIsWater _dest && {(_lp distance2D _tpos) <= (_dest distance2D _tpos) + 30} && {((_r getOrDefault ["supportDest", [0, 0, 0]]) distance2D _dest) > 25}) then {
+						_r set ["supportDest", _dest];
+						{_x doMove _dest} forEach ([driver _v, effectiveCommander _v] arrayIntersect _crew);
+						["C_VEH", [["side", side _g], ["id", _r get "id"], ["event", "carrier_support"], ["group", groupId _g], ["x", round (_dest # 0)], ["y", round (_dest # 1)]]] call SWLC_fnc_log;
+					};
+				};
+				if (CFG("verboseLog")) then {
+					["C_VPOS", [["side", side _g], ["wave", _op get "id"], ["id", _r get "id"], ["role", "carrier"], ["x", round (_here # 0)], ["y", round (_here # 1)],
+						["d_target", round (_here distance2D _tpos)], ["lead_d", round (leader _g distance2D _tpos)], ["in_square", [_target, _here] call SWLC_fnc_adInSquare]]] call SWLC_fnc_log;
+				};
+			}] call SWLC_fnc_resGuarded;
+		};
+	} forEach _live;
 };
 
 // Sent when a wave ends or a group leaves its wave.
@@ -371,14 +551,15 @@ SWLC_fnc_makeDismount = {
 	private _side = _cmd get "side";
 	private _tpos = [_target] call SWLC_fnc_adPos;
 	private _threat = [_cmd, _target] call SWLC_fnc_threatOf;
-	private _dMax = CFG("dismountDistMax");
-	private _dMin = if (_threat get "scouted") then {CFG("dismountDistMin")} else {_dMax - 100};
+	private _half = ([_target] call SWLC_fnc_adSize) / 2;
+	private _dMax = _half + CFG("dismountOutsideMax");
+	private _dMin = if (_threat get "scouted") then {_half + CFG("dismountOutsideMin")} else {_dMax - 70};
 	private _danger = ((_cmd get "board") select {(_x get "cat") in ["static", "unknownAT", "tank", "apc"]}) apply {_x get "pos"};
 	private _range = CFG("dismountThreatRange");
 	private _tEye = (AGLToASL _tpos) vectorAdd [0, 0, 2];
 	private _best = [];
 	private _bestScore = -1e9;
-	for "_d" from _dMin to _dMax step 50 do {
+	for "_d" from _dMin to _dMax step 35 do {
 		{
 			private _p = [_tpos, _bearing + _x, _d] call SWLC_fnc_offset;
 			if (!surfaceIsWater _p && {!([_side, _p, 50] call SWLC_fnc_adRestricted)} && {(_danger findIf {_x distance2D _p < _range}) < 0}) then {

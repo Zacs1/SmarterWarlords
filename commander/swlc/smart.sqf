@@ -430,9 +430,10 @@ SWLC_fnc_smartDigIn = {
 		[_x, "Defending", _spot, "dig_in"] call SWLC_fnc_setState;
 		_x setVariable ["SWLC_digUntil", time + CFG("digInSeconds")];
 		_x setVariable ["SWLC_patrolAt", time];
-		[_x, [[_spot, "MOVE", 15]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
+		private _sweep = (([_s] call SWLC_fnc_sweepOrder) select [0, 2]) apply {[_x # 0, "MOVE", 25]};
+		[_x, _sweep + [[_spot, "MOVE", 15]], "AWARE", "FULL", "WEDGE", "RED"] call SWLC_fnc_adSetOrder;
 		[_cmd, "digin", "position", [["group", groupId _x], ["sector", [_s] call SWLC_fnc_adName], ["facing", round _bearing], ["from", _from], ["x", round (_spot # 0)], ["y", round (_spot # 1)]]] call SWLC_fnc_smartLog;
-	} forEach (_live select [0, CFG("digInGroups")]);
+	} forEach (([_live, [], {[_x] call SWLC_fnc_groupMen}, "ASCEND"] call BIS_fnc_sortBy) select [0, (CFG("digInGroups") min (floor ((count _live) / 2))) max 1]);
 	if (_live isNotEqualTo []) then {[_side, "digin", [[_s] call SWLC_fnc_adName], _live # 0] call SWLC_fnc_radio};
 };
 

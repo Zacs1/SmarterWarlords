@@ -123,7 +123,7 @@ SWLC_fnc_statusRow = {
 			_job = "Defending";
 			_place = [_goal] call SWLC_fnc_statusPlace;
 			private _dig = _g getVariable ["SWLC_digUntil", -1];
-			_reason = if (_dig >= time) then {"dug in, watching for a counterattack"} else {"responding to enemy near this sector"};
+			_reason = if (_dig >= time) then {"cleanup squad: sweeping the sector and digging in, then following"} else {"responding to enemy near this sector"};
 			if (_g getVariable ["SWLC_holdout", false]) then {_reason = "holding out, waiting for reinforcements"};
 		};
 		case "Borrowed": {

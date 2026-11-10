@@ -136,8 +136,11 @@ SWLC_fnc_musterAssign = {
 	private _tpos = _op get "tpos";
 	_g setVariable ["SWLC_waveId", _op get "id"];
 	(_op get "groups") pushBackUnique _g;
+	if ([_cmd, _op, _g] call SWLC_fnc_vehExpress) exitWith {};
 	([_cmd, _g, _tpos] call SWLC_fnc_musterChoose) params ["_near", "_forward"];
-	if (isNull _near || {(leader _g distance2D (_op get "rally")) <= CFG("rallyJoinRadius")}) exitWith {
+	// Next to the rally already: straight there, unless the squad is thin and has a sector to fill up at first.
+	private _thin = ([_g] call SWLC_fnc_groupMen) < CFG("musterFillFraction") * ([_cmd get "side"] call SWLC_fnc_econSquadCap);
+	if (isNull _near || {!_thin && {(leader _g distance2D (_op get "rally")) <= CFG("rallyJoinRadius")}}) exitWith {
 		[_g] call SWLC_fnc_waveGroupStart;
 		[_cmd, _op, _g] call SWLC_fnc_waveFootOrder;
 	};
@@ -235,7 +238,7 @@ SWLC_fnc_musterTick = {
 			private _g = _x;
 			private _waited = time - (_g getVariable ["SWLC_musterAt", time]);
 			_forced || {_waited >= CFG("musterGroupSeconds") && {
-				_waited >= CFG("musterMaxSeconds") || {((units _g) findIf {alive _x && {((getPosATL _x) # 2) > 3 || {vehicle _x isKindOf "ParachuteBase"}}}) < 0}
+				_waited >= CFG("musterMaxSeconds") || {([_g] call SWLC_fnc_groupMen) >= CFG("musterFillFraction") * ([_cmd get "side"] call SWLC_fnc_econSquadCap) && {((units _g) findIf {alive _x && {((getPosATL _x) # 2) > 3 || {vehicle _x isKindOf "ParachuteBase"}}}) < 0}}
 			}}
 		};
 		if (_leaving isEqualTo []) exitWith {};
@@ -286,7 +289,7 @@ SWLC_fnc_musterMountTick = {
 	{
 		// Kit first, then board, so nobody climbs in on the way to the crate.
 		[_cmd, _x, "musterMount", {
-			if !([_x] call SWLC_fnc_kitPending) then {[_cmd, _x] call SWLC_fnc_vehMountGroup};
+			if !([_x] call SWLC_fnc_kitPending) then {[_cmd, _x] call SWLC_fnc_vehMountGroup; [_x] call SWLC_fnc_vehHurryBoard};
 		}] call SWLC_fnc_resGuarded;
 	} forEach (+_batch);
 	if (CFG("rollingMuster")) exitWith {

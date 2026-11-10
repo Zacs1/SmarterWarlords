@@ -205,6 +205,7 @@ SWLC_settings = createHashMapFromArray [
 
 	// Muster: groups form up at their own sector, then leave for the rally
 	["rollingMuster", true],          // each group leaves as soon as it is ready, instead of waiting for the others at the sector
+	["musterFillFraction", 0.5],      // rolling muster: a squad under this share of its full size waits for bought men, up to musterMaxSeconds
 	["musterGroupSeconds", 15],       // rolling muster: a group spends this long at the sector to buy and pick up kit
 	["musterSeconds", 30],            // the short wait after the first group arrives at a sector
 	["musterMaxSeconds", 70],         // longer only while men just bought are still landing
@@ -218,7 +219,9 @@ SWLC_settings = createHashMapFromArray [
 	["goMinGroups", 2],               // groups ready at the rally that go in together
 	["goMassGate", true],             // the first push waits until most of the wave has reached the rally
 	["goMassFraction", 0.6],          // share of the wave's men ready at the rally
-	["goMassMaxSeconds", 270],        // after the first group arrives, go with whoever is there
+	["goMassMaxSeconds", 100],        // after the first group arrives, go with whoever is there
+	["goPairSeconds", 30],            // goMinGroups groups at the rally go after this long, without waiting for the rest
+	["goPairMinMen", 8],              // as long as they have this many men between them
 	["rallyLoneWait", 60],            // a lone group with nobody fighting waits this long, then goes in anyway
 	["rallyOutside", 200],            // metres outside the sector square
 	["rallyJoinRadius", 500],         // a group this close to the rally skips the muster
@@ -391,8 +394,9 @@ SWLC_settings = createHashMapFromArray [
 	["cpReserveMax", 1500],           // ...capped here, so it never stops a poor side buying cheap transport
 	["cpPlentiful", 3000],            // CP above the reserve at which combat vehicles are bought without a threat reason
 	["cpCombatFraction", 0.6],        // most of the spare CP one combat vehicle may use
-	["shopGroupSize", 10],            // men per AI warlord, leader included. Stock Warlords lets a warlord have 9 others
-	["shopMaxInfantryPerTick", 6],
+	["shopGroupSize", 8],             // men per AI warlord, leader included. 8 is what an APC seats
+	["shopGroupMax", 8],              // hard cap on an AI squad, town bonus included, so a full squad always fits in an APC
+	["shopMaxInfantryPerTick", 12],
 	["scanBuying", true],
 	["scanStampSeconds", 130],        // blocks Warlords' own random AI scan on an all-AI side
 
@@ -408,15 +412,39 @@ SWLC_settings = createHashMapFromArray [
 
 	// Vehicles
 	["vehiclesEnabled", true],
-	["vehMinDriveDist", 300],         // drives shorter than this aren't worth buying for
+	["vehMinDriveDist", 250],         // drives shorter than this aren't worth buying for
 	["vehReuseRadius", 500],
 	["vehBuyPerTick", 8],
 	["vehSeatForFullGroupCP", 1200],  // with this much spare CP, buy seats for a full group, not just the men present
 	["vehMaxFleet", 12],
 	["vehMaxCombatPerWave", 1],
-	["dismountDistMin", 500],
-	["dismountDistMax", 800],
-	["dismountThreatRange", 900],     // stay this far from known AT and static weapons
+	["dismountOutsideMin", 80],       // vehicles stop this far outside the sector square, measured from its edge
+	["dismountOutsideMax", 220],
+	["dismountThreatRange", 350],     // stay this far from known AT and static weapons
+	["driveFast", true],              // drive legs at full speed
+	["mountHurry", true],             // men standing by their vehicle after this long are put in their seats, if no player can see
+	["mountHurrySeconds", 25],
+	["mountHurryRadius", 60],
+	["mountHurryPlayerRadius", 150],
+	// Keeping the vehicle: a squad that dismounts owns its vehicle, runs back to it when the sector falls and drives on
+	["expressRemount", true],
+	["expressRideRadius", 700],       // the vehicle has to be this close to the squad
+	["expressMinFraction", 0.5],      // squads under this share of shopGroupSize rebuild at a sector first
+	["vehOwnerSeconds", 900],         // how long a parked vehicle stays its squad's own
+	["vehOwnerRadius", 1200],         // and how far the squad can be from it
+	// Armed carriers: armed cars and APCs that carry a squad, drop it at the dismount point and support from the sector edge
+	["carrierEnabled", true],
+	["carrierMaxPerSide", 3],
+	["carrierMinCP", 4000],           // spare CP needed before one is bought
+	["carrierMinSeats", 8],
+	["carrierStandoff", 40],          // metres outside the sector square where it supports from
+	// Clearing up: parked vehicles nobody is coming back for, and wrecks, are removed when no player is near
+	["vehDespawn", true],
+	["vehDespawnSeconds", 120],       // parked with no squad
+	["vehDespawnOwnedSeconds", 600],  // parked, and its squad is still around
+	["vehDespawnBrokenSeconds", 45],  // cannot drive
+	["vehDespawnPlayerRadius", 250],
+	["vehWreckSeconds", 180],
 	["dismountRoadSnap", 120],
 	["dismountArriveRadius", 50],
 	["mountCapSeconds", 60],          // after the muster ends
@@ -473,8 +501,8 @@ SWLC_settings = createHashMapFromArray [
 	["reactionDelay", 0],             // seconds before a new sighting affects plans and defence (radio is not delayed)
 	["difficultyPresets", createHashMapFromArray [
 		["easy", [["intelDecayMultiplier", 0.6], ["shopGroupSize", 6], ["reactionDelay", 20], ["scanBuying", false]]],
-		["normal", [["intelDecayMultiplier", 1], ["shopGroupSize", 10], ["reactionDelay", 0], ["scanBuying", true]]],
-		["hard", [["intelDecayMultiplier", 1.5], ["shopGroupSize", 10], ["reactionDelay", 0], ["scanBuying", true]]]
+		["normal", [["intelDecayMultiplier", 1], ["shopGroupSize", 8], ["reactionDelay", 0], ["scanBuying", true]]],
+		["hard", [["intelDecayMultiplier", 1.5], ["shopGroupSize", 8], ["reactionDelay", 0], ["scanBuying", true]]]
 	]],
 	["verboseLog", true],             // per-vehicle and per-guard lines for the test analyser; the playable build turns them off
 	["profileStages", false],         // test switch: log the cost of each stage of the commander tick
@@ -748,7 +776,7 @@ SWLC_settings = createHashMapFromArray [
 	["huntOffset", 150],              // metres from the wreck towards the objective; AT teams fire from about this far
 	["huntSeconds", 150],             // time at the spot, on top of the walk
 	["smartDigIn", true],
-	["digInGroups", 1],
+	["digInGroups", 2],               // the cleanup squads: sweep the captured sector, dig in, then follow the attack
 	["digInSeconds", 90],
 	["smartPersonality", true],
 	["personalityForce", ""],         // "aggressive", "cautious" or "sneaky" forces one

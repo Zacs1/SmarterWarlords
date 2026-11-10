@@ -37,7 +37,10 @@ Debug markers are off. To turn them on, open the debug console as host and run `
 - The side that lost it votes straight back for it. If you're on that side, radio tells you "Vote X". The AI on a human side can't reinforce holdouts unless your side votes for that sector.
 - Fast travel to a sector vanishes from the list while it's under real fire. It comes back once things have been quiet for about two minutes.
 - A wave that bumps into enemies between sectors stops and fights, and the side-chat radio says so.
-- A wave now forms up at its rally point before it goes in. The first groups wait, up to four and a half minutes, until most of the wave has arrived. If you're already in the sector they come straight to you.
+- A wave forms up at its rally point before it goes in, but not for long: two squads go after 30 seconds, most of the wave goes at once, and a lone squad goes after 100 seconds. If you're already in the sector they come straight to you.
+- Vehicles now drop their squads 80 to 220 m outside the sector edge. Squads keep their vehicle: when the sector falls, all but one or two cleanup squads run back to it and drive to the next target without mustering. The cleanup squads sweep and dig in for about 90 seconds, then follow.
+- With CP to spare, up to three squads a side ride an armed APC. The squad gets out and the crew stays in, holding back and then moving up to the sector edge behind the infantry.
+- Parked vehicles nobody is using disappear after two minutes (ten if a squad still owns one), and only when no player is within 250 m.
 - Before the enemy arrives, watch for men moving out ahead of a sector, guns appearing on the side facing the enemy, and AT soldiers near the road.
 - A counterattack group waits behind the sector and goes in once the enemy breaks in.
 - The commander goes quiet when its stance is hold or rebuild. The radio and the panel say which. On a human side that also stops the AI's waves for a while.

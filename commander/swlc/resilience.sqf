@@ -577,7 +577,8 @@ SWLC_fnc_resGoalFault = {
 			if (([_op get "target"] call SWLC_fnc_adOwner) == _side || {(_g getVariable ["SWLC_waveId", -1]) != (_op get "id")}) then {
 				_fault = "bad_goal";
 			} else {
-				if (_state in ["Travelling", "Mustering", "Mounting"]) then {
+				// A squad boarding its own parked vehicle (vehExpress) has no muster sector to check.
+				if (_state in ["Travelling", "Mustering", "Mounting"] && {(_g getVariable ["SWLC_leg", ""]) != "LATE" || {_state != "Mounting"}}) then {
 					private _rec = (_cmd get "musters") getOrDefault [_g getVariable ["SWLC_musterName", ""], createHashMap];
 					if (count _rec == 0 || {([_rec get "sector"] call SWLC_fnc_adOwner) != _side}) then {_fault = "bad_goal"};
 				};
